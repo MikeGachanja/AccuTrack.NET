@@ -1,0 +1,9 @@
+<Project>
+  <!-- All modules build to a single folder: bin/Debug or bin/Release (no framework in path). -->
+  <!-- Libraries and main exe end up together where the main exe runs. -->
+  <PropertyGroup>
+    <BaseOutputPath>$(MSBuildThisFileDirectory)bin\$(Configuration)\</BaseOutputPath>
+    <OutputPath>$(BaseOutputPath)</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+</Project>

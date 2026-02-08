@@ -1,0 +1,21 @@
+<Solution>
+  <Project Path="../SDK/SDK/SDK.csproj" />
+  <Project Path="alarms/alarms.csproj" />
+  <Project Path="communication/communication.csproj" />
+  <Project Path="compiler/compiler.csproj" />
+  <Project Path="components/components.csproj" />
+  <Project Path="console/console.csproj" />
+  <Project Path="Designer/Designer.csproj" />
+  <Project Path="discovery/discovery.csproj" />
+  <Project Path="events/events.csproj" />
+  <Project Path="historian/historian.csproj" />
+  <Project Path="machinelearning/machinelearning.csproj" />
+  <Project Path="project/project.csproj" />
+  <Project Path="scheduler/scheduler.csproj" />
+  <Project Path="screeneditor/screeneditor.csproj" />
+  <Project Path="scripter/scripter.csproj" />
+  <Project Path="simulator/simulator.csproj" />
+  <Project Path="tagengine/tagengine.csproj" />
+  <Project Path="tools/tools.csproj" />
+  <Project Path="workspace/workspace.csproj" />
+</Solution>
