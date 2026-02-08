@@ -38,7 +38,17 @@ public class BuildService
         File.WriteAllText(tagsPath, JsonSerializer.Serialize(new { tags = Array.Empty<object>() }));
         var commPath = Path.Combine(dir, "communication.json");
         File.WriteAllText(commPath, JsonSerializer.Serialize(new { modules = Array.Empty<object>() }));
-        log?.Invoke($"JSON written to {dir}");
+        // metadata.iscr for Runtime: name, resolution, screens list
+        var metaPath = Path.Combine(dir, "metadata.iscr");
+        var meta = new
+        {
+            name = project.Name,
+            projectName = project.Name,
+            resolution = new { width = 1920, height = 1080 },
+            screens = project.Screens.Select(s => s.Name).Where(n => !string.IsNullOrEmpty(n)).ToArray()
+        };
+        File.WriteAllText(metaPath, JsonSerializer.Serialize(meta, new JsonSerializerOptions { WriteIndented = true }));
+        log?.Invoke($"JSON and metadata.iscr written to {dir}");
     }
 
     private void GenerateAvaloniaScreens(ScadaProject project, Action<string>? log)

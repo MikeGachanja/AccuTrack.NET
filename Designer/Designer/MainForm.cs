@@ -389,6 +389,7 @@ public partial class MainForm : Form
         exitToolStripMenuItem.Click += (_, _) => Close();
         buildToolStripMenuItemBuild.Click += (_, _) => OnBuild();
         cleanToolStripMenuItem.Click += (_, _) => OnClean();
+        deployToolStripMenuItemDeploy.Click += (_, _) => OnDeployToDevice();
     }
 
     private void OnNewProject()
@@ -485,6 +486,18 @@ public partial class MainForm : Form
     {
         WriteConsole("Clean...");
         SetStatus("Clean.");
+    }
+
+    private void OnDeployToDevice()
+    {
+        if (_projectManager.CurrentProject == null)
+        {
+            WriteConsole("No project open.");
+            MessageBox.Show(this, "Open a project first.", "Deploy", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        using var dlg = new DeployForm(_projectManager, _buildService);
+        dlg.ShowDialog(this);
     }
 
     public void WriteConsole(string text)

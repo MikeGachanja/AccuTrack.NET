@@ -60,7 +60,7 @@ public class CommunicationEditorControl : UserControl
         split.Panel1.Controls.Add(_grid);
         split.Panel2.Controls.Add(_propertyGrid);
 
-        void ApplySplitLayout()
+        void ApplySplitLayout(object? sender, EventArgs e)
         {
             int w = split.Width;
             int minWidthNeeded = panel1Min + split.SplitterWidth + panel2Min;
