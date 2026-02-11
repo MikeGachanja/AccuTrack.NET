@@ -60,7 +60,6 @@ public partial class TagTableEditor : UserControl
         {
             Name = "DataType",
             HeaderText = "Data Type",
-            Width = 100,
             DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton,
             FlatStyle = FlatStyle.Flat
         };
@@ -75,16 +74,11 @@ public partial class TagTableEditor : UserControl
         _tagsGrid.Columns.Add("MaxValue", "Max");
         _tagsGrid.Columns.Add("ReadOnly", "Read Only");
 
-        // Set column widths
-        _tagsGrid.Columns["Name"].Width = 150;
-        _tagsGrid.Columns["TagTable"].Width = 120;
-        _tagsGrid.Columns["Address"].Width = 120;
-        _tagsGrid.Columns["Value"].Width = 100;
-        _tagsGrid.Columns["Description"].Width = 200;
-        _tagsGrid.Columns["Unit"].Width = 80;
-        _tagsGrid.Columns["MinValue"].Width = 80;
-        _tagsGrid.Columns["MaxValue"].Width = 80;
-        _tagsGrid.Columns["ReadOnly"].Width = 80;
+        // Set equal FillWeight for all columns to make them equal size
+        foreach (DataGridViewColumn column in _tagsGrid.Columns)
+        {
+            column.FillWeight = 100;
+        }
         
         // Hide TagTable column initially (will be shown in All Tags view)
         _tagsGrid.Columns["TagTable"].Visible = false;
@@ -104,10 +98,13 @@ public partial class TagTableEditor : UserControl
 
         // Handle cell value changes and formatting
         _tagsGrid.CellValueChanged += OnCellValueChanged;
+        _tagsGrid.CellEndEdit += OnCellEndEdit;
         _tagsGrid.CellFormatting += OnCellFormatting;
         _tagsGrid.RowsAdded += OnRowsAdded;
         _tagsGrid.RowsRemoved += OnRowsRemoved;
         _tagsGrid.UserDeletingRow += OnUserDeletingRow;
+        _tagsGrid.DefaultValuesNeeded += OnDefaultValuesNeeded;
+        _tagsGrid.RowValidated += OnRowValidated;
 
         Controls.Add(_tagsGrid);
     }
@@ -205,7 +202,7 @@ public partial class TagTableEditor : UserControl
                     rowIndex = _tagsGrid.Rows.Add(
                         tag.Name,
                         table.Name,  // TagTable name
-                        normalizedDataType,
+                        null, // Set DataType after row is created to avoid ComboBox validation issues
                         tag.Address,
                         tag.Value?.ToString() ?? "",
                         tag.Description,
@@ -219,7 +216,7 @@ public partial class TagTableEditor : UserControl
                 {
                     rowIndex = _tagsGrid.Rows.Add(
                         tag.Name,
-                        normalizedDataType,
+                        null, // Set DataType after row is created to avoid ComboBox validation issues
                         tag.Address,
                         tag.Value?.ToString() ?? "",
                         tag.Description,
@@ -228,6 +225,28 @@ public partial class TagTableEditor : UserControl
                         tag.MaxValue,
                         tag.ReadOnly
                     );
+                }
+
+                // Set DataType cell value after row is created to ensure ComboBox validation passes
+                var dataTypeCell = _tagsGrid.Rows[rowIndex].Cells["DataType"] as DataGridViewComboBoxCell;
+                if (dataTypeCell != null)
+                {
+                    // Ensure the value exists in the ComboBox items
+                    if (dataTypeCell.Items.Contains(normalizedDataType))
+                    {
+                        dataTypeCell.Value = normalizedDataType;
+                    }
+                    else
+                    {
+                        // If value doesn't exist, use the first available item or default
+                        dataTypeCell.Value = dataTypeCell.Items.Count > 0 ? dataTypeCell.Items[0] : "Bit";
+                        System.Diagnostics.Debug.WriteLine($"Warning: DataType '{normalizedDataType}' not found in ComboBox items for tag '{tag.Name}'. Using default.");
+                    }
+                }
+                else
+                {
+                    // Fallback: set value directly if cell is not a ComboBox cell
+                    _tagsGrid.Rows[rowIndex].Cells["DataType"].Value = normalizedDataType;
                 }
 
                 // Update tag with normalized data type
@@ -247,20 +266,37 @@ public partial class TagTableEditor : UserControl
     private string NormalizeDataType(string dataType)
     {
         if (string.IsNullOrEmpty(dataType))
-            return "Float32";
+            return "Bit"; // Changed default to Bit to match new default
 
         var normalized = dataType.Trim();
         
         // Map common variations to standard types
-        return normalized.ToLower() switch
+        string result = normalized.ToLower() switch
         {
             "float" or "double" => "Float32",
             "float64" => "Float64",
             "int" or "integer" => "Int32",
             "bool" or "boolean" => "Bit",
             "string" => "String8",
-            _ => DataTypes.Contains(normalized) ? normalized : "Float32"
+            _ => DataTypes.Contains(normalized) ? normalized : "Bit" // Changed default to Bit
         };
+        
+        // Ensure the result is in the DataTypes array (case-insensitive check)
+        if (!DataTypes.Contains(result))
+        {
+            // Find case-insensitive match
+            var match = DataTypes.FirstOrDefault(dt => dt.Equals(result, StringComparison.OrdinalIgnoreCase));
+            if (match != null)
+            {
+                result = match;
+            }
+            else
+            {
+                result = "Bit"; // Fallback to Bit if no match found
+            }
+        }
+        
+        return result;
     }
 
     /// <summary>
@@ -337,13 +373,26 @@ public partial class TagTableEditor : UserControl
                         // TagTable column is read-only in All Tags view
                         break;
                     case "DataType":
-                        var newDataType = row.Cells[e.ColumnIndex].Value?.ToString() ?? "Float32";
+                        var newDataType = row.Cells[e.ColumnIndex].Value?.ToString() ?? "Bit";
                         tag.DataType = newDataType;
                         
                         // If address doesn't match new data type, suggest a new address
                         if (!IsAddressMatchingDataType(tag.Address, newDataType))
                         {
-                            var suggestedAddress = FindNextAvailableAddress(newDataType);
+                            // Extract prefix from existing address (I, Q, or M), default to M
+                            string prefix = "M";
+                            if (!string.IsNullOrEmpty(tag.Address))
+                            {
+                                var upperAddr = tag.Address.ToUpper();
+                                if (upperAddr.StartsWith("I"))
+                                    prefix = "I";
+                                else if (upperAddr.StartsWith("Q"))
+                                    prefix = "Q";
+                                else if (upperAddr.StartsWith("M"))
+                                    prefix = "M";
+                            }
+                            
+                            var suggestedAddress = FindNextAvailableAddress(newDataType, prefix);
                             if (!string.IsNullOrEmpty(suggestedAddress))
                             {
                                 tag.Address = suggestedAddress;
@@ -418,10 +467,95 @@ public partial class TagTableEditor : UserControl
                 MessageBox.Show($"Error updating tag: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
-        else if (e.RowIndex == _tagsGrid.Rows.Count - 1 && _tagsGrid.Rows[e.RowIndex].IsNewRow)
+    }
+
+    /// <summary>
+    /// Handles cell edit end - used for auto-populating address/data type on new rows and creating tags.
+    /// </summary>
+    private void OnCellEndEdit(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0)
+            return;
+
+        var row = _tagsGrid.Rows[e.RowIndex];
+        var rowData = row.Tag as TagRowData;
+        
+        // Only auto-populate for new rows that don't have a tag yet
+        bool isNewRow = row.IsNewRow || (rowData?.Tag == null && e.RowIndex == _tagsGrid.Rows.Count - 1);
+        
+        if (isNewRow)
         {
-            // New row - create new tag
-            CreateNewTagFromRow(row);
+            var columnName = _tagsGrid.Columns[e.ColumnIndex].Name;
+
+            if (columnName == "DataType")
+            {
+                var newDataType = row.Cells["DataType"].Value?.ToString() ?? "Bit";
+                var currentAddress = row.Cells["Address"].Value?.ToString();
+
+                // Auto-populate address if empty and we have a valid data type
+                if (string.IsNullOrWhiteSpace(currentAddress) && !string.IsNullOrWhiteSpace(newDataType))
+                {
+                    // Default to Memory (M) prefix for new tags
+                    var suggestedAddress = FindNextAvailableAddress(newDataType, "M");
+                    if (!string.IsNullOrEmpty(suggestedAddress))
+                    {
+                        // Temporarily remove event handlers to prevent recursion
+                        _tagsGrid.CellValueChanged -= OnCellValueChanged;
+                        _tagsGrid.CellEndEdit -= OnCellEndEdit;
+                        try
+                        {
+                            row.Cells["Address"].Value = suggestedAddress;
+                        }
+                        finally
+                        {
+                            // Re-add event handlers
+                            _tagsGrid.CellValueChanged += OnCellValueChanged;
+                            _tagsGrid.CellEndEdit += OnCellEndEdit;
+                        }
+                    }
+                }
+            }
+            else if (columnName == "Address")
+            {
+                var newAddress = row.Cells["Address"].Value?.ToString()?.ToUpper() ?? string.Empty;
+                var currentDataType = row.Cells["DataType"].Value?.ToString();
+
+                // If the user typed an address but left data type empty, infer data type from address
+                if (!string.IsNullOrEmpty(newAddress) && string.IsNullOrWhiteSpace(currentDataType))
+                {
+                    var inferredType = GetDataTypeFromAddress(newAddress);
+                    if (!string.IsNullOrEmpty(inferredType))
+                    {
+                        // Temporarily remove event handlers to prevent recursion
+                        _tagsGrid.CellValueChanged -= OnCellValueChanged;
+                        _tagsGrid.CellEndEdit -= OnCellEndEdit;
+                        try
+                        {
+                            row.Cells["DataType"].Value = inferredType;
+                        }
+                        finally
+                        {
+                            // Re-add event handlers
+                            _tagsGrid.CellValueChanged += OnCellValueChanged;
+                            _tagsGrid.CellEndEdit += OnCellEndEdit;
+                        }
+                    }
+                }
+            }
+
+            // Try to create tag if row has enough data (name is required)
+            // Check if this is a committed row (not the new row placeholder) that doesn't have a tag yet
+            if (rowData?.Tag == null)
+            {
+                var name = row.Cells["Name"].Value?.ToString();
+                // Create tag if we have a name and the row is not the new row placeholder
+                // (new row placeholder is always the last row and has IsNewRow = true)
+                if (!string.IsNullOrWhiteSpace(name) && 
+                    (!row.IsNewRow || e.RowIndex < _tagsGrid.Rows.Count - 1))
+                {
+                    CreateNewTagFromRow(row);
+                }
+            }
         }
     }
 
@@ -431,6 +565,29 @@ public partial class TagTableEditor : UserControl
     private void OnRowsAdded(object? sender, DataGridViewRowsAddedEventArgs e)
     {
         SetModified(true);
+    }
+
+    /// <summary>
+    /// Handles row validated event - creates tag when new row is committed.
+    /// </summary>
+    private void OnRowValidated(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.RowIndex >= _tagsGrid.Rows.Count)
+            return;
+
+        var row = _tagsGrid.Rows[e.RowIndex];
+        var rowData = row.Tag as TagRowData;
+        
+        // If this row doesn't have a tag yet and is not the new row placeholder, create one
+        if (rowData?.Tag == null && !row.IsNewRow)
+        {
+            // Check if row has at least a name before creating tag
+            var name = row.Cells["Name"].Value?.ToString();
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                CreateNewTagFromRow(row);
+            }
+        }
     }
 
     /// <summary>
@@ -464,6 +621,78 @@ public partial class TagTableEditor : UserControl
     }
 
     /// <summary>
+    /// Handles default values needed for new row.
+    /// </summary>
+    private void OnDefaultValuesNeeded(object? sender, DataGridViewRowEventArgs e)
+    {
+        // Set default values for new row
+        var row = e.Row;
+        
+        // Default name: Tag_1, Tag_2, etc.
+        var defaultName = GetNextAvailableTagName();
+        row.Cells["Name"].Value = defaultName;
+        
+        // Default data type: Bit (Boolean)
+        row.Cells["DataType"].Value = "Bit";
+        
+        // Default address: M0.0 for Bit type (Memory)
+        var defaultAddress = FindNextAvailableAddress("Bit", "M");
+        row.Cells["Address"].Value = defaultAddress;
+        
+        // Default ReadOnly: false
+        row.Cells["ReadOnly"].Value = false;
+    }
+
+    /// <summary>
+    /// Gets the next available tag name in format Tag_1, Tag_2, etc.
+    /// </summary>
+    private string GetNextAvailableTagName()
+    {
+        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        
+        // Collect all existing tag names
+        foreach (var table in _tagTables)
+        {
+            foreach (var tag in table.GetTags())
+            {
+                if (!string.IsNullOrEmpty(tag.Name))
+                {
+                    usedNames.Add(tag.Name);
+                }
+            }
+        }
+        
+        // Also check names in the grid
+        foreach (DataGridViewRow row in _tagsGrid.Rows)
+        {
+            if (row.IsNewRow) continue;
+            var name = row.Cells["Name"].Value?.ToString();
+            if (!string.IsNullOrEmpty(name))
+            {
+                usedNames.Add(name);
+            }
+        }
+        
+        // Find next available Tag_N
+        int counter = 1;
+        while (true)
+        {
+            string candidateName = $"Tag_{counter}";
+            if (!usedNames.Contains(candidateName))
+            {
+                return candidateName;
+            }
+            counter++;
+            
+            // Prevent infinite loop
+            if (counter > 10000)
+            {
+                return $"Tag_{counter}";
+            }
+        }
+    }
+
+    /// <summary>
     /// Creates a new tag from a grid row.
     /// </summary>
     private void CreateNewTagFromRow(DataGridViewRow row)
@@ -471,18 +700,18 @@ public partial class TagTableEditor : UserControl
         if (_tagTables.Count == 0)
             return;
 
-        var dataType = row.Cells["DataType"].Value?.ToString() ?? "Float32";
+        var dataType = row.Cells["DataType"].Value?.ToString() ?? "Bit";
         var address = row.Cells["Address"].Value?.ToString();
         
-        // If no address provided, find next available one
+        // If no address provided, find next available one (default to Memory/M)
         if (string.IsNullOrEmpty(address))
         {
-            address = FindNextAvailableAddress(dataType);
+            address = FindNextAvailableAddress(dataType, "M");
         }
 
         var tag = new Tag
         {
-            Name = row.Cells["Name"].Value?.ToString() ?? "NewTag",
+            Name = row.Cells["Name"].Value?.ToString() ?? GetNextAvailableTagName(),
             DataType = dataType,
             Address = address ?? string.Empty,
             Description = row.Cells["Description"].Value?.ToString() ?? string.Empty,
@@ -596,7 +825,7 @@ public partial class TagTableEditor : UserControl
     private string GetDataTypeFromAddress(string address)
     {
         if (string.IsNullOrEmpty(address))
-            return "Float32"; // Default
+            return "Bit"; // Default to Bit (Boolean)
 
         address = address.ToUpper().Trim();
 
@@ -631,8 +860,17 @@ public partial class TagTableEditor : UserControl
     /// <summary>
     /// Finds the next available address for a given data type.
     /// </summary>
-    private string FindNextAvailableAddress(string dataType)
+    /// <param name="dataType">The data type (Bit, Word, etc.)</param>
+    /// <param name="addressPrefix">Address prefix: "I" for Input, "Q" for Output, "M" for Memory (default)</param>
+    private string FindNextAvailableAddress(string dataType, string addressPrefix = "M")
     {
+        // Validate and normalize prefix
+        addressPrefix = addressPrefix?.ToUpper() ?? "M";
+        if (addressPrefix != "I" && addressPrefix != "Q" && addressPrefix != "M")
+        {
+            addressPrefix = "M"; // Default to Memory if invalid
+        }
+
         // Collect all used addresses
         var usedAddresses = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var table in _tagTables)
@@ -659,7 +897,6 @@ public partial class TagTableEditor : UserControl
 
         // Find next available address based on data type
         int offset = 0;
-        string prefix = "M"; // Default to Memory
 
         while (true)
         {
@@ -669,23 +906,23 @@ public partial class TagTableEditor : UserControl
             {
                 int byteOffset = offset / 8;
                 int bitOffset = offset % 8;
-                address = $"{prefix}{byteOffset}.{bitOffset}";
+                address = $"{addressPrefix}{byteOffset}.{bitOffset}";
                 offset++;
             }
             else if (dataType == "Word" || dataType == "Int16" || dataType == "UInt16")
             {
-                address = $"{prefix}W{offset}";
+                address = $"{addressPrefix}W{offset}";
                 offset += 2; // Words are 2 bytes
             }
             else if (dataType == "DWord" || dataType == "Float32" || 
                      dataType == "Int32" || dataType == "UInt32")
             {
-                address = $"{prefix}D{offset}";
+                address = $"{addressPrefix}D{offset}";
                 offset += 4; // DWords are 4 bytes
             }
             else // Byte, Int8, UInt8, String8, String16
             {
-                address = $"{prefix}B{offset}";
+                address = $"{addressPrefix}B{offset}";
                 offset++;
             }
 
@@ -697,7 +934,7 @@ public partial class TagTableEditor : UserControl
             // Prevent infinite loop
             if (offset > 10000)
             {
-                return $"{prefix}W0"; // Fallback
+                return $"{addressPrefix}W0"; // Fallback
             }
         }
     }
