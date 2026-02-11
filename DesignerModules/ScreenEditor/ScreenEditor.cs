@@ -283,9 +283,19 @@ public partial class ScreenEditor : UserControl
 
     private void OnCanvasDragEnter(object? sender, DragEventArgs e)
     {
-        // Use custom format; WinForms stores by concrete type so GetDataPresent(BaseComponent) would fail
+        // Check for component drag-drop
         if (e.Data?.GetDataPresent(ComponentsView.ComponentDragDropFormat) == true &&
             e.Data?.GetData(ComponentsView.ComponentDragDropFormat) is BaseComponent)
+        {
+            e.Effect = DragDropEffects.Copy;
+        }
+        // Check for screen drag-drop (using string literal to avoid circular dependency)
+        else if (e.Data?.GetDataPresent("AccuTrack.SCADA.Screen") == true)
+        {
+            e.Effect = DragDropEffects.Copy;
+        }
+        // Check for SVG drag-drop
+        else if (e.Data?.GetDataPresent("AccuTrack.SCADA.SVG") == true)
         {
             e.Effect = DragDropEffects.Copy;
         }
@@ -297,10 +307,11 @@ public partial class ScreenEditor : UserControl
 
     private void OnCanvasDragDrop(object? sender, DragEventArgs e)
     {
+        Point dropPoint = _canvas.PointToClient(new Point(e.X, e.Y));
+        
+        // Handle component drag-drop
         if (e.Data?.GetData(ComponentsView.ComponentDragDropFormat) is BaseComponent component)
         {
-            Point dropPoint = _canvas.PointToClient(new Point(e.X, e.Y));
-            
             // Clone the component and place it at drop location
             var newComponent = component.Clone();
             newComponent.Location = SnapToGrid(dropPoint);
@@ -310,6 +321,76 @@ public partial class ScreenEditor : UserControl
             SetSelectedComponent(newComponent);
             SetModified(true);
             _canvas.Invalidate();
+        }
+        // Handle screen drag-drop - create navigation button (using string literal to avoid circular dependency)
+        else if (e.Data?.GetData("AccuTrack.SCADA.Screen") is Dictionary<string, object> screenData)
+        {
+            try
+            {
+                string screenName = screenData.TryGetValue("screenName", out var name) ? name?.ToString() ?? "" : "";
+                
+                if (!string.IsNullOrEmpty(screenName))
+                {
+                    // Create a navigation button component
+                    var button = new ButtonComponent
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = $"NavButton_{screenName}_{_components.Count + 1}",
+                        Location = SnapToGrid(dropPoint),
+                        Size = new Size(120, 35),
+                        Text = screenName,
+                        Action = $"NavigateScreen:{screenName}", // Format: NavigateScreen:ScreenName
+                        BackColor = Color.FromArgb(70, 130, 180), // Steel blue
+                        ForeColor = Color.White,
+                        BorderColor = Color.FromArgb(50, 100, 150),
+                        BorderWidth = 2,
+                        Font = new Font("Arial", 9, FontStyle.Bold),
+                        Visible = true,
+                        Enabled = true
+                    };
+                    
+                    _components.Add(button);
+                    SetSelectedComponent(button);
+                    SetModified(true);
+                    _canvas.Invalidate();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error creating navigation button: {ex.Message}");
+            }
+        }
+        // Handle SVG drag-drop - create SVG view component
+        else if (e.Data?.GetData("AccuTrack.SCADA.SVG") is string svgPath)
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(svgPath))
+                {
+                    // Create an SVG view component
+                    var svgComponent = new SvgViewComponent
+                    {
+                        Id = Guid.NewGuid(),
+                        Name = $"SVGView_{Path.GetFileNameWithoutExtension(svgPath)}_{_components.Count + 1}",
+                        Location = SnapToGrid(dropPoint),
+                        Size = new Size(100, 100), // Default size for SVG
+                        SvgPath = svgPath, // Store relative path from svg/ directory
+                        BorderColor = Color.Gray,
+                        BorderWidth = 1,
+                        Visible = true,
+                        Enabled = true
+                    };
+                    
+                    _components.Add(svgComponent);
+                    SetSelectedComponent(svgComponent);
+                    SetModified(true);
+                    _canvas.Invalidate();
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Error creating SVG component: {ex.Message}");
+            }
         }
     }
 

@@ -46,6 +46,7 @@ public class ComponentsModule
         RegisterComponent("Conveyor", typeof(ConveyorComponent));
         RegisterComponent("Tab", typeof(TabComponent));
         RegisterComponent("Popup", typeof(PopupComponent));
+        RegisterComponent("SVGView", typeof(SvgViewComponent));
         
         // Additional components can be registered here as they are implemented
     }

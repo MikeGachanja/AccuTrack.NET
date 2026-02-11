@@ -57,6 +57,7 @@ public partial class ProjectView : UserControl
         _treeView.AfterSelect += OnNodeSelected;
         _treeView.MouseDown += OnTreeViewMouseDown;
         _treeView.AfterLabelEdit += OnNodeLabelEdit;
+        _treeView.ItemDrag += OnTreeViewItemDrag;
 
         // Initialize context menu
         _contextMenu = new ContextMenuStrip();
@@ -330,6 +331,41 @@ public partial class ProjectView : UserControl
     {
         // Handle selection if needed
     }
+
+    private void OnTreeViewItemDrag(object? sender, ItemDragEventArgs e)
+    {
+        if (e.Item is TreeNode node && node.Tag is ProjectNodeData nodeData)
+        {
+            // Only allow dragging screen nodes
+            if (nodeData.Type == NodeType.Screen && nodeData.Data != null)
+            {
+                try
+                {
+                    // Get screen name
+                    dynamic screenObj = nodeData.Data;
+                    string screenName = screenObj.Name?.ToString() ?? node.Text;
+                    string scadaName = nodeData.ScadaName ?? "";
+                    
+                    // Create drag data with screen information
+                    var dragData = new Dictionary<string, object>
+                    {
+                        ["screenName"] = screenName,
+                        ["scadaName"] = scadaName,
+                        ["screenObject"] = nodeData.Data
+                    };
+                    
+                    var dataObject = new DataObject(ScreenDragDropFormat, dragData);
+                    _treeView.DoDragDrop(dataObject, DragDropEffects.Copy);
+                }
+                catch
+                {
+                    // Ignore drag errors
+                }
+            }
+        }
+    }
+
+    public const string ScreenDragDropFormat = "AccuTrack.SCADA.Screen";
 
     private void OnTreeViewMouseDown(object? sender, MouseEventArgs e)
     {
