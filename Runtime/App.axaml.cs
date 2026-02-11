@@ -30,10 +30,33 @@ public partial class App : Application
                 mainWindow.SetTransferServer(transferServer);
             if (Services.Get<ICommunication>() is { } communication)
                 mainWindow.SetCommunication(communication);
-            if (Services.Get<IScreens>() is { } screensModule)
-                mainWindow.SetScreensModule(screensModule);
+            
+            IScreens? screensModule = null;
+            if (Services.Get<IScreens>() is { } screens)
+            {
+                screensModule = screens;
+                mainWindow.SetScreensModule(screens);
+            }
+            
             if (Services.Get<IProject>() is { } project)
+            {
                 mainWindow.SetProject(project);
+                
+                // Load the first screen if project is already loaded (startup scenario)
+                // This ensures screens are displayed even if project loaded before UI initialization
+                if (project.CurrentProject != null)
+                {
+                    var firstScreenPath = project.GetFirstScreenPath();
+                    if (!string.IsNullOrEmpty(firstScreenPath) && screensModule != null)
+                    {
+                        // Use dispatcher to ensure UI is ready
+                        Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                        {
+                            screensModule.ScreenManager.LoadScreen(firstScreenPath);
+                        });
+                    }
+                }
+            }
         }
 
         base.OnFrameworkInitializationCompleted();

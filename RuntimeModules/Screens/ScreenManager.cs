@@ -14,7 +14,16 @@ public sealed class ScreenManager
     public string CurrentScreenPath => _currentScreenPath;
 
     /// <summary>Set callback when LoadScreen is called (host sets container content).</summary>
-    public void SetLoadScreenCallback(Action<string>? callback) => _onLoadScreen = callback;
+    /// <remarks>If a screen is already loaded, the callback will be invoked immediately with the current screen path.</remarks>
+    public void SetLoadScreenCallback(Action<string>? callback)
+    {
+        _onLoadScreen = callback;
+        // If a screen was already loaded before the callback was set, trigger it now
+        if (callback != null && !string.IsNullOrEmpty(_currentScreenPath))
+        {
+            callback(_currentScreenPath);
+        }
+    }
 
     /// <summary>Load a screen by path; invokes callback so host can set view.</summary>
     public bool LoadScreen(string screenPath)

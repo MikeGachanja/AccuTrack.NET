@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia;
 using Runtime.Modules.Alarms;
@@ -115,19 +116,55 @@ internal static class Program
             });
         };
 
+        // Load existing project data automatically on startup
         var appDir = AppContext.BaseDirectory;
         var dataPath = Path.Combine(appDir, "data");
         var metadataPath = Path.Combine(dataPath, "metadata.iscr");
+        bool projectLoaded = false;
+        
+        System.Diagnostics.Debug.WriteLine($"[Runtime] Checking for project data in: {dataPath}");
+        System.Diagnostics.Debug.WriteLine($"[Runtime] App directory: {appDir}");
+        System.Diagnostics.Debug.WriteLine($"[Runtime] Data directory exists: {Directory.Exists(dataPath)}");
+        System.Diagnostics.Debug.WriteLine($"[Runtime] Metadata file exists: {File.Exists(metadataPath)}");
+        
         if (File.Exists(metadataPath))
         {
+            System.Diagnostics.Debug.WriteLine($"[Runtime] Attempting to load project from: {metadataPath}");
             if (project.OpenProject(metadataPath))
             {
                 engine.ReinitializeWithProject(dataPath);
                 screensModule.InitializeWithProject(dataPath);
                 WireAnimationManagerToTagManager(screensModule, tagsModule);
+                projectLoaded = true;
+                var projectName = project.CurrentProject?.Name ?? "Unknown";
+                var screenCount = project.CurrentProject?.Screen.Count ?? 0;
+                System.Diagnostics.Debug.WriteLine($"[Runtime] Successfully loaded project: {projectName} with {screenCount} screen(s)");
+                if (screenCount > 0)
+                {
+                    var firstScreen = project.GetFirstScreenPath();
+                    System.Diagnostics.Debug.WriteLine($"[Runtime] First screen path: {firstScreen}");
+                }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("[Runtime] Failed to load existing project data (OpenProject returned false).");
+            }
+        }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine($"[Runtime] No existing project data found at {metadataPath}. Runtime will start without a project.");
+            if (Directory.Exists(dataPath))
+            {
+                var files = Directory.GetFiles(dataPath, "*", SearchOption.AllDirectories);
+                System.Diagnostics.Debug.WriteLine($"[Runtime] Found {files.Length} file(s) in data directory:");
+                foreach (var file in files.Take(10)) // Log first 10 files
+                {
+                    System.Diagnostics.Debug.WriteLine($"  - {file}");
+                }
             }
         }
 
+        // Start all modules (they can run with or without a project)
         engine.StartAll();
 
         return BuildAvaloniaApp()

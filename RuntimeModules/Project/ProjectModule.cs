@@ -52,14 +52,23 @@ public sealed class ProjectModule : IProject
 
     private bool LoadProject(string projectDir)
     {
+        System.Diagnostics.Debug.WriteLine($"[ProjectModule] Loading project from: {projectDir}");
         var metadataPath = Path.Combine(projectDir, "metadata.iscr");
         if (!File.Exists(metadataPath))
+        {
+            System.Diagnostics.Debug.WriteLine($"[ProjectModule] Metadata file not found: {metadataPath}");
             return false;
+        }
 
+        System.Diagnostics.Debug.WriteLine($"[ProjectModule] Found metadata file: {metadataPath}");
         if (!LoadProjectMetadata(metadataPath))
+        {
+            System.Diagnostics.Debug.WriteLine("[ProjectModule] Failed to load project metadata");
             return false;
+        }
 
         var jsonPath = Path.Combine(projectDir, "json");
+        System.Diagnostics.Debug.WriteLine($"[ProjectModule] Loading JSON files from: {jsonPath}");
         LoadCommunicationInfo(Path.Combine(jsonPath, "communications.json"));
         LoadScreensInfo(Path.Combine(jsonPath, "screens.json"));
         LoadScriptsInfo(Path.Combine(jsonPath, "scripts.json"));
@@ -68,6 +77,7 @@ public sealed class ProjectModule : IProject
         LoadHistorianInfo(Path.Combine(jsonPath, "historian.json"));
         LoadSecurityInfo(Path.Combine(jsonPath, "security.json"));
 
+        System.Diagnostics.Debug.WriteLine($"[ProjectModule] Project loaded successfully. Name: {_project.Name}, Screens: {_project.Screen.Count}");
         return true;
     }
 
@@ -142,19 +152,28 @@ public sealed class ProjectModule : IProject
 
     private void LoadScreensInfo(string path)
     {
-        if (!File.Exists(path)) return;
+        if (!File.Exists(path))
+        {
+            System.Diagnostics.Debug.WriteLine($"[ProjectModule] Screens file not found: {path}");
+            return;
+        }
         try
         {
             var json = File.ReadAllText(path);
             using var doc = JsonDocument.Parse(json);
             var root = doc.RootElement;
             if (!root.TryGetProperty("screens", out var screens) || screens.ValueKind != JsonValueKind.Array)
+            {
+                System.Diagnostics.Debug.WriteLine($"[ProjectModule] Screens array not found or invalid in {path}");
                 return;
+            }
 
             var jsonDir = Path.GetDirectoryName(path) ?? "";
             var projectDir = Path.GetDirectoryName(jsonDir) ?? _projectDir;
             var screensDir = Path.Combine(projectDir, "screens");
 
+            System.Diagnostics.Debug.WriteLine($"[ProjectModule] Loading screens from directory: {screensDir}");
+            int screenCount = 0;
             foreach (var item in screens.EnumerateArray())
             {
                 var name = item.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
@@ -163,12 +182,26 @@ public sealed class ProjectModule : IProject
                 var jsonFile = Path.Combine(screensDir, id + ".json");
                 var address = File.Exists(jsonFile) ? Path.GetFullPath(jsonFile) : jsonFile;
                 _project.Screen.Add(new ScreenInfo { Name = name, Type = "screen", Address = address });
+                screenCount++;
+                System.Diagnostics.Debug.WriteLine($"[ProjectModule] Loaded screen: {name} (id: {id}) -> {address} (exists: {File.Exists(jsonFile)})");
             }
 
+            System.Diagnostics.Debug.WriteLine($"[ProjectModule] Loaded {screenCount} screen(s)");
             if (_project.Screen.Count > 0)
-                ScreenAvailable?.Invoke(this, _project.Screen[0].Address);
+            {
+                var firstScreen = _project.Screen[0].Address;
+                System.Diagnostics.Debug.WriteLine($"[ProjectModule] Firing ScreenAvailable event with: {firstScreen}");
+                ScreenAvailable?.Invoke(this, firstScreen);
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine("[ProjectModule] No screens loaded, ScreenAvailable event not fired");
+            }
         }
-        catch { }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ProjectModule] Error loading screens from {path}: {ex.Message}");
+        }
     }
 
     private void LoadScriptsInfo(string path)
