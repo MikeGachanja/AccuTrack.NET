@@ -341,9 +341,31 @@ public class CompilerModule
         if (!File.Exists(securityPath))
             File.WriteAllText(securityPath, new JObject { ["users"] = new JArray(), ["groups"] = new JArray(), ["roles"] = new JArray() }.ToString());
 
-        var eventsPath = Path.Combine(jsonPath, "events.json");
-        if (!File.Exists(eventsPath))
-            File.WriteAllText(eventsPath, new JObject { ["events"] = new JArray() }.ToString());
+        // Copy events.json from source project if it exists, otherwise create empty one
+        // Construct source json path from RootPath
+        var sourceJsonPath = Path.Combine(_currentProject.Paths.RootPath, "json");
+        var sourceEventsPath = Path.Combine(sourceJsonPath, "events.json");
+        var buildEventsPath = Path.Combine(jsonPath, "events.json");
+        
+        if (File.Exists(sourceEventsPath))
+        {
+            try
+            {
+                File.Copy(sourceEventsPath, buildEventsPath, true);
+                EmitMessage("Copied json/events.json from source project");
+            }
+            catch (Exception ex)
+            {
+                EmitWarning($"Failed to copy events.json: {ex.Message}");
+                // Create empty events.json as fallback
+                File.WriteAllText(buildEventsPath, new JObject { ["events"] = new JArray() }.ToString());
+            }
+        }
+        else
+        {
+            // Create empty events.json if source doesn't exist
+            File.WriteAllText(buildEventsPath, new JObject { ["events"] = new JArray() }.ToString());
+        }
     }
 
     private bool GenerateProjectMetadata(string buildPath)

@@ -108,6 +108,21 @@ namespace Designer
             _propertyEditor = new PropertyEditor();
             _propertyEditor.Dock = DockStyle.Fill;
             
+            // Wire up auto-save request
+            _propertyEditor.RequestAutoSave += (s, e) =>
+            {
+                // Mark current screen editor as modified if it exists
+                if (editorTabs.SelectedTab != null)
+                {
+                    var widget = editorTabs.SelectedTab.Controls.Count > 0 ? editorTabs.SelectedTab.Controls[0] : null;
+                    if (widget is ScreenEditor screenEditor)
+                    {
+                        // ScreenEditor doesn't have a public SetModified, so we'll trigger it through component changes
+                        // The screen will be marked modified when SaveScreen is called
+                    }
+                }
+            };
+            
             if (bottomTabWidget.TabPages.Count >= 3)
             {
                 var propertiesTab = bottomTabWidget.TabPages[2];
@@ -1571,6 +1586,13 @@ namespace Designer
             var editor = new ScreenEditor();
             editor.SetScadaProjectName(scadaName);
             
+            // Get SCADA project to retrieve resolution
+            var scadaProject = _projectManager?.FindScadaProject(scadaName);
+            if (scadaProject != null)
+            {
+                editor.SetScadaResolution(scadaProject.Resolution);
+            }
+            
             // SetTemplate now accepts object
             editor.SetTemplate(template);
             
@@ -1584,7 +1606,6 @@ namespace Designer
                 _propertyEditor.SetAvailableTagTables(tagTables);
                 _propertyEditor.SetAvailableScreens(screens);
                 
-                var scadaProject = _projectManager.FindScadaProject(scadaName);
                 _propertyEditor.SetScadaProject(scadaProject);
                 
                 // Connect screen editor selection events to property editor

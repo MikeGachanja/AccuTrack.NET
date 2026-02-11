@@ -1,5 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Runtime.Views.Controls.RuntimeTextLabel">
-  <TextBlock x:Name="TheText" Text="" Foreground="White" />
+  <TextBlock x:Name="TheText" Text="" Foreground="#333333" />
 </UserControl>

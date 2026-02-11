@@ -29,9 +29,6 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         
-        // Set window to full screen mode
-        WindowState = WindowState.FullScreen;
-        
         _screenContainer = this.FindControl<ContentControl>("ScreenContainer");
         HomeButton.Click += OnHomeClicked;
         LogsButton.Click += OnLogsClicked;
@@ -117,7 +114,7 @@ public partial class MainWindow : Window
                 return;
             }
         }
-        _screenContainer.Content = new TextBlock { Text = "Screen: " + path, Foreground = Avalonia.Media.Brushes.White };
+        _screenContainer.Content = new TextBlock { Text = "Screen: " + path, Foreground = Avalonia.Media.Brushes.Black };
     }
 
     internal void SetTransferServer(ProjectTransferServer server)

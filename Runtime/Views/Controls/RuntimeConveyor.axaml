@@ -1,9 +1,9 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Runtime.Views.Controls.RuntimeConveyor">
-  <Border x:Name="TheBorder" Background="#333" BorderBrush="Gray" BorderThickness="1" CornerRadius="2" Padding="6">
+  <Border x:Name="TheBorder" Background="#e0e0e0" BorderBrush="#cccccc" BorderThickness="1" CornerRadius="2" Padding="6">
     <StackPanel>
-      <TextBlock x:Name="LabelText" Text="Conveyor" Foreground="White" FontSize="11" HorizontalAlignment="Center" />
+      <TextBlock x:Name="LabelText" Text="Conveyor" Foreground="#333333" FontSize="11" HorizontalAlignment="Center" />
     </StackPanel>
   </Border>
 </UserControl>

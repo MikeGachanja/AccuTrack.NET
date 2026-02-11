@@ -3,6 +3,6 @@
              x:Class="Runtime.Views.Controls.RuntimeMotor">
   <StackPanel>
     <Ellipse x:Name="TheEllipse" Width="28" Height="28" Fill="Gray" />
-    <TextBlock x:Name="LabelText" Text="Motor" Foreground="White" FontSize="10" HorizontalAlignment="Center" />
+    <TextBlock x:Name="LabelText" Text="Motor" Foreground="#333333" FontSize="10" HorizontalAlignment="Center" />
   </StackPanel>
 </UserControl>

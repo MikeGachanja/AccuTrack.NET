@@ -3,7 +3,7 @@
              x:Class="Runtime.Views.Controls.RuntimeTab">
   <TabControl>
     <TabItem Header="Content">
-      <TextBlock Text="Tab content (stub)" Foreground="#808080" Margin="8" />
+      <TextBlock Text="Tab content (stub)" Foreground="#666666" Margin="8" />
     </TabItem>
   </TabControl>
 </UserControl>

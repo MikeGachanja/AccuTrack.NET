@@ -24,11 +24,18 @@ public static class ScreenViewBuilder
         if (screen == null) return null;
         var subs = new List<IDisposable>();
         var screenId = screen.Id ?? screen.Name ?? "";
+        // Force light background - override dark colors
+        var bgColor = screen.BackgroundColor ?? "#FFFFFF";
+        if (IsDarkColor(bgColor))
+        {
+            bgColor = "#FFFFFF"; // Force white for dark colors
+        }
+        
         var canvas = new Canvas
         {
             Width = screen.Width,
             Height = screen.Height,
-            Background = ParseBrush(screen.BackgroundColor)
+            Background = ParseBrush(bgColor)
         };
         var sorted = new List<ComponentDescriptor>(screen.Components);
         sorted.Sort((a, b) => a.ZOrder.CompareTo(b.ZOrder));
@@ -108,7 +115,9 @@ public static class ScreenViewBuilder
         b.TagName = d.TagName;
         if (eventManager != null && !string.IsNullOrEmpty(d.Id))
         {
-            b.Click += (_, _) => eventManager.FireTrigger(d.Id, "click");
+            // Wire various trigger types
+            b.Click += (_, _) => eventManager.FireTrigger(d.Id, "OnClick");
+            // Note: Double-click and right-click would need to be added to RuntimeButton if not already present
         }
         return b;
     }
@@ -487,13 +496,13 @@ public static class ScreenViewBuilder
     {
         return new Border
         {
-            Background = new SolidColorBrush(Color.FromRgb(60, 60, 60)),
-            BorderBrush = Brushes.Gray,
+            Background = new SolidColorBrush(Color.FromRgb(240, 240, 240)),
+            BorderBrush = new SolidColorBrush(Color.FromRgb(200, 200, 200)),
             BorderThickness = new Thickness(1),
             Child = new TextBlock
             {
                 Text = $"{d.ComponentType}: {d.Name}",
-                Foreground = Brushes.Gray,
+                Foreground = new SolidColorBrush(Color.FromRgb(100, 100, 100)),
                 FontSize = 10,
                 VerticalAlignment = VerticalAlignment.Center,
                 HorizontalAlignment = HorizontalAlignment.Center
@@ -531,9 +540,28 @@ public static class ScreenViewBuilder
         }
     }
 
+    private static bool IsDarkColor(string hex)
+    {
+        if (string.IsNullOrEmpty(hex) || !hex.StartsWith("#") || hex.Length < 7)
+            return false;
+        try
+        {
+            var r = Convert.ToInt32(hex.Substring(1, 2), 16);
+            var g = Convert.ToInt32(hex.Substring(3, 2), 16);
+            var b = Convert.ToInt32(hex.Substring(5, 2), 16);
+            // Calculate luminance - if less than 128, consider it dark
+            var luminance = (0.299 * r + 0.587 * g + 0.114 * b);
+            return luminance < 128;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private static IBrush ParseBrush(string hex)
     {
-        if (string.IsNullOrEmpty(hex)) return Brushes.Black;
+        if (string.IsNullOrEmpty(hex)) return Brushes.White;
         if (hex.StartsWith("#") && hex.Length >= 7)
         {
             var r = Convert.ToInt32(hex.Substring(1, 2), 16);
@@ -541,6 +569,6 @@ public static class ScreenViewBuilder
             var b = Convert.ToInt32(hex.Substring(5, 2), 16);
             return new SolidColorBrush(Color.FromRgb((byte)r, (byte)g, (byte)b));
         }
-        return Brushes.Black;
+        return Brushes.White;
     }
 }

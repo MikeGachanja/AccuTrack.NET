@@ -16,7 +16,7 @@ public partial class RuntimeRectangle : UserControl
     {
         if (d == null) return;
         var color = GetProperty(d, "color", "");
-        if (string.IsNullOrEmpty(color)) color = GetProperty(d, "backgroundColor", "#404040");
+        if (string.IsNullOrEmpty(color)) color = GetProperty(d, "backgroundColor", "#e0e0e0");
         TheBorder.Background = ParseBrush(color);
         if (GetProperty(d, "borderColor", "") is { Length: > 0 } bc)
         {

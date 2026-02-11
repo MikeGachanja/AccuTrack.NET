@@ -6,12 +6,11 @@
         Height="768"
         MinWidth="640"
         MinHeight="480"
-        WindowState="FullScreen"
-        Background="#1a1a1a">
+        Background="White">
   <Panel>
     <DockPanel>
       <!-- Top: small menu strip with page controls only (Home, Logs, Alarms) -->
-      <Border DockPanel.Dock="Top" Background="#2d3748" Padding="6,4" MinHeight="36">
+      <Border DockPanel.Dock="Top" Background="#f0f0f0" Padding="6,4" MinHeight="36">
         <StackPanel Orientation="Horizontal" Spacing="6">
           <Button x:Name="HomeButton" Content="Home" Width="70" Height="28" FontSize="12" />
           <Button x:Name="LogsButton" Content="Logs" Width="70" Height="28" FontSize="12" />
@@ -20,9 +19,9 @@
       </Border>
 
       <!-- Bottom: connection status strip -->
-      <Border DockPanel.Dock="Bottom" Background="#2d3748" Padding="8,5" MinHeight="28">
+      <Border DockPanel.Dock="Bottom" Background="#f0f0f0" Padding="8,5" MinHeight="28">
         <StackPanel Orientation="Horizontal" Spacing="12">
-          <TextBlock Text="Connections:" FontWeight="Bold" Foreground="#a0a0a0" VerticalAlignment="Center" FontSize="12" />
+          <TextBlock Text="Connections:" FontWeight="Bold" Foreground="#333333" VerticalAlignment="Center" FontSize="12" />
           <ItemsControl x:Name="ConnectionStatusList">
             <ItemsControl.ItemsPanel>
               <ItemsPanelTemplate>
@@ -31,10 +30,10 @@
             </ItemsControl.ItemsPanel>
             <ItemsControl.ItemTemplate>
               <DataTemplate>
-                <Border Background="#1a1a1a" Padding="5,2" CornerRadius="3" BorderThickness="1" BorderBrush="#4a5568">
+                <Border Background="White" Padding="5,2" CornerRadius="3" BorderThickness="1" BorderBrush="#cccccc">
                   <StackPanel Orientation="Horizontal" Spacing="4">
-                    <TextBlock Text="{Binding Name}" Foreground="#e0e0e0" FontSize="11" />
-                    <TextBlock Text="{Binding Status}" Foreground="#a0a0a0" FontSize="10" />
+                    <TextBlock Text="{Binding Name}" Foreground="#333333" FontSize="11" />
+                    <TextBlock Text="{Binding Status}" Foreground="#666666" FontSize="10" />
                   </StackPanel>
                 </Border>
               </DataTemplate>
@@ -52,13 +51,13 @@
             IsVisible="False"
             Background="#80000000"
             ZIndex="1000">
-      <Border Background="#2d3748" BorderBrush="#4a5568" BorderThickness="2" CornerRadius="8"
+      <Border Background="White" BorderBrush="#cccccc" BorderThickness="2" CornerRadius="8"
               Width="400" Height="200" HorizontalAlignment="Center" VerticalAlignment="Center">
         <StackPanel Margin="20" Spacing="15">
-          <TextBlock x:Name="TransferTitle" Text="Project Transfer" FontSize="18" FontWeight="Bold" Foreground="White" HorizontalAlignment="Center" />
-          <TextBlock x:Name="TransferStatus" Text="Preparing transfer..." Foreground="#a0a0a0" FontSize="14" HorizontalAlignment="Center" />
+          <TextBlock x:Name="TransferTitle" Text="Project Transfer" FontSize="18" FontWeight="Bold" Foreground="#333333" HorizontalAlignment="Center" />
+          <TextBlock x:Name="TransferStatus" Text="Preparing transfer..." Foreground="#666666" FontSize="14" HorizontalAlignment="Center" />
           <ProgressBar x:Name="TransferProgressBar" Minimum="0" Maximum="100" Value="0" Height="20" />
-          <TextBlock x:Name="TransferProgressText" Text="0%" Foreground="White" FontSize="12" HorizontalAlignment="Center" />
+          <TextBlock x:Name="TransferProgressText" Text="0%" Foreground="#333333" FontSize="12" HorizontalAlignment="Center" />
         </StackPanel>
       </Border>
     </Border>

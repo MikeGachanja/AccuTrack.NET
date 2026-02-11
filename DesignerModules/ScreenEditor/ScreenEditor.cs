@@ -4,7 +4,6 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
-using Designer.Modules.ScreenEditor;
 using Designer.Modules.Components;
 using Newtonsoft.Json.Linq;
 
@@ -16,8 +15,10 @@ namespace Designer.Modules.ScreenEditor;
 public partial class ScreenEditor : UserControl
 {
     private Panel _canvas;
+    private Panel _canvasContainer; // Container with margins for centering
     private object? _template; // Changed to object to avoid circular dependency
     private string? _scadaProjectName; // Store name instead of object to avoid circular dependency
+    private Size _scadaResolution = new Size(1920, 1080); // Default SCADA resolution
     private bool _modified;
     private float _zoomFactor = 1.0f;
     
@@ -25,11 +26,30 @@ public partial class ScreenEditor : UserControl
     private List<BaseComponent> _components = new List<BaseComponent>();
     private BaseComponent? _selectedComponent;
     private Point _dragStartPoint;
+    private Point _dragStartComponentLocation; // Original component location when drag starts
+    private Size _dragStartComponentSize; // Original component size when resize starts
     private bool _isDragging;
     private bool _isResizing;
     private Rectangle? _selectionRect;
     
     private const int ResizeHandleSize = 8;
+    
+    // Resize handle positions
+    private enum ResizeHandle
+    {
+        None,
+        TopLeft,
+        Top,
+        TopRight,
+        Right,
+        BottomRight,
+        Bottom,
+        BottomLeft,
+        Left
+    }
+    
+    private ResizeHandle _activeResizeHandle = ResizeHandle.None;
+    private const int MarginSize = 20; // Margin around the canvas
 
     public event EventHandler<bool>? ModifiedChanged;
     public event EventHandler<BaseComponent?>? SelectionChanged;
@@ -77,12 +97,21 @@ public partial class ScreenEditor : UserControl
         var snapToGridButton = new ToolStripButton("Snap to Grid") { CheckOnClick = true, Checked = true };
         toolbar.Items.Add(snapToGridButton);
 
-        // Canvas for screen design
-        _canvas = new Panel
+        // Container panel with margins for centering the canvas
+        _canvasContainer = new Panel
         {
             Dock = DockStyle.Fill,
+            BackColor = Color.LightGray, // Background color outside the screen bounds
+            AutoScroll = true,
+            Padding = new Padding(MarginSize)
+        };
+
+        // Canvas for screen design - sized to exactly match SCADA resolution
+        _canvas = new Panel
+        {
             BackColor = Color.White,
-            AutoScroll = true
+            Size = _scadaResolution,
+            Location = new Point(MarginSize, MarginSize)
         };
 
         _canvas.Paint += OnCanvasPaint;
@@ -94,8 +123,13 @@ public partial class ScreenEditor : UserControl
         _canvas.DragEnter += OnCanvasDragEnter;
         _canvas.DragDrop += OnCanvasDragDrop;
 
+        _canvasContainer.Paint += OnContainerPaint;
+        _canvasContainer.Controls.Add(_canvas);
+        _canvasContainer.Scroll += (s, e) => _canvas.Invalidate(); // Invalidate canvas when scrolling
+        _canvasContainer.Resize += (s, e) => UpdateCanvasPosition(); // Recenter canvas on resize
+
         mainLayout.Controls.Add(toolbar, 0, 0);
-        mainLayout.Controls.Add(_canvas, 0, 1);
+        mainLayout.Controls.Add(_canvasContainer, 0, 1);
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -108,6 +142,15 @@ public partial class ScreenEditor : UserControl
     public void SetScadaProjectName(string scadaName)
     {
         _scadaProjectName = scadaName;
+    }
+
+    /// <summary>
+    /// Sets the SCADA resolution (screen size) for this editor.
+    /// </summary>
+    public void SetScadaResolution(Size resolution)
+    {
+        _scadaResolution = resolution;
+        UpdateCanvasSize();
     }
 
     /// <summary>
@@ -130,7 +173,16 @@ public partial class ScreenEditor : UserControl
             
             if (size != null)
             {
-                _canvas.Size = new Size(size.Width, size.Height);
+                // Use SCADA resolution if available, otherwise use template size
+                if (_scadaResolution.Width > 0 && _scadaResolution.Height > 0)
+                {
+                    _canvas.Size = _scadaResolution;
+                }
+                else
+                {
+                    _canvas.Size = new Size(size.Width, size.Height);
+                }
+                UpdateCanvasSize(); // This will update position and scroll area
             }
             if (backgroundColor != null)
             {
@@ -219,6 +271,9 @@ public partial class ScreenEditor : UserControl
                     
                     // Write JSON to file
                     File.WriteAllText(filePath, json.ToString(Newtonsoft.Json.Formatting.Indented));
+                    
+                    // Save events.json if components have events
+                    SaveEventsIfNeeded(filePath);
                 }
             }
             
@@ -231,6 +286,48 @@ public partial class ScreenEditor : UserControl
             // Log error for debugging
             System.Diagnostics.Debug.WriteLine($"Error saving screen: {ex.Message}");
             return false;
+        }
+    }
+    
+    /// <summary>
+    /// Saves events.json if any components have events associated.
+    /// Note: Events are saved immediately when created/updated in PropertyEditor,
+    /// but this ensures events.json exists in the project structure.
+    /// </summary>
+    private void SaveEventsIfNeeded(string screenFilePath)
+    {
+        try
+        {
+            // Determine events.json path (should be in json/ directory relative to screens)
+            string? screenDir = Path.GetDirectoryName(screenFilePath);
+            if (string.IsNullOrEmpty(screenDir))
+                return;
+                
+            // Go up from screens/ to project root, then to json/
+            string? projectRoot = Path.GetDirectoryName(screenDir); // screens -> project root
+            if (string.IsNullOrEmpty(projectRoot))
+                return;
+                
+            string jsonDir = Path.Combine(projectRoot, "json");
+            if (!Directory.Exists(jsonDir))
+            {
+                Directory.CreateDirectory(jsonDir);
+            }
+            
+            string eventsPath = Path.Combine(jsonDir, "events.json");
+            
+            // Ensure events.json exists (even if empty)
+            // Events are saved immediately when created/updated via PropertyEditor
+            if (!File.Exists(eventsPath))
+            {
+                // Create empty events.json file
+                var emptyEventsJson = new JObject { ["events"] = new JArray() };
+                File.WriteAllText(eventsPath, emptyEventsJson.ToString(Newtonsoft.Json.Formatting.Indented));
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"Error ensuring events.json exists: {ex.Message}");
         }
     }
 
@@ -281,6 +378,82 @@ public partial class ScreenEditor : UserControl
         }
     }
 
+    private void OnContainerPaint(object? sender, PaintEventArgs e)
+    {
+        var g = e.Graphics;
+        
+        // Draw visual boundary around the screen canvas
+        Rectangle canvasBounds = new Rectangle(
+            _canvas.Location.X - 1,
+            _canvas.Location.Y - 1,
+            _canvas.Width + 2,
+            _canvas.Height + 2
+        );
+        
+        // Draw border around screen bounds
+        using (var pen = new Pen(Color.DarkGray, 2))
+        {
+            g.DrawRectangle(pen, canvasBounds);
+        }
+        
+        // Draw corner indicators
+        int cornerSize = 10;
+        using (var brush = new SolidBrush(Color.DarkGray))
+        {
+            // Top-left corner
+            g.FillRectangle(brush, canvasBounds.Left, canvasBounds.Top, cornerSize, 3);
+            g.FillRectangle(brush, canvasBounds.Left, canvasBounds.Top, 3, cornerSize);
+            
+            // Top-right corner
+            g.FillRectangle(brush, canvasBounds.Right - cornerSize, canvasBounds.Top, cornerSize, 3);
+            g.FillRectangle(brush, canvasBounds.Right - 3, canvasBounds.Top, 3, cornerSize);
+            
+            // Bottom-left corner
+            g.FillRectangle(brush, canvasBounds.Left, canvasBounds.Bottom - 3, cornerSize, 3);
+            g.FillRectangle(brush, canvasBounds.Left, canvasBounds.Bottom - cornerSize, 3, cornerSize);
+            
+            // Bottom-right corner
+            g.FillRectangle(brush, canvasBounds.Right - cornerSize, canvasBounds.Bottom - 3, cornerSize, 3);
+            g.FillRectangle(brush, canvasBounds.Right - 3, canvasBounds.Bottom - cornerSize, 3, cornerSize);
+        }
+    }
+
+    /// <summary>
+    /// Updates the canvas size to match SCADA resolution and centers it in the container.
+    /// </summary>
+    private void UpdateCanvasSize()
+    {
+        if (_scadaResolution.Width > 0 && _scadaResolution.Height > 0)
+        {
+            _canvas.Size = _scadaResolution;
+            UpdateCanvasPosition();
+            
+            // Update container's auto-scroll minimum size to include margins
+            _canvasContainer.AutoScrollMinSize = new Size(
+                _canvas.Width + (MarginSize * 2),
+                _canvas.Height + (MarginSize * 2)
+            );
+            
+            _canvas.Invalidate();
+            _canvasContainer.Invalidate();
+        }
+    }
+
+    /// <summary>
+    /// Centers the canvas in the container with margins.
+    /// </summary>
+    private void UpdateCanvasPosition()
+    {
+        // Center the canvas in the container, but ensure minimum margin
+        int containerWidth = _canvasContainer.ClientSize.Width;
+        int containerHeight = _canvasContainer.ClientSize.Height;
+        
+        int x = Math.Max(MarginSize, (containerWidth - _canvas.Width) / 2);
+        int y = Math.Max(MarginSize, (containerHeight - _canvas.Height) / 2);
+        
+        _canvas.Location = new Point(x, y);
+    }
+
     private void OnCanvasDragEnter(object? sender, DragEventArgs e)
     {
         // Check for component drag-drop
@@ -314,13 +487,20 @@ public partial class ScreenEditor : UserControl
         {
             // Clone the component and place it at drop location
             var newComponent = component.Clone();
-            newComponent.Location = SnapToGrid(dropPoint);
+            Point location = SnapToGrid(dropPoint);
+            // Constrain to screen bounds
+            location = ConstrainToScreenBounds(location, newComponent.Size);
+            newComponent.Location = location;
             newComponent.Name = $"{component.ComponentType}_{_components.Count + 1}";
             
-            _components.Add(newComponent);
-            SetSelectedComponent(newComponent);
-            SetModified(true);
-            _canvas.Invalidate();
+            // Only add if it fits within screen bounds
+            if (IsWithinScreenBounds(location, newComponent.Size))
+            {
+                _components.Add(newComponent);
+                SetSelectedComponent(newComponent);
+                SetModified(true);
+                _canvas.Invalidate();
+            }
         }
         // Handle screen drag-drop - create navigation button (using string literal to avoid circular dependency)
         else if (e.Data?.GetData("AccuTrack.SCADA.Screen") is Dictionary<string, object> screenData)
@@ -332,12 +512,17 @@ public partial class ScreenEditor : UserControl
                 if (!string.IsNullOrEmpty(screenName))
                 {
                     // Create a navigation button component
+                    Point location = SnapToGrid(dropPoint);
+                    Size buttonSize = new Size(120, 35);
+                    // Constrain to screen bounds
+                    location = ConstrainToScreenBounds(location, buttonSize);
+                    
                     var button = new ButtonComponent
                     {
                         Id = Guid.NewGuid(),
                         Name = $"NavButton_{screenName}_{_components.Count + 1}",
-                        Location = SnapToGrid(dropPoint),
-                        Size = new Size(120, 35),
+                        Location = location,
+                        Size = buttonSize,
                         Text = screenName,
                         Action = $"NavigateScreen:{screenName}", // Format: NavigateScreen:ScreenName
                         BackColor = Color.FromArgb(70, 130, 180), // Steel blue
@@ -349,10 +534,14 @@ public partial class ScreenEditor : UserControl
                         Enabled = true
                     };
                     
-                    _components.Add(button);
-                    SetSelectedComponent(button);
-                    SetModified(true);
-                    _canvas.Invalidate();
+                    // Only add if it fits within screen bounds
+                    if (IsWithinScreenBounds(location, buttonSize))
+                    {
+                        _components.Add(button);
+                        SetSelectedComponent(button);
+                        SetModified(true);
+                        _canvas.Invalidate();
+                    }
                 }
             }
             catch (Exception ex)
@@ -367,13 +556,18 @@ public partial class ScreenEditor : UserControl
             {
                 if (!string.IsNullOrEmpty(svgPath))
                 {
+                    Point location = SnapToGrid(dropPoint);
+                    Size svgSize = new Size(100, 100);
+                    // Constrain to screen bounds
+                    location = ConstrainToScreenBounds(location, svgSize);
+                    
                     // Create an SVG view component
                     var svgComponent = new SvgViewComponent
                     {
                         Id = Guid.NewGuid(),
                         Name = $"SVGView_{Path.GetFileNameWithoutExtension(svgPath)}_{_components.Count + 1}",
-                        Location = SnapToGrid(dropPoint),
-                        Size = new Size(100, 100), // Default size for SVG
+                        Location = location,
+                        Size = svgSize,
                         SvgPath = svgPath, // Store relative path from svg/ directory
                         BorderColor = Color.Gray,
                         BorderWidth = 1,
@@ -381,10 +575,14 @@ public partial class ScreenEditor : UserControl
                         Enabled = true
                     };
                     
-                    _components.Add(svgComponent);
-                    SetSelectedComponent(svgComponent);
-                    SetModified(true);
-                    _canvas.Invalidate();
+                    // Only add if it fits within screen bounds
+                    if (IsWithinScreenBounds(location, svgSize))
+                    {
+                        _components.Add(svgComponent);
+                        SetSelectedComponent(svgComponent);
+                        SetModified(true);
+                        _canvas.Invalidate();
+                    }
                 }
             }
             catch (Exception ex)
@@ -411,40 +609,175 @@ public partial class ScreenEditor : UserControl
         
         SetSelectedComponent(clickedComponent);
         
-        // Check if clicking on resize handle
-        if (_selectedComponent != null && IsPointOnResizeHandle(clickPoint, _selectedComponent.Bounds))
-        {
-            _isResizing = true;
-        }
+        // Note: Resize handle detection and resizing is handled in OnCanvasMouseDown
+        // This method is mainly for component selection
     }
 
     private void OnCanvasMouseMove(object? sender, MouseEventArgs e)
     {
         if (_isDragging && _selectedComponent != null)
         {
-            Point newLocation = SnapToGrid(new Point(
-                e.X - _dragStartPoint.X + _selectedComponent.Location.X,
-                e.Y - _dragStartPoint.Y + _selectedComponent.Location.Y
-            ));
+            // Calculate the mouse movement delta from the original drag start point
+            int deltaX = e.X - _dragStartPoint.X;
+            int deltaY = e.Y - _dragStartPoint.Y;
+            
+            // Calculate new location based on original component location + mouse delta
+            Point newLocation = new Point(
+                _dragStartComponentLocation.X + deltaX,
+                _dragStartComponentLocation.Y + deltaY
+            );
+            
+            // Snap to grid
+            newLocation = SnapToGrid(newLocation);
+            
+            // Only constrain if the component would go outside bounds
+            // This allows smooth dragging within bounds
+            if (!IsWithinScreenBounds(newLocation, _selectedComponent.Size))
+            {
+                newLocation = ConstrainToScreenBounds(newLocation, _selectedComponent.Size);
+            }
+            
             _selectedComponent.Move(newLocation);
             _canvas.Invalidate();
         }
-        else if (_isResizing && _selectedComponent != null)
+        else if (_isResizing && _selectedComponent != null && _activeResizeHandle != ResizeHandle.None)
         {
             Point delta = new Point(e.X - _dragStartPoint.X, e.Y - _dragStartPoint.Y);
-            Size newSize = new Size(
-                Math.Max(20, _selectedComponent.Size.Width + delta.X),
-                Math.Max(20, _selectedComponent.Size.Height + delta.Y)
-            );
+            Point newLocation = _dragStartComponentLocation;
+            Size newSize = _dragStartComponentSize;
+            
+            // Calculate new size and location based on which handle is being dragged
+            switch (_activeResizeHandle)
+            {
+                case ResizeHandle.TopLeft:
+                    newLocation = new Point(
+                        _dragStartComponentLocation.X + delta.X,
+                        _dragStartComponentLocation.Y + delta.Y
+                    );
+                    newSize = new Size(
+                        Math.Max(20, _dragStartComponentSize.Width - delta.X),
+                        Math.Max(20, _dragStartComponentSize.Height - delta.Y)
+                    );
+                    // Adjust location if size changed
+                    newLocation = new Point(
+                        _dragStartComponentLocation.X + (_dragStartComponentSize.Width - newSize.Width),
+                        _dragStartComponentLocation.Y + (_dragStartComponentSize.Height - newSize.Height)
+                    );
+                    break;
+                    
+                case ResizeHandle.Top:
+                    newLocation = new Point(
+                        _dragStartComponentLocation.X,
+                        _dragStartComponentLocation.Y + delta.Y
+                    );
+                    newSize = new Size(
+                        _dragStartComponentSize.Width,
+                        Math.Max(20, _dragStartComponentSize.Height - delta.Y)
+                    );
+                    newLocation = new Point(
+                        _dragStartComponentLocation.X,
+                        _dragStartComponentLocation.Y + (_dragStartComponentSize.Height - newSize.Height)
+                    );
+                    break;
+                    
+                case ResizeHandle.TopRight:
+                    newLocation = new Point(
+                        _dragStartComponentLocation.X,
+                        _dragStartComponentLocation.Y + delta.Y
+                    );
+                    newSize = new Size(
+                        Math.Max(20, _dragStartComponentSize.Width + delta.X),
+                        Math.Max(20, _dragStartComponentSize.Height - delta.Y)
+                    );
+                    newLocation = new Point(
+                        _dragStartComponentLocation.X,
+                        _dragStartComponentLocation.Y + (_dragStartComponentSize.Height - newSize.Height)
+                    );
+                    break;
+                    
+                case ResizeHandle.Right:
+                    newSize = new Size(
+                        Math.Max(20, _dragStartComponentSize.Width + delta.X),
+                        _dragStartComponentSize.Height
+                    );
+                    break;
+                    
+                case ResizeHandle.BottomRight:
+                    newSize = new Size(
+                        Math.Max(20, _dragStartComponentSize.Width + delta.X),
+                        Math.Max(20, _dragStartComponentSize.Height + delta.Y)
+                    );
+                    break;
+                    
+                case ResizeHandle.Bottom:
+                    newSize = new Size(
+                        _dragStartComponentSize.Width,
+                        Math.Max(20, _dragStartComponentSize.Height + delta.Y)
+                    );
+                    break;
+                    
+                case ResizeHandle.BottomLeft:
+                    newLocation = new Point(
+                        _dragStartComponentLocation.X + delta.X,
+                        _dragStartComponentLocation.Y
+                    );
+                    newSize = new Size(
+                        Math.Max(20, _dragStartComponentSize.Width - delta.X),
+                        Math.Max(20, _dragStartComponentSize.Height + delta.Y)
+                    );
+                    newLocation = new Point(
+                        _dragStartComponentLocation.X + (_dragStartComponentSize.Width - newSize.Width),
+                        _dragStartComponentLocation.Y
+                    );
+                    break;
+                    
+                case ResizeHandle.Left:
+                    newLocation = new Point(
+                        _dragStartComponentLocation.X + delta.X,
+                        _dragStartComponentLocation.Y
+                    );
+                    newSize = new Size(
+                        Math.Max(20, _dragStartComponentSize.Width - delta.X),
+                        _dragStartComponentSize.Height
+                    );
+                    newLocation = new Point(
+                        _dragStartComponentLocation.X + (_dragStartComponentSize.Width - newSize.Width),
+                        _dragStartComponentLocation.Y
+                    );
+                    break;
+            }
+            
+            // Snap to grid
+            newLocation = SnapToGrid(newLocation);
+            newSize = SnapSizeToGrid(newSize);
+            
+            // Constrain to screen bounds
+            if (!IsWithinScreenBounds(newLocation, newSize))
+            {
+                // First constrain the size
+                newSize = ConstrainSizeToScreenBounds(newLocation, newSize);
+                // Then adjust location if needed
+                if (newLocation.X + newSize.Width > _canvas.Width)
+                    newLocation = new Point(_canvas.Width - newSize.Width, newLocation.Y);
+                if (newLocation.Y + newSize.Height > _canvas.Height)
+                    newLocation = new Point(newLocation.X, _canvas.Height - newSize.Height);
+                if (newLocation.X < 0)
+                    newLocation = new Point(0, newLocation.Y);
+                if (newLocation.Y < 0)
+                    newLocation = new Point(newLocation.X, 0);
+            }
+            
+            _selectedComponent.Move(newLocation);
             _selectedComponent.Resize(newSize);
             _canvas.Invalidate();
         }
         else
         {
-            // Update cursor if over resize handle
-            if (_selectedComponent != null && IsPointOnResizeHandle(e.Location, _selectedComponent.Bounds))
+            // Update cursor based on resize handle
+            if (_selectedComponent != null)
             {
-                _canvas.Cursor = Cursors.SizeNWSE;
+                ResizeHandle handle = GetResizeHandleAtPoint(e.Location, _selectedComponent.Bounds);
+                _canvas.Cursor = GetCursorForResizeHandle(handle);
             }
             else
             {
@@ -463,12 +796,18 @@ public partial class ScreenEditor : UserControl
             if (_selectedComponent != null && _selectedComponent.Contains(clickPoint))
             {
                 _dragStartPoint = clickPoint;
+                _dragStartComponentLocation = _selectedComponent.Location; // Store original location
                 _isDragging = true;
             }
-            else if (_selectedComponent != null && IsPointOnResizeHandle(clickPoint, _selectedComponent.Bounds))
+            else if (_selectedComponent != null)
             {
-                _dragStartPoint = clickPoint;
-                _isResizing = true;
+                _activeResizeHandle = GetResizeHandleAtPoint(clickPoint, _selectedComponent.Bounds);
+                if (_activeResizeHandle != ResizeHandle.None)
+                {
+                    _dragStartPoint = clickPoint;
+                    _dragStartComponentSize = _selectedComponent.Size;
+                    _isResizing = true;
+                }
             }
             else
             {
@@ -488,7 +827,9 @@ public partial class ScreenEditor : UserControl
             }
             _isDragging = false;
             _isResizing = false;
+            _activeResizeHandle = ResizeHandle.None;
             _selectionRect = null;
+            _canvas.Cursor = Cursors.Default;
             _canvas.Invalidate();
         }
     }
@@ -520,32 +861,105 @@ public partial class ScreenEditor : UserControl
             (point.Y / gridSize) * gridSize
         );
     }
+    
+    private Size SnapSizeToGrid(Size size)
+    {
+        int gridSize = 20;
+        return new Size(
+            ((size.Width + gridSize / 2) / gridSize) * gridSize,
+            ((size.Height + gridSize / 2) / gridSize) * gridSize
+        );
+    }
+    
+    /// <summary>
+    /// Gets the appropriate cursor for a resize handle.
+    /// </summary>
+    private Cursor GetCursorForResizeHandle(ResizeHandle handle)
+    {
+        return handle switch
+        {
+            ResizeHandle.TopLeft or ResizeHandle.BottomRight => Cursors.SizeNWSE,
+            ResizeHandle.TopRight or ResizeHandle.BottomLeft => Cursors.SizeNESW,
+            ResizeHandle.Top or ResizeHandle.Bottom => Cursors.SizeNS,
+            ResizeHandle.Left or ResizeHandle.Right => Cursors.SizeWE,
+            _ => Cursors.Default
+        };
+    }
 
+    /// <summary>
+    /// Gets which resize handle (if any) the point is on.
+    /// </summary>
+    private ResizeHandle GetResizeHandleAtPoint(Point point, Rectangle bounds)
+    {
+        int halfSize = ResizeHandleSize / 2;
+        int tolerance = ResizeHandleSize;
+        
+        // Check corners first (they take priority)
+        if (Math.Abs(point.X - bounds.Left) <= tolerance && Math.Abs(point.Y - bounds.Top) <= tolerance)
+            return ResizeHandle.TopLeft;
+        if (Math.Abs(point.X - bounds.Right) <= tolerance && Math.Abs(point.Y - bounds.Top) <= tolerance)
+            return ResizeHandle.TopRight;
+        if (Math.Abs(point.X - bounds.Right) <= tolerance && Math.Abs(point.Y - bounds.Bottom) <= tolerance)
+            return ResizeHandle.BottomRight;
+        if (Math.Abs(point.X - bounds.Left) <= tolerance && Math.Abs(point.Y - bounds.Bottom) <= tolerance)
+            return ResizeHandle.BottomLeft;
+        
+        // Check edges
+        if (Math.Abs(point.X - bounds.Left) <= tolerance && point.Y >= bounds.Top && point.Y <= bounds.Bottom)
+            return ResizeHandle.Left;
+        if (Math.Abs(point.X - bounds.Right) <= tolerance && point.Y >= bounds.Top && point.Y <= bounds.Bottom)
+            return ResizeHandle.Right;
+        if (Math.Abs(point.Y - bounds.Top) <= tolerance && point.X >= bounds.Left && point.X <= bounds.Right)
+            return ResizeHandle.Top;
+        if (Math.Abs(point.Y - bounds.Bottom) <= tolerance && point.X >= bounds.Left && point.X <= bounds.Right)
+            return ResizeHandle.Bottom;
+        
+        return ResizeHandle.None;
+    }
+    
+    /// <summary>
+    /// Legacy method for compatibility - checks if point is on any resize handle.
+    /// </summary>
     private bool IsPointOnResizeHandle(Point point, Rectangle bounds)
     {
-        Rectangle handleRect = new Rectangle(
-            bounds.Right - ResizeHandleSize,
-            bounds.Bottom - ResizeHandleSize,
-            ResizeHandleSize,
-            ResizeHandleSize
-        );
-        return handleRect.Contains(point);
+        return GetResizeHandleAtPoint(point, bounds) != ResizeHandle.None;
     }
 
     private void DrawResizeHandles(Graphics g, Rectangle bounds)
     {
+        // Draw resize handles on all corners and edges
         using (var brush = new SolidBrush(Color.Blue))
+        using (var outlinePen = new Pen(Color.White, 1))
         {
-            // Draw resize handle at bottom-right corner
-            Rectangle handleRect = new Rectangle(
-                bounds.Right - ResizeHandleSize,
-                bounds.Bottom - ResizeHandleSize,
-                ResizeHandleSize,
-                ResizeHandleSize
-            );
-            g.FillRectangle(brush, handleRect);
-            g.DrawRectangle(Pens.Black, handleRect);
+            int size = ResizeHandleSize;
+            int halfSize = size / 2;
+            
+            // Draw corner handles (larger, square)
+            DrawHandle(g, brush, outlinePen, bounds.Left - halfSize, bounds.Top - halfSize, size, size); // Top-left
+            DrawHandle(g, brush, outlinePen, bounds.Right - halfSize, bounds.Top - halfSize, size, size); // Top-right
+            DrawHandle(g, brush, outlinePen, bounds.Right - halfSize, bounds.Bottom - halfSize, size, size); // Bottom-right
+            DrawHandle(g, brush, outlinePen, bounds.Left - halfSize, bounds.Bottom - halfSize, size, size); // Bottom-left
+            
+            // Draw edge handles (smaller, rectangular)
+            int edgeHandleWidth = 6;
+            int edgeHandleHeight = size;
+            
+            // Top edge
+            DrawHandle(g, brush, outlinePen, bounds.Left + bounds.Width / 2 - edgeHandleWidth / 2, bounds.Top - halfSize, edgeHandleWidth, edgeHandleHeight);
+            // Right edge
+            DrawHandle(g, brush, outlinePen, bounds.Right - halfSize, bounds.Top + bounds.Height / 2 - edgeHandleWidth / 2, edgeHandleHeight, edgeHandleWidth);
+            // Bottom edge
+            DrawHandle(g, brush, outlinePen, bounds.Left + bounds.Width / 2 - edgeHandleWidth / 2, bounds.Bottom - halfSize, edgeHandleWidth, edgeHandleHeight);
+            // Left edge
+            DrawHandle(g, brush, outlinePen, bounds.Left - halfSize, bounds.Top + bounds.Height / 2 - edgeHandleWidth / 2, edgeHandleHeight, edgeHandleWidth);
         }
+    }
+    
+    private void DrawHandle(Graphics g, Brush brush, Pen outlinePen, int x, int y, int width, int height)
+    {
+        Rectangle handleRect = new Rectangle(x, y, width, height);
+        g.FillRectangle(brush, handleRect);
+        g.DrawRectangle(outlinePen, handleRect);
     }
 
     private void ZoomIn()
@@ -568,7 +982,17 @@ public partial class ScreenEditor : UserControl
 
     private void UpdateZoom()
     {
-        if (_template != null)
+        if (_scadaResolution.Width > 0 && _scadaResolution.Height > 0)
+        {
+            _canvas.Size = new Size(
+                (int)(_scadaResolution.Width * _zoomFactor),
+                (int)(_scadaResolution.Height * _zoomFactor)
+            );
+            UpdateCanvasPosition();
+            _canvas.Invalidate();
+            _canvasContainer.Invalidate();
+        }
+        else if (_template != null)
         {
             try
             {
@@ -580,14 +1004,50 @@ public partial class ScreenEditor : UserControl
                         (int)(size.Width * _zoomFactor),
                         (int)(size.Height * _zoomFactor)
                     );
+                    UpdateCanvasPosition();
                     _canvas.Invalidate();
+                    _canvasContainer.Invalidate();
                 }
             }
             catch
             {
                 // Fallback
                 _canvas.Invalidate();
+                _canvasContainer.Invalidate();
             }
         }
+    }
+
+    /// <summary>
+    /// Checks if a location and size are within the screen bounds.
+    /// </summary>
+    private bool IsWithinScreenBounds(Point location, Size size)
+    {
+        return location.X >= 0 && location.Y >= 0 &&
+               location.X + size.Width <= _canvas.Width &&
+               location.Y + size.Height <= _canvas.Height;
+    }
+
+    /// <summary>
+    /// Constrains a location to ensure the component stays within screen bounds.
+    /// </summary>
+    private Point ConstrainToScreenBounds(Point location, Size size)
+    {
+        int x = Math.Max(0, Math.Min(location.X, _canvas.Width - size.Width));
+        int y = Math.Max(0, Math.Min(location.Y, _canvas.Height - size.Height));
+        return new Point(x, y);
+    }
+
+    /// <summary>
+    /// Constrains a size to ensure the component stays within screen bounds.
+    /// </summary>
+    private Size ConstrainSizeToScreenBounds(Point location, Size size)
+    {
+        int maxWidth = _canvas.Width - location.X;
+        int maxHeight = _canvas.Height - location.Y;
+        return new Size(
+            Math.Min(size.Width, maxWidth),
+            Math.Min(size.Height, maxHeight)
+        );
     }
 }

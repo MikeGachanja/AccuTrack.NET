@@ -12,24 +12,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\TagEngine\TagEngine.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
-
-  <!-- Include Events module source files directly -->
-  <ItemGroup>
-    <Compile Include="..\Events\EventEnums.cs" Link="Events\EventEnums.cs" />
-    <Compile Include="..\Events\EventTrigger.cs" Link="Events\EventTrigger.cs" />
-    <Compile Include="..\Events\EventAction.cs" Link="Events\EventAction.cs" />
-    <Compile Include="..\Events\ScadaEvent.cs" Link="Events\ScadaEvent.cs" />
-    <Compile Include="..\Events\EventsModule.cs" Link="Events\EventsModule.cs" />
-  </ItemGroup>
-
-  <PropertyGroup>
-    <UseWindowsForms>true</UseWindowsForms>
-  </PropertyGroup>
 
 </Project>

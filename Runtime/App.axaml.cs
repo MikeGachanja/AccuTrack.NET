@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Styling;
 using Avalonia.Themes.Fluent;
 using Runtime.Modules.Communication;
 using Runtime.Modules.Console;
@@ -13,6 +14,8 @@ public partial class App : Application
 {
     public override void Initialize()
     {
+        // Ensure light theme is applied
+        RequestedThemeVariant = ThemeVariant.Light;
     }
 
     public override void OnFrameworkInitializationCompleted()

@@ -58,6 +58,7 @@ public class ButtonComponent : BaseComponent
             Enabled = Enabled,
             ZOrder = ZOrder,
             TagName = TagName,
+            EventIds = new List<string>(EventIds), // Copy event IDs
             Text = Text,
             BackColor = BackColor,
             ForeColor = ForeColor,

@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Runtime.Views.Controls.RuntimePopup">
-  <Border Background="#2d2d2d" BorderBrush="Gray" BorderThickness="1" CornerRadius="4" Padding="8">
-    <TextBlock x:Name="PlaceholderText" Text="Popup (stub)" Foreground="#808080" FontSize="11" />
+  <Border Background="White" BorderBrush="#cccccc" BorderThickness="1" CornerRadius="4" Padding="8">
+    <TextBlock x:Name="PlaceholderText" Text="Popup (stub)" Foreground="#666666" FontSize="11" />
   </Border>
 </UserControl>

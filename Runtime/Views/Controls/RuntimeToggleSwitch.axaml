@@ -3,6 +3,6 @@
              x:Class="Runtime.Views.Controls.RuntimeToggleSwitch">
   <StackPanel>
     <ToggleSwitch x:Name="TheSwitch" OffContent="" OnContent="" />
-    <TextBlock x:Name="LabelText" Text="" Foreground="White" FontSize="10" IsVisible="False" />
+    <TextBlock x:Name="LabelText" Text="" Foreground="#333333" FontSize="10" IsVisible="False" />
   </StackPanel>
 </UserControl>

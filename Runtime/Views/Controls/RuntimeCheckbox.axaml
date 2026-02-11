@@ -1,5 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Runtime.Views.Controls.RuntimeCheckbox">
-  <CheckBox x:Name="TheCheckBox" Content="" Foreground="White" />
+  <CheckBox x:Name="TheCheckBox" Content="" Foreground="#333333" />
 </UserControl>

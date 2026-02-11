@@ -12,6 +12,9 @@ namespace Designer
         private Panel projectWidget;
         private Panel editorWidget;
         private Panel componentsWidget;
+        private SplitContainer mainSplitContainer;
+        private SplitContainer verticalSplitContainer;
+        private SplitContainer horizontalSplitContainer;
 
         // Menu items
         private ToolStripMenuItem menuFile;
@@ -130,9 +133,18 @@ namespace Designer
             editorTabs = new TabControl();
             componentsPanel = new Panel();
             componentsWidget = componentsPanel; // Alias for MainForm.cs compatibility - set after componentsPanel is initialized
+            mainSplitContainer = new SplitContainer();
+            verticalSplitContainer = new SplitContainer();
+            horizontalSplitContainer = new SplitContainer();
             editorWidget.SuspendLayout();
             bottomWidget.SuspendLayout();
             bottomTabWidget.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(mainSplitContainer)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(verticalSplitContainer)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(horizontalSplitContainer)).BeginInit();
+            mainSplitContainer.SuspendLayout();
+            verticalSplitContainer.SuspendLayout();
+            horizontalSplitContainer.SuspendLayout();
             SuspendLayout();
             // 
             // menuStrip
@@ -151,10 +163,46 @@ namespace Designer
             statusStrip.TabIndex = 1;
             statusStrip.Text = "statusStrip";
             // 
+            // mainSplitContainer
+            // 
+            mainSplitContainer.Dock = DockStyle.Fill;
+            mainSplitContainer.FixedPanel = FixedPanel.Panel2;
+            mainSplitContainer.Location = new Point(0, 24);
+            mainSplitContainer.Name = "mainSplitContainer";
+            mainSplitContainer.Orientation = Orientation.Horizontal;
+            mainSplitContainer.Size = new Size(1165, 691);
+            mainSplitContainer.SplitterDistance = 534;
+            mainSplitContainer.SplitterWidth = 4;
+            mainSplitContainer.TabIndex = 0;
+            // 
+            // verticalSplitContainer
+            // 
+            verticalSplitContainer.Dock = DockStyle.Fill;
+            verticalSplitContainer.FixedPanel = FixedPanel.Panel1;
+            verticalSplitContainer.Location = new Point(0, 0);
+            verticalSplitContainer.Name = "verticalSplitContainer";
+            verticalSplitContainer.Orientation = Orientation.Vertical;
+            verticalSplitContainer.Size = new Size(1165, 534);
+            verticalSplitContainer.SplitterDistance = 200;
+            verticalSplitContainer.SplitterWidth = 4;
+            verticalSplitContainer.TabIndex = 0;
+            // 
+            // horizontalSplitContainer
+            // 
+            horizontalSplitContainer.Dock = DockStyle.Fill;
+            horizontalSplitContainer.FixedPanel = FixedPanel.Panel2;
+            horizontalSplitContainer.Location = new Point(204, 0);
+            horizontalSplitContainer.Name = "horizontalSplitContainer";
+            horizontalSplitContainer.Orientation = Orientation.Vertical;
+            horizontalSplitContainer.Size = new Size(961, 534);
+            horizontalSplitContainer.SplitterDistance = 757;
+            horizontalSplitContainer.SplitterWidth = 4;
+            horizontalSplitContainer.TabIndex = 0;
+            // 
             // projectWidget
             // 
-            projectWidget.Dock = DockStyle.Left;
-            projectWidget.Location = new Point(0, 24);
+            projectWidget.Dock = DockStyle.Fill;
+            projectWidget.Location = new Point(0, 0);
             projectWidget.MaximumSize = new Size(250, 0);
             projectWidget.MinimumSize = new Size(160, 0);
             projectWidget.Name = "projectWidget";
@@ -165,16 +213,16 @@ namespace Designer
             // 
             editorWidget.Controls.Add(editorTabs);
             editorWidget.Dock = DockStyle.Fill;
-            editorWidget.Location = new Point(200, 24);
+            editorWidget.Location = new Point(0, 0);
             editorWidget.Name = "editorWidget";
-            editorWidget.Size = new Size(965, 534);
+            editorWidget.Size = new Size(765, 534);
             editorWidget.TabIndex = 0;
             // 
             // bottomWidget
             // 
             bottomWidget.Controls.Add(bottomTabWidget);
-            bottomWidget.Dock = DockStyle.Bottom;
-            bottomWidget.Location = new Point(0, 558);
+            bottomWidget.Dock = DockStyle.Fill;
+            bottomWidget.Location = new Point(0, 0);
             bottomWidget.MaximumSize = new Size(0, 400);
             bottomWidget.MinimumSize = new Size(0, 120);
             bottomWidget.Name = "bottomWidget";
@@ -229,25 +277,31 @@ namespace Designer
             // 
             // componentsPanel
             // 
-            componentsPanel.Dock = DockStyle.Right;
-            componentsPanel.Location = new Point(965, 24);
+            componentsPanel.Dock = DockStyle.Fill;
+            componentsPanel.Location = new Point(769, 0);
             componentsPanel.MaximumSize = new Size(300, 0);
             componentsPanel.MinimumSize = new Size(200, 0);
             componentsPanel.Name = "componentsPanel";
-            componentsPanel.Size = new Size(200, 534);
+            componentsPanel.Size = new Size(192, 534);
             componentsPanel.TabIndex = 4;
             // Set componentsWidget alias after componentsPanel is initialized
             componentsWidget = componentsPanel;
+            // 
+            // Setup SplitContainer hierarchy
+            // 
+            horizontalSplitContainer.Panel1.Controls.Add(editorWidget);
+            horizontalSplitContainer.Panel2.Controls.Add(componentsPanel);
+            verticalSplitContainer.Panel1.Controls.Add(projectWidget);
+            verticalSplitContainer.Panel2.Controls.Add(horizontalSplitContainer);
+            mainSplitContainer.Panel1.Controls.Add(verticalSplitContainer);
+            mainSplitContainer.Panel2.Controls.Add(bottomWidget);
             // 
             // MainForm
             // 
             AutoScaleDimensions = new SizeF(7F, 15F);
             AutoScaleMode = AutoScaleMode.Font;
             ClientSize = new Size(1165, 737);
-            Controls.Add(componentsPanel);
-            Controls.Add(editorWidget);
-            Controls.Add(projectWidget);
-            Controls.Add(bottomWidget);
+            Controls.Add(mainSplitContainer);
             Controls.Add(menuStrip);
             Controls.Add(statusStrip);
             MainMenuStrip = menuStrip;
@@ -257,6 +311,12 @@ namespace Designer
             editorWidget.ResumeLayout(false);
             bottomWidget.ResumeLayout(false);
             bottomTabWidget.ResumeLayout(false);
+            ((System.ComponentModel.ISupportInitialize)(mainSplitContainer)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(verticalSplitContainer)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(horizontalSplitContainer)).EndInit();
+            mainSplitContainer.ResumeLayout(false);
+            verticalSplitContainer.ResumeLayout(false);
+            horizontalSplitContainer.ResumeLayout(false);
             ResumeLayout(false);
             PerformLayout();
         }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 
 namespace Designer.Modules.Components;
@@ -18,6 +19,7 @@ public abstract class BaseComponent
     public bool Enabled { get; set; } = true;
     public int ZOrder { get; set; } = 0;
     public string TagName { get; set; } = string.Empty; // Associated tag for data binding
+    public List<string> EventIds { get; set; } = new List<string>(); // Associated event IDs
     public Dictionary<string, object> Properties { get; set; } = new Dictionary<string, object>();
 
     /// <summary>
@@ -65,7 +67,7 @@ public abstract class BaseComponent
             propsObj[prop.Key] = JToken.FromObject(prop.Value);
         }
 
-        return new JObject
+        var json = new JObject
         {
             ["id"] = Id.ToString(),
             ["componentType"] = ComponentType,
@@ -86,6 +88,19 @@ public abstract class BaseComponent
             ["tagName"] = TagName,
             ["properties"] = propsObj
         };
+        
+        // Add event IDs if any
+        if (EventIds != null && EventIds.Count > 0)
+        {
+            var eventIdsArray = new JArray();
+            foreach (var eventId in EventIds)
+            {
+                eventIdsArray.Add(eventId);
+            }
+            json["eventIds"] = eventIdsArray;
+        }
+        
+        return json;
     }
 
     /// <summary>
@@ -103,6 +118,20 @@ public abstract class BaseComponent
         Visible = json["visible"]?.ToObject<bool>() ?? true;
         Enabled = json["enabled"]?.ToObject<bool>() ?? true;
         ZOrder = json["zOrder"]?.ToObject<int>() ?? 0;
+        
+        // Load event IDs
+        EventIds.Clear();
+        if (json["eventIds"] is JArray eventIdsArray)
+        {
+            foreach (var item in eventIdsArray)
+            {
+                var eventId = item?.ToString();
+                if (!string.IsNullOrEmpty(eventId))
+                {
+                    EventIds.Add(eventId);
+                }
+            }
+        }
 
         var locationObj = json["location"] as JObject;
         if (locationObj != null)
