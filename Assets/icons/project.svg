@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Project folder representation -->
+  <!-- Folder body -->
+  <path d="M 20 25 L 20 70 L 80 70 L 80 35 L 55 35 L 50 25 Z" 
+        fill="#3498DB" stroke="#2980B9" stroke-width="2"/>
+  <path d="M 20 25 L 50 25 L 55 35 L 20 35 Z" 
+        fill="#2980B9" opacity="0.7"/>
+  
+  <!-- Folder tab -->
+  <path d="M 25 25 L 45 25 L 50 30 L 25 30 Z" 
+        fill="#5DADE2" stroke="#2980B9" stroke-width="1"/>
+  
+  <!-- Document/file inside folder -->
+  <rect x="30" y="40" width="40" height="25" rx="1" fill="#FFFFFF" stroke="#BDC3C7" stroke-width="1"/>
+  <line x1="35" y1="47" x2="60" y2="47" stroke="#3498DB" stroke-width="1.5"/>
+  <line x1="35" y1="52" x2="55" y2="52" stroke="#95A5A6" stroke-width="1"/>
+  <line x1="35" y1="57" x2="50" y2="57" stroke="#95A5A6" stroke-width="1"/>
+  
+  <!-- Project icon/symbol -->
+  <circle cx="45" cy="30" r="3" fill="#FFFFFF"/>
+  <path d="M 45 27 L 47 30 L 45 33 L 43 30 Z" fill="#3498DB"/>
+  
+  <!-- Base -->
+  <rect x="35" y="70" width="30" height="6" rx="1" fill="#7F8C8D"/>
+</svg>

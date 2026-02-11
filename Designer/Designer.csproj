@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <OutputPath>..\bin\$(Configuration)\$(RuntimeIdentifier)\Designer\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DesignerModules\Alarms\Alarms.csproj" />
+    <ProjectReference Include="..\DesignerModules\Communication\Communication.csproj" />
+    <ProjectReference Include="..\DesignerModules\Compiler\Compiler.csproj" />
+    <ProjectReference Include="..\DesignerModules\Components\Components.csproj" />
+    <ProjectReference Include="..\DesignerModules\Console\Console.csproj" />
+    <ProjectReference Include="..\DesignerModules\Discovery\Discovery.csproj" />
+    <ProjectReference Include="..\DesignerModules\EventsBus\EventsBus.csproj" />
+    <ProjectReference Include="..\DesignerModules\Historian\Historian.csproj" />
+    <ProjectReference Include="..\DesignerModules\MachineLearning\MachineLearning.csproj" />
+    <ProjectReference Include="..\DesignerModules\Project\Project.csproj" />
+    <ProjectReference Include="..\DesignerModules\Scheduler\Scheduler.csproj" />
+    <ProjectReference Include="..\DesignerModules\ScreenEditor\ScreenEditor.csproj" />
+    <ProjectReference Include="..\DesignerModules\ScriptEditor\ScriptEditor.csproj" />
+    <ProjectReference Include="..\DesignerModules\Security\Security.csproj" />
+    <ProjectReference Include="..\DesignerModules\Simulator\Simulator.csproj" />
+    <ProjectReference Include="..\DesignerModules\TagEngine\TagEngine.csproj" />
+    <ProjectReference Include="..\DesignerModules\Tools\Tools.csproj" />
+    <ProjectReference Include="..\DesignerModules\Workspace\Workspace.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="System.Windows.Forms" />
+  </ItemGroup>
+
+</Project>

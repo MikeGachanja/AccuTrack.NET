@@ -1,0 +1,23 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Runtime.Views.LogsView"
+             Background="#1e1e1e">
+  <StackPanel Margin="10" Spacing="10">
+    <StackPanel Orientation="Horizontal" Spacing="10">
+      <Button x:Name="BackButton" Content="← Back" Width="80" />
+      <TextBlock Text="Logs" FontSize="24" FontWeight="Bold" Foreground="White" VerticalAlignment="Center" />
+      <Button x:Name="ClearButton" Content="Clear Logs" Width="100" />
+    </StackPanel>
+    <Border Background="#2b2b2b" BorderBrush="Gray" BorderThickness="1" CornerRadius="4">
+      <ScrollViewer>
+        <ItemsControl x:Name="LogList">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{Binding Line}" Foreground="#e0e0e0" FontFamily="Consolas" FontSize="12" TextWrapping="Wrap" Margin="2,0" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </ScrollViewer>
+    </Border>
+  </StackPanel>
+</UserControl>

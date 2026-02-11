@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Code/script document representation -->
+  <!-- Document body -->
+  <rect x="25" y="15" width="50" height="65" rx="2" fill="#34495E" stroke="#2C3E50" stroke-width="2"/>
+  <rect x="27" y="17" width="46" height="61" fill="#2C3E50"/>
+  
+  <!-- Code lines representation -->
+  <!-- Function/block indicators -->
+  <rect x="32" y="25" width="36" height="3" rx="1" fill="#3498DB"/>
+  <rect x="32" y="30" width="28" height="2" rx="1" fill="#7F8C8D"/>
+  <rect x="32" y="34" width="32" height="2" rx="1" fill="#7F8C8D"/>
+  <rect x="36" y="38" width="24" height="2" rx="1" fill="#95A5A6"/>
+  <rect x="36" y="42" width="28" height="2" rx="1" fill="#95A5A6"/>
+  
+  <rect x="32" y="48" width="30" height="3" rx="1" fill="#2ECC71"/>
+  <rect x="32" y="53" width="26" height="2" rx="1" fill="#7F8C8D"/>
+  <rect x="32" y="57" width="34" height="2" rx="1" fill="#7F8C8D"/>
+  <rect x="36" y="61" width="22" height="2" rx="1" fill="#95A5A6"/>
+  
+  <!-- Code brackets -->
+  <text x="30" y="30" font-family="monospace" font-size="10" fill="#E74C3C">{</text>
+  <text x="30" y="50" font-family="monospace" font-size="10" fill="#E74C3C">{</text>
+  <text x="68" y="45" font-family="monospace" font-size="10" fill="#E74C3C">}</text>
+  <text x="68" y="65" font-family="monospace" font-size="10" fill="#E74C3C">}</text>
+  
+  <!-- Corner fold -->
+  <path d="M 65 15 L 75 15 L 75 25 L 65 15" fill="#1A252F" opacity="0.8"/>
+  
+  <!-- Base -->
+  <rect x="35" y="80" width="30" height="6" rx="1" fill="#7F8C8D"/>
+</svg>

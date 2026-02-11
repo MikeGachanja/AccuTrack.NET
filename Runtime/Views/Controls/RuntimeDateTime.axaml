@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Runtime.Views.Controls.RuntimeDateTime">
+  <StackPanel>
+    <TextBlock x:Name="LabelText" Text="" Foreground="White" FontSize="11" IsVisible="False" />
+    <TextBlock x:Name="ValueText" Text="" Foreground="#b0b0b0" FontSize="14" />
+  </StackPanel>
+</UserControl>

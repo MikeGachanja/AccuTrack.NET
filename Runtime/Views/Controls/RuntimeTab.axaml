@@ -1,0 +1,9 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Runtime.Views.Controls.RuntimeTab">
+  <TabControl>
+    <TabItem Header="Content">
+      <TextBlock Text="Tab content (stub)" Foreground="#808080" Margin="8" />
+    </TabItem>
+  </TabControl>
+</UserControl>

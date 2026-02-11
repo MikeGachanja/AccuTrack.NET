@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Runtime.Views.Controls.RuntimeIndicator">
+  <StackPanel>
+    <Ellipse x:Name="TheEllipse" Width="24" Height="24" Fill="Gray" />
+    <TextBlock x:Name="LabelText" Text="" Foreground="White" FontSize="10" HorizontalAlignment="Center" IsVisible="False" />
+  </StackPanel>
+</UserControl>

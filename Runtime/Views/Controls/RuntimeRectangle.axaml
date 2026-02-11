@@ -1,0 +1,5 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Runtime.Views.Controls.RuntimeRectangle">
+  <Border x:Name="TheBorder" Background="#404040" BorderBrush="Transparent" BorderThickness="0" />
+</UserControl>

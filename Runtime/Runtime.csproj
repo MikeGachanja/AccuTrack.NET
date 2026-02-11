@@ -1,0 +1,42 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <OutputPath>..\bin\$(Configuration)\$(RuntimeIdentifier)\Runtime\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <ApplicationIcon />
+    <StartupObject>Runtime.Program</StartupObject>
+    <RootNamespace>Runtime</RootNamespace>
+    <AssemblyName>Runtime</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="11.2.2" />
+    <PackageReference Include="Avalonia.Desktop" Version="11.2.2" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="11.2.2" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="11.2.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RuntimeModules\Alarms\Alarms.csproj" />
+    <ProjectReference Include="..\RuntimeModules\Communication\Communication.csproj" />
+    <ProjectReference Include="..\RuntimeModules\Console\Console.csproj" />
+    <ProjectReference Include="..\RuntimeModules\Discovery\Discovery.csproj" />
+    <ProjectReference Include="..\RuntimeModules\EventDispatcher\EventDispatcher.csproj" />
+    <ProjectReference Include="..\RuntimeModules\ExecutionEngine\ExecutionEngine.csproj" />
+    <ProjectReference Include="..\RuntimeModules\Historian\Historian.csproj" />
+    <ProjectReference Include="..\RuntimeModules\MLEngine\MLEngine.csproj" />
+    <ProjectReference Include="..\RuntimeModules\Project\Project.csproj" />
+    <ProjectReference Include="..\RuntimeModules\Scheduler\Scheduler.csproj" />
+    <ProjectReference Include="..\RuntimeModules\Screens\Screens.csproj" />
+    <ProjectReference Include="..\RuntimeModules\ScriptingEngine\ScriptingEngine.csproj" />
+    <ProjectReference Include="..\RuntimeModules\Security\Security.csproj" />
+    <ProjectReference Include="..\RuntimeModules\TagsEngine\TagsEngine.csproj" />
+  </ItemGroup>
+
+</Project>

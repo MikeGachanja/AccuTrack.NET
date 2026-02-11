@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="32" height="32" viewBox="0 0 32 32"
+	xmlns="http://www.w3.org/2000/svg">
+	<defs>
+		<linearGradient id="primaryGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+			<stop offset="0%" style="stop-color:#4a90e2"/>
+			<stop offset="100%" style="stop-color:#357abd"/>
+		</linearGradient>
+		<filter id="dropShadow">
+			<feDropShadow dx="0" dy="1" stdDeviation="1" flood-opacity="0.2"/>
+		</filter>
+	</defs>
+	<text x="16" y="20" font-size="14" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-weight="bold" filter="url(#dropShadow)">Abc</text>
+	<line x1="6" y1="22" x2="26" y2="22" stroke="#2c5c8f" stroke-width="1.5" stroke-dasharray="2,2" filter="url(#dropShadow)"/>
+</svg>

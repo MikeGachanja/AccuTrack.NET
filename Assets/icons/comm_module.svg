@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Communication module - network/router representation -->
+  <!-- Main device body -->
+  <rect x="20" y="25" width="60" height="50" rx="3" fill="#34495E" stroke="#2C3E50" stroke-width="2"/>
+  <rect x="22" y="27" width="56" height="46" fill="#2C3E50"/>
+  
+  <!-- Network ports/connections -->
+  <rect x="25" y="32" width="12" height="4" rx="1" fill="#3498DB"/>
+  <rect x="25" y="38" width="12" height="4" rx="1" fill="#3498DB"/>
+  <rect x="25" y="44" width="12" height="4" rx="1" fill="#3498DB"/>
+  <rect x="25" y="50" width="12" height="4" rx="1" fill="#3498DB"/>
+  
+  <rect x="63" y="32" width="12" height="4" rx="1" fill="#2ECC71"/>
+  <rect x="63" y="38" width="12" height="4" rx="1" fill="#2ECC71"/>
+  <rect x="63" y="44" width="12" height="4" rx="1" fill="#2ECC71"/>
+  <rect x="63" y="50" width="12" height="4" rx="1" fill="#2ECC71"/>
+  
+  <!-- Central processing unit indicator -->
+  <circle cx="50" cy="42" r="8" fill="#E74C3C" opacity="0.8"/>
+  <circle cx="50" cy="42" r="5" fill="#C0392B"/>
+  
+  <!-- Signal waves -->
+  <path d="M 10 35 Q 15 30, 20 35" stroke="#3498DB" stroke-width="2" fill="none" opacity="0.6"/>
+  <path d="M 10 45 Q 15 40, 20 45" stroke="#3498DB" stroke-width="2" fill="none" opacity="0.6"/>
+  
+  <path d="M 90 35 Q 85 30, 80 35" stroke="#2ECC71" stroke-width="2" fill="none" opacity="0.6"/>
+  <path d="M 90 45 Q 85 40, 80 45" stroke="#2ECC71" stroke-width="2" fill="none" opacity="0.6"/>
+  
+  <!-- Status LED -->
+  <circle cx="75" cy="30" r="3" fill="#2ECC71"/>
+  
+  <!-- Base -->
+  <rect x="30" y="75" width="40" height="6" rx="1" fill="#7F8C8D"/>
+</svg>

@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Table/grid representation for tag table -->
+  <!-- Table body -->
+  <rect x="20" y="20" width="60" height="60" rx="2" fill="#34495E" stroke="#2C3E50" stroke-width="2"/>
+  <rect x="22" y="22" width="56" height="56" fill="#2C3E50"/>
+  
+  <!-- Table header -->
+  <rect x="20" y="20" width="60" height="12" rx="2" fill="#3498DB"/>
+  <text x="50" y="29" font-family="Arial, sans-serif" font-size="7" fill="#FFFFFF" text-anchor="middle" font-weight="bold">TAGS</text>
+  
+  <!-- Grid lines -->
+  <line x1="30" y1="32" x2="30" y2="80" stroke="#7F8C8D" stroke-width="1" opacity="0.6"/>
+  <line x1="50" y1="32" x2="50" y2="80" stroke="#7F8C8D" stroke-width="1" opacity="0.6"/>
+  <line x1="70" y1="32" x2="70" y2="80" stroke="#7F8C8D" stroke-width="1" opacity="0.6"/>
+  
+  <line x1="20" y1="42" x2="80" y2="42" stroke="#7F8C8D" stroke-width="1" opacity="0.6"/>
+  <line x1="20" y1="52" x2="80" y2="52" stroke="#7F8C8D" stroke-width="1" opacity="0.6"/>
+  <line x1="20" y1="62" x2="80" y2="62" stroke="#7F8C8D" stroke-width="1" opacity="0.6"/>
+  <line x1="20" y1="72" x2="80" y2="72" stroke="#7F8C8D" stroke-width="1" opacity="0.6"/>
+  
+  <!-- Tag indicators (cells with data) -->
+  <circle cx="40" cy="47" r="2" fill="#2ECC71"/>
+  <circle cx="60" cy="47" r="2" fill="#2ECC71"/>
+  <circle cx="40" cy="57" r="2" fill="#3498DB"/>
+  <circle cx="60" cy="57" r="2" fill="#3498DB"/>
+  <circle cx="40" cy="67" r="2" fill="#E74C3C"/>
+  <circle cx="60" cy="67" r="2" fill="#E74C3C"/>
+  
+  <!-- Base -->
+  <rect x="30" y="80" width="40" height="6" rx="1" fill="#7F8C8D"/>
+</svg>

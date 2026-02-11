@@ -1,0 +1,11 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="Runtime.Views.Controls.RuntimeTrendView">
+  <Border Background="#252525" BorderBrush="Gray" BorderThickness="1" CornerRadius="4" Padding="8">
+    <StackPanel>
+      <TextBlock x:Name="LabelText" Text="Trend" Foreground="White" FontSize="12" FontWeight="SemiBold" />
+      <TextBlock x:Name="TagText" Text="" Foreground="#a0a0a0" FontSize="10" Margin="0,2,0,0" />
+      <TextBlock x:Name="PlaceholderText" Text="Historical data (chart placeholder)" Foreground="#606060" FontSize="11" Margin="0,8,0,0" />
+    </StackPanel>
+  </Border>
+</UserControl>

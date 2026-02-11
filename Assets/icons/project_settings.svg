@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Settings/gear icon -->
+  <!-- Main gear body -->
+  <g transform="translate(50,50)">
+    <!-- Gear outer teeth -->
+    <path d="M 0,-25 L 3,-25 L 5,-30 L 8,-30 L 8,-27 L 0,-27 Z" fill="#34495E" stroke="#2C3E50" stroke-width="1"/>
+    <path d="M 25,0 L 25,-3 L 30,-5 L 30,-8 L 27,-8 L 27,0 Z" fill="#34495E" stroke="#2C3E50" stroke-width="1"/>
+    <path d="M 0,25 L -3,25 L -5,30 L -8,30 L -8,27 L 0,27 Z" fill="#34495E" stroke="#2C3E50" stroke-width="1"/>
+    <path d="M -25,0 L -25,3 L -30,5 L -30,8 L -27,8 L -27,0 Z" fill="#34495E" stroke="#2C3E50" stroke-width="1"/>
+    
+    <!-- Gear diagonal teeth -->
+    <path d="M 18,-18 L 20,-20 L 24,-16 L 22,-14 L 18,-18 Z" fill="#34495E" stroke="#2C3E50" stroke-width="1"/>
+    <path d="M 18,18 L 20,20 L 24,16 L 22,14 L 18,18 Z" fill="#34495E" stroke="#2C3E50" stroke-width="1"/>
+    <path d="M -18,18 L -20,20 L -24,16 L -22,14 L -18,18 Z" fill="#34495E" stroke="#2C3E50" stroke-width="1"/>
+    <path d="M -18,-18 L -20,-20 L -24,-16 L -22,-14 L -18,-18 Z" fill="#34495E" stroke="#2C3E50" stroke-width="1"/>
+    
+    <!-- Gear center circle -->
+    <circle cx="0" cy="0" r="18" fill="#2C3E50" stroke="#1A252F" stroke-width="2"/>
+    <circle cx="0" cy="0" r="12" fill="#34495E"/>
+    
+    <!-- Inner gear details -->
+    <circle cx="0" cy="0" r="8" fill="#3498DB" opacity="0.6"/>
+    <circle cx="0" cy="0" r="4" fill="#2980B9"/>
+  </g>
+  
+  <!-- Base/platform -->
+  <rect x="35" y="75" width="30" height="6" rx="1" fill="#7F8C8D"/>
+</svg>

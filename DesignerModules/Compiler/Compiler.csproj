@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <OutputPath>..\..\bin\$(Configuration)\$(RuntimeIdentifier)\Designer\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Project\Project.csproj" />
+    <ProjectReference Include="..\Console\Console.csproj" />
+    <ProjectReference Include="..\TagEngine\TagEngine.csproj" />
+    <ProjectReference Include="..\ScriptEditor\ScriptEditor.csproj" />
+  </ItemGroup>
+
+</Project>

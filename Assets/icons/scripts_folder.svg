@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Folder with script/code icon -->
+  <!-- Folder body -->
+  <path d="M 20 25 L 20 70 L 80 70 L 80 35 L 55 35 L 50 25 Z" 
+        fill="#E74C3C" stroke="#C0392B" stroke-width="2"/>
+  <path d="M 20 25 L 50 25 L 55 35 L 20 35 Z" 
+        fill="#C0392B" opacity="0.7"/>
+  
+  <!-- Folder tab -->
+  <path d="M 25 25 L 45 25 L 50 30 L 25 30 Z" 
+        fill="#EC7063" stroke="#C0392B" stroke-width="1"/>
+  
+  <!-- Script/code icon inside folder -->
+  <rect x="32" y="42" width="36" height="22" rx="1" fill="#2C3E50" stroke="#1A252F" stroke-width="1.5"/>
+  <rect x="35" y="46" width="28" height="2" rx="1" fill="#3498DB"/>
+  <rect x="35" y="50" width="22" height="2" rx="1" fill="#7F8C8D"/>
+  <rect x="35" y="54" width="26" height="2" rx="1" fill="#7F8C8D"/>
+  <rect x="38" y="58" width="18" height="2" rx="1" fill="#95A5A6"/>
+  <text x="33" y="57" font-family="monospace" font-size="8" fill="#E74C3C">{</text>
+  <text x="59" y="57" font-family="monospace" font-size="8" fill="#E74C3C">}</text>
+  
+  <!-- Base -->
+  <rect x="35" y="70" width="30" height="6" rx="1" fill="#7F8C8D"/>
+</svg>

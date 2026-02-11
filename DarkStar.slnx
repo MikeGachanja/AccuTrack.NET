@@ -1,0 +1,41 @@
+<Solution>
+  <Folder Name="/DesignerModules/">
+    <Project Path="DesignerModules/Alarms/Alarms.csproj" />
+    <Project Path="DesignerModules/Communication/Communication.csproj" />
+    <Project Path="DesignerModules/Compiler/Compiler.csproj" />
+    <Project Path="DesignerModules/Components/Components.csproj" />
+    <Project Path="DesignerModules/Console/Console.csproj" />
+    <Project Path="DesignerModules/Discovery/Discovery.csproj" />
+    <Project Path="DesignerModules/EventsBus/EventsBus.csproj" />
+    <Project Path="DesignerModules/Historian/Historian.csproj" />
+    <Project Path="DesignerModules/MachineLearning/MachineLearning.csproj" />
+    <Project Path="DesignerModules/Project/Project.csproj" />
+    <Project Path="DesignerModules/Scheduler/Scheduler.csproj" />
+    <Project Path="DesignerModules/ScreenEditor/ScreenEditor.csproj" />
+    <Project Path="DesignerModules/ScriptEditor/ScriptEditor.csproj" />
+    <Project Path="DesignerModules/Security/Security.csproj" />
+    <Project Path="DesignerModules/Simulator/Simulator.csproj" />
+    <Project Path="DesignerModules/TagEngine/TagEngine.csproj" />
+    <Project Path="DesignerModules/Tools/Tools.csproj" />
+    <Project Path="DesignerModules/Workspace/Workspace.csproj" />
+  </Folder>
+  <Folder Name="/RuntimeModules/">
+    <Project Path="RuntimeModules/Alarms/Alarms.csproj" />
+    <Project Path="RuntimeModules/Communication/Communication.csproj" />
+    <Project Path="RuntimeModules/Console/Console.csproj" />
+    <Project Path="RuntimeModules/Discovery/Discovery.csproj" />
+    <Project Path="RuntimeModules/EventDispatcher/EventDispatcher.csproj" />
+    <Project Path="RuntimeModules/ExecutionEngine/ExecutionEngine.csproj" />
+    <Project Path="RuntimeModules/Historian/Historian.csproj" />
+    <Project Path="RuntimeModules/MLEngine/MLEngine.csproj" />
+    <Project Path="RuntimeModules/Project/Project.csproj" />
+    <Project Path="RuntimeModules/Scheduler/Scheduler.csproj" />
+    <Project Path="RuntimeModules/Screens/Screens.csproj" />
+    <Project Path="RuntimeModules/ScriptingEngine/ScriptingEngine.csproj" />
+    <Project Path="RuntimeModules/Security/Security.csproj" />
+    <Project Path="RuntimeModules/TagsEngine/TagsEngine.csproj" />
+  </Folder>
+  <Project Path="Designer/Designer.csproj" />
+  <Project Path="Runtime/Runtime.csproj" />
+  <Project Path="Tests/Designer.Tests/Designer.Tests.csproj" />
+</Solution>

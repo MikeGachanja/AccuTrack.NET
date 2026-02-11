@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- Add/Plus icon -->
+  <!-- Circle background -->
+  <circle cx="50" cy="50" r="35" fill="#2ECC71" stroke="#27AE60" stroke-width="2"/>
+  <circle cx="50" cy="50" r="30" fill="#27AE60" opacity="0.3"/>
+  
+  <!-- Plus sign -->
+  <rect x="45" y="30" width="10" height="40" rx="2" fill="#FFFFFF"/>
+  <rect x="30" y="45" width="40" height="10" rx="2" fill="#FFFFFF"/>
+  
+  <!-- Highlight/shine -->
+  <ellipse cx="50" cy="40" rx="20" ry="15" fill="#FFFFFF" opacity="0.2"/>
+</svg>

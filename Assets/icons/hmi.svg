@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <!-- HMI Screen -->
+  <rect x="10" y="15" width="80" height="60" rx="3" fill="#2C3E50" stroke="#34495E" stroke-width="2"/>
+  <!-- Screen bezel -->
+  <rect x="5" y="10" width="90" height="70" rx="5" fill="#34495E" stroke="#1A252F" stroke-width="1"/>
+  <!-- Screen content area -->
+  <rect x="15" y="20" width="70" height="50" fill="#3498DB" opacity="0.3"/>
+  <!-- Stand/base -->
+  <rect x="40" y="75" width="20" height="15" rx="2" fill="#7F8C8D"/>
+  <rect x="35" y="80" width="30" height="5" rx="1" fill="#95A5A6"/>
+  <!-- Status indicator -->
+  <circle cx="85" cy="25" r="4" fill="#2ECC71"/>
+</svg>
