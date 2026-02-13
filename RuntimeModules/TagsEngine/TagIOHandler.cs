@@ -17,6 +17,15 @@ public sealed class TagIOHandler
     public void SetCommunicationModule(object? commModule)
     {
         _communicationModule = commModule as CommunicationModule;
+        
+        // Set up listener for OPC UA node value changes (similar to Qt's onOPCUANodeValueChanged)
+        // This ensures tag values are updated when OPC UA subscriptions receive data
+        if (_communicationModule != null)
+        {
+            // The callback is set up in Program.cs, but we can also listen here if needed
+            // The CommunicationModule will call the callback set via SetTagUpdateCallback
+            System.Diagnostics.Debug.WriteLine("[TagIOHandler] Communication module set - tag updates will be handled via callback");
+        }
     }
 
     public void Start() => _running = true;

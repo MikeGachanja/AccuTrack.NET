@@ -78,7 +78,61 @@ internal static class Program
         var tagsModule = new TagsModule();
         engine.ModuleManager.RegisterModule(tagsModule);
         tagsModule.SetCommunicationModule(commModule);
-        commModule.SetTagUpdateCallback((name, val) => tagsModule.TagManager.UpdateTagValue(name, val, TagQuality.Good));
+        
+        // Set up tag update callback that handles both tag name and address resolution
+        // Since tag name == tag address, either can work for resolution
+        commModule.SetTagUpdateCallback((tagNameOrAddress, value) =>
+        {
+            System.Diagnostics.Debug.WriteLine($"[Runtime] Tag update callback received - TagName/Address: '{tagNameOrAddress}', Value: '{value}' (Type: {value?.GetType().Name ?? "null"})");
+            
+            // Try updating by tag name first (tag name == tag address, so this should work)
+            if (tagsModule.TagManager.UpdateTagValue(tagNameOrAddress, value, TagQuality.Good))
+            {
+                System.Diagnostics.Debug.WriteLine($"[Runtime] Successfully updated tag '{tagNameOrAddress}' by name");
+                return;
+            }
+            
+            // If tag name update failed, try updating by address (tag name == tag address)
+            if (tagsModule.TagManager.UpdateTagValueByAddress(tagNameOrAddress, value, TagQuality.Good))
+            {
+                System.Diagnostics.Debug.WriteLine($"[Runtime] Successfully updated tag '{tagNameOrAddress}' by address");
+                return;
+            }
+            
+            // Try to find tag by checking if tagNameOrAddress matches any tag's address
+            var tag = tagsModule.TagManager.GetTag(tagNameOrAddress);
+            if (tag != null)
+            {
+                // Found by name, try updating again (should have worked above, but try once more)
+                if (tagsModule.TagManager.UpdateTagValue(tagNameOrAddress, value, TagQuality.Good))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Runtime] Successfully updated tag '{tagNameOrAddress}' after finding by name");
+                    return;
+                }
+            }
+            
+            // Try finding by address
+            tag = tagsModule.TagManager.GetTagByAddress(tagNameOrAddress);
+            if (tag != null)
+            {
+                if (tagsModule.TagManager.UpdateTagValue(tag.Name, value, TagQuality.Good))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[Runtime] Successfully updated tag '{tag.Name}' after finding by address '{tagNameOrAddress}'");
+                    return;
+                }
+            }
+            
+            // If all attempts failed, log warning
+            System.Diagnostics.Debug.WriteLine($"[Runtime] WARNING - Failed to update tag '{tagNameOrAddress}' - tag not found in TagManager (Total tags: {tagsModule.TagManager.TagCount})");
+            
+            // Log available tag names for debugging
+            var availableTags = tagsModule.TagManager.GetTagNames();
+            if (availableTags.Count > 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"[Runtime] Available tags: {string.Join(", ", availableTags.Take(10))}");
+            }
+        });
+        
         SetupTagProvider(commModule, tagsModule);
 
         engine.ModuleManager.RegisterModule(new AlarmsModule());

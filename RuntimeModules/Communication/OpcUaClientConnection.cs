@@ -179,6 +179,21 @@ public sealed class OpcUaClientConnection : IConnectionStub
             
             System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Session created successfully");
 
+            // Set up KeepAlive handler to maintain connection and process subscriptions
+            _session.KeepAlive += (session, e) =>
+            {
+                if (e.CurrentState == ServerState.Unknown || e.CurrentState == ServerState.Shutdown)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] KeepAlive: Server state changed to {e.CurrentState}, connection may be lost");
+                    _status.Connected = false;
+                    _status.Status = $"Disconnected (Server state: {e.CurrentState})";
+                }
+                else if (e.CurrentState == ServerState.Running)
+                {
+                    _status.Connected = true;
+                }
+            };
+
             _status.Connected = true;
             _status.Status = "Connected";
             System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully connected to OPC UA server at {EndpointUrl}");
@@ -234,7 +249,15 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 int subscribedCount = 0;
                 int failedCount = 0;
                 
-                foreach (var (tagName, nodeIdStr) in tagMappings)
+                // Group by tag name to avoid duplicate subscriptions
+                var uniqueTagMappings = tagMappings
+                    .GroupBy(m => m.tagName)
+                    .Select(g => g.First())
+                    .ToList();
+                
+                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Processing {uniqueTagMappings.Count} unique tag mappings (from {tagMappings.Count} total)");
+                
+                foreach (var (tagName, nodeIdStr) in uniqueTagMappings)
                 {
                     if (string.IsNullOrWhiteSpace(nodeIdStr))
                     {
@@ -242,53 +265,96 @@ public sealed class OpcUaClientConnection : IConnectionStub
                         continue;
                     }
                     
+                    // Since tag name == tag address, try tag name first, then nodeIdStr
+                    // Try multiple resolution strategies
+                    NodeId? nodeId = null;
+                    string? resolvedNodeIdStr = null;
+                    
+                    // Strategy 1: Try tag name directly as NodeId (since tag name == tag address)
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Attempting to subscribe to tag '{tagName}' - trying tag name as NodeId first");
+                    nodeId = TryResolveNodeId(tagName);
+                    if (nodeId != null && !nodeId.IsNullNodeId)
+                    {
+                        resolvedNodeIdStr = tagName;
+                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully resolved tag name '{tagName}' as NodeId: {nodeId}");
+                    }
+                    else
+                    {
+                        // Strategy 2: Try the provided nodeIdStr
+                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Tag name resolution failed, trying provided NodeId '{nodeIdStr}'");
+                        nodeId = TryResolveNodeId(nodeIdStr);
+                        if (nodeId != null && !nodeId.IsNullNodeId)
+                        {
+                            resolvedNodeIdStr = nodeIdStr;
+                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully resolved NodeId '{nodeIdStr}' to {nodeId}");
+                        }
+                    }
+                    
+                    if (nodeId == null || nodeId.IsNullNodeId)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Failed to resolve NodeId for tag '{tagName}' (tried '{tagName}' and '{nodeIdStr}')");
+                        failedCount++;
+                        continue;
+                    }
+                    
                     // Verify the node exists in browsed nodes (optional check)
                     bool nodeExists = false;
                     lock (_nodesLock)
                     {
-                        nodeExists = _allNodes.Any(n => n.NodeId == nodeIdStr);
+                        nodeExists = _allNodes.Any(n => 
+                            n.NodeId.Equals(resolvedNodeIdStr, StringComparison.OrdinalIgnoreCase) ||
+                            n.DisplayName.Equals(tagName, StringComparison.OrdinalIgnoreCase) ||
+                            n.DisplayName.Equals(resolvedNodeIdStr, StringComparison.OrdinalIgnoreCase));
                     }
                     
                     if (!nodeExists)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Node '{nodeIdStr}' not found in browsed nodes, but will attempt subscription anyway");
+                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Node '{resolvedNodeIdStr}' (tag: '{tagName}') not found in browsed nodes, but will attempt subscription anyway");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Node '{resolvedNodeIdStr}' (tag: '{tagName}') found in browsed nodes");
                     }
                     
-                    // Subscribe even if node not found in browse (might be a valid node)
+                    // Verify the node exists and is readable before subscribing
                     try
                     {
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Attempting to subscribe to tag '{tagName}' with NodeId '{nodeIdStr}'");
-                        
-                        // Try to resolve NodeId
-                        var nodeId = TryResolveNodeId(nodeIdStr);
-                        if (nodeId == null || nodeId.IsNullNodeId)
+                        var testRead = _session.ReadValue(nodeId);
+                        if (testRead != null)
                         {
-                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Failed to resolve NodeId '{nodeIdStr}' for tag '{tagName}'");
-                            failedCount++;
-                            continue;
-                        }
-                        
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Resolved NodeId '{nodeIdStr}' to {nodeId}");
-                        
-                        // Verify the node exists and is readable before subscribing
-                        try
-                        {
-                            var testRead = _session.ReadValue(nodeId);
-                            if (testRead != null && Opc.Ua.StatusCode.IsGood(testRead.StatusCode))
+                            var statusCode = testRead.StatusCode;
+                            var readValue = testRead.WrappedValue.Value;
+                            var sourceTimestamp = testRead.SourceTimestamp;
+                            var serverTimestamp = testRead.ServerTimestamp;
+                            
+                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Test read for tag '{tagName}' (NodeId: {nodeId}, resolved from '{resolvedNodeIdStr}'):");
+                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync:   StatusCode: 0x{(uint)statusCode:X8} ({(Opc.Ua.StatusCode.IsGood(statusCode) ? "Good" : "Bad")})");
+                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync:   Value: '{readValue}' (Type: {readValue?.GetType().Name ?? "null"})");
+                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync:   SourceTimestamp: {sourceTimestamp}");
+                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync:   ServerTimestamp: {serverTimestamp}");
+                            
+                            if (Opc.Ua.StatusCode.IsGood(statusCode))
                             {
-                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Verified node '{nodeId}' is readable. Current value: {testRead.WrappedValue.Value}");
+                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Verified node '{nodeId}' (resolved from '{resolvedNodeIdStr}') is readable. Current value: {readValue}");
                             }
                             else
                             {
-                                var statusCode = testRead?.StatusCode ?? StatusCodes.Bad;
-                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Node '{nodeId}' is not readable. StatusCode: 0x{(uint)statusCode:X8}. Subscription may fail.");
+                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Node '{nodeId}' (resolved from '{resolvedNodeIdStr}') is not readable. StatusCode: 0x{(uint)statusCode:X8}. Subscription may fail.");
                             }
                         }
-                        catch (Exception ex)
+                        else
                         {
-                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Failed to verify node '{nodeId}' before subscribing: {ex.Message}");
+                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Test read returned null for node '{nodeId}' (resolved from '{resolvedNodeIdStr}')");
                         }
-                        
+                    }
+                    catch (Exception ex)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Failed to verify node '{nodeId}' (resolved from '{resolvedNodeIdStr}') before subscribing: {ex.GetType().Name} - {ex.Message}");
+                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Exception StackTrace: {ex.StackTrace}");
+                    }
+                    
+                    try
+                    {
                         var item = new MonitoredItem(_subscription.DefaultItem)
                         {
                             StartNodeId = nodeId,
@@ -297,29 +363,94 @@ public sealed class OpcUaClientConnection : IConnectionStub
                             DisplayName = tagName
                         };
                         
+                        // Capture both tagName and resolvedNodeIdStr for the notification handler
+                        var capturedTagName = tagName;
+                        var capturedNodeIdStr = resolvedNodeIdStr ?? nodeIdStr;
+                        
                         item.Notification += (monitoredItem, e) =>
                         {
-                            if (e.NotificationValue is MonitoredItemNotification n && n.Value?.Value != null)
+                            // Process notification on background thread to avoid blocking the OPC UA notification handler
+                            Task.Run(() =>
                             {
-                                var value = n.Value.Value;
-                                var statusCode = n.Value.StatusCode;
-                                var sourceTimestamp = n.Value.SourceTimestamp;
-                                
-                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Tag '{tagName}' changed to '{value}' (Type: {value.GetType().Name}, StatusCode: 0x{(uint)statusCode:X8}, Timestamp: {sourceTimestamp})");
-                                
-                                if (Opc.Ua.StatusCode.IsGood(statusCode))
+                                try
                                 {
-                                    _onTagValue?.Invoke(tagName, value);
+                                    if (e.NotificationValue is MonitoredItemNotification n && n.Value?.Value != null)
+                                    {
+                                        var value = n.Value.Value;
+                                        var statusCode = n.Value.StatusCode;
+                                        var sourceTimestamp = n.Value.SourceTimestamp;
+                                        
+                                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification (Background Thread): Tag '{capturedTagName}' (NodeId: {monitoredItem.StartNodeId}) changed to '{value}' (Type: {value.GetType().Name}, StatusCode: 0x{(uint)statusCode:X8}, Timestamp: {sourceTimestamp})");
+                                        
+                                        if (Opc.Ua.StatusCode.IsGood(statusCode))
+                                        {
+                                            // Try to resolve tag by name first, then by address/NodeId
+                                            // Since tag name == tag address, either should work
+                                            string? resolvedTagName = capturedTagName;
+                                            
+                                            // If tag name doesn't work, try finding by NodeId/address
+                                            if (_getTagsFunc != null)
+                                            {
+                                                try
+                                                {
+                                                    var tags = _getTagsFunc();
+                                                    // Check if tag name exists
+                                                    bool tagExists = tags.Any(t => t.tagName.Equals(capturedTagName, StringComparison.OrdinalIgnoreCase));
+                                                    
+                                                    if (!tagExists)
+                                                    {
+                                                        // Try to find by address/NodeId
+                                                        var matchingTag = tags.FirstOrDefault(t => 
+                                                            (!string.IsNullOrEmpty(t.address) && t.address.Equals(capturedNodeIdStr, StringComparison.OrdinalIgnoreCase)) ||
+                                                            t.tagName.Equals(capturedNodeIdStr, StringComparison.OrdinalIgnoreCase));
+                                                        
+                                                        if (!string.IsNullOrEmpty(matchingTag.tagName))
+                                                        {
+                                                            resolvedTagName = matchingTag.tagName;
+                                                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Resolved tag by address/NodeId '{capturedNodeIdStr}' to tag name '{resolvedTagName}'");
+                                                        }
+                                                    }
+                                                }
+                                                catch (Exception ex)
+                                                {
+                                                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Error resolving tag: {ex.Message}");
+                                                }
+                                            }
+                                            
+                                            // Invoke callback with resolved tag name on background thread
+                                            if (!string.IsNullOrEmpty(resolvedTagName))
+                                            {
+                                                try
+                                                {
+                                                    _onTagValue?.Invoke(resolvedTagName, value);
+                                                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Successfully invoked callback for tag '{resolvedTagName}' with value '{value}'");
+                                                }
+                                                catch (Exception ex)
+                                                {
+                                                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Error invoking callback for tag '{resolvedTagName}': {ex.GetType().Name} - {ex.Message}");
+                                                }
+                                            }
+                                            else
+                                            {
+                                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Could not resolve tag name for NodeId '{capturedNodeIdStr}', tag name '{capturedTagName}'");
+                                            }
+                                        }
+                                        else
+                                        {
+                                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Tag '{capturedTagName}' has bad status code 0x{(uint)statusCode:X8}, not invoking callback");
+                                        }
+                                    }
+                                    else
+                                    {
+                                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Tag '{capturedTagName}' received notification but value is null or invalid");
+                                    }
                                 }
-                                else
+                                catch (Exception ex)
                                 {
-                                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Tag '{tagName}' has bad status code 0x{(uint)statusCode:X8}, not invoking callback");
+                                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Exception processing notification for tag '{capturedTagName}': {ex.GetType().Name} - {ex.Message}");
+                                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: StackTrace: {ex.StackTrace}");
                                 }
-                            }
-                            else
-                            {
-                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Tag '{tagName}' received notification but value is null or invalid");
-                            }
+                            });
                         };
                         
                         _subscription.AddItem(item);
@@ -483,10 +614,22 @@ public sealed class OpcUaClientConnection : IConnectionStub
                         continue;
                     }
                     
-                    // Use tag address if available, otherwise use tag name as NodeId
-                    var nodeId = !string.IsNullOrEmpty(address) ? address : tagName;
+                    // Since tag name == tag address, try both:
+                    // 1. First try tag name as NodeId (most common case)
+                    // 2. Then try address as NodeId
+                    // 3. Fall back to tag name if address is empty
+                    var nodeId = !string.IsNullOrEmpty(tagName) ? tagName : (!string.IsNullOrEmpty(address) ? address : tagName);
+                    
+                    // Also add address-based mapping if address is different from tag name
+                    if (!string.IsNullOrEmpty(address) && !address.Equals(tagName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        list.Add((tagName, address)); // Add address-based mapping
+                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: Added mapping from TagProvider - Tag: '{tagName}', NodeId: '{address}' (by address)");
+                    }
+                    
+                    // Always add tag name-based mapping (tag name == tag address)
                     list.Add((tagName, nodeId));
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: Added mapping from TagProvider - Tag: '{tagName}', NodeId: '{nodeId}' (Address: '{address}')");
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: Added mapping from TagProvider - Tag: '{tagName}', NodeId: '{nodeId}' (by tag name)");
                 }
             }
             catch (Exception ex)
@@ -502,6 +645,31 @@ public sealed class OpcUaClientConnection : IConnectionStub
         
         System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: Total mappings: {list.Count}");
         return list;
+    }
+
+    /// <summary>Find tag name by NodeId/address - used for resolving notifications that come with NodeId instead of tag name.</summary>
+    private string? FindTagNameByNodeId(string nodeId)
+    {
+        if (_getTagsFunc == null) return null;
+        
+        try
+        {
+            var tags = _getTagsFunc();
+            foreach (var (tagName, address) in tags)
+            {
+                // Match by address (NodeId)
+                if (!string.IsNullOrEmpty(address) && address.Equals(nodeId, StringComparison.OrdinalIgnoreCase))
+                {
+                    return tagName;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] FindTagNameByNodeId: Error finding tag for NodeId '{nodeId}': {ex.Message}");
+        }
+        
+        return null;
     }
 
     public bool ReadTag(string nodeIdOrTagName, out object? value)
@@ -532,15 +700,33 @@ public sealed class OpcUaClientConnection : IConnectionStub
             System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: NodeId resolved: {nodeId}");
             
             var dataValue = _session.ReadValue(nodeId);
-            if (dataValue != null && Opc.Ua.StatusCode.IsGood(dataValue.StatusCode))
+            if (dataValue != null)
             {
-                value = dataValue.WrappedValue.Value;
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: Successfully read value '{value}' (Type: {value?.GetType().Name}) from NodeId '{nodeIdOrTagName}'");
-                return true;
+                var statusCode = dataValue.StatusCode;
+                var readValue = dataValue.WrappedValue.Value;
+                var sourceTimestamp = dataValue.SourceTimestamp;
+                var serverTimestamp = dataValue.ServerTimestamp;
+                
+                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: Read result for NodeId '{nodeIdOrTagName}' (resolved: {nodeId}):");
+                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag:   StatusCode: 0x{(uint)statusCode:X8} ({(Opc.Ua.StatusCode.IsGood(statusCode) ? "Good" : "Bad")})");
+                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag:   Value: '{readValue}' (Type: {readValue?.GetType().Name ?? "null"})");
+                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag:   SourceTimestamp: {sourceTimestamp}");
+                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag:   ServerTimestamp: {serverTimestamp}");
+                
+                if (Opc.Ua.StatusCode.IsGood(statusCode))
+                {
+                    value = readValue;
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: Successfully read value '{value}' from NodeId '{nodeIdOrTagName}'");
+                    return true;
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: Read failed with StatusCode: 0x{(uint)statusCode:X8} for NodeId '{nodeIdOrTagName}'");
+                }
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: Read failed with StatusCode: 0x{(uint)(dataValue?.StatusCode ?? StatusCodes.Bad):X8} for NodeId '{nodeIdOrTagName}'");
+                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: Read returned null DataValue for NodeId '{nodeIdOrTagName}'");
             }
         }
         catch (ArgumentException ex)
@@ -819,10 +1005,41 @@ public sealed class OpcUaClientConnection : IConnectionStub
                     // First try to find matching node in browsed nodes by DisplayName or NodeId
                     lock (_nodesLock)
                     {
+                        // Try exact matches first
                         var matchingNode = _allNodes.FirstOrDefault(n => 
                             n.DisplayName.Equals(nodeIdStr, StringComparison.OrdinalIgnoreCase) ||
                             n.NodeId.Equals(nodeIdStr, StringComparison.OrdinalIgnoreCase) ||
                             n.DisplayName.Equals(matchingTag.tagName, StringComparison.OrdinalIgnoreCase));
+                        
+                        // If no exact match, try core name matching (ignoring prefixes)
+                        if (string.IsNullOrEmpty(matchingNode.NodeId))
+                        {
+                            // Extract core name from tag name
+                            string tagCoreName = matchingTag.tagName;
+                            if (tagCoreName.Length > 1 && char.IsLetter(tagCoreName[0]) && char.IsUpper(tagCoreName[1]))
+                            {
+                                tagCoreName = tagCoreName.Substring(1);
+                            }
+                            
+                            matchingNode = _allNodes.FirstOrDefault(n =>
+                            {
+                                // Try matching DisplayName core name
+                                string nodeCoreName = n.DisplayName;
+                                if (nodeCoreName.Length > 1 && char.IsLetter(nodeCoreName[0]) && char.IsUpper(nodeCoreName[1]))
+                                {
+                                    nodeCoreName = nodeCoreName.Substring(1);
+                                }
+                                
+                                return nodeCoreName.Equals(tagCoreName, StringComparison.OrdinalIgnoreCase) ||
+                                       n.DisplayName.EndsWith(tagCoreName, StringComparison.OrdinalIgnoreCase) ||
+                                       tagCoreName.EndsWith(nodeCoreName, StringComparison.OrdinalIgnoreCase);
+                            });
+                            
+                            if (!string.IsNullOrEmpty(matchingNode.NodeId))
+                            {
+                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching browsed node by core name - Tag: '{matchingTag.tagName}' (core: '{tagCoreName}'), DisplayName: '{matchingNode.DisplayName}', NodeId: '{matchingNode.NodeId}'");
+                            }
+                        }
                         
                         if (!string.IsNullOrEmpty(matchingNode.NodeId))
                         {
@@ -884,6 +1101,36 @@ public sealed class OpcUaClientConnection : IConnectionStub
                     n.NodeId.Contains(identifier, StringComparison.OrdinalIgnoreCase) ||
                     n.NodeId.EndsWith(identifier, StringComparison.OrdinalIgnoreCase) ||
                     identifier.EndsWith(n.DisplayName, StringComparison.OrdinalIgnoreCase));
+            }
+            
+            // If still no match, try matching by core name (ignoring common prefixes like 'm', 'i', etc.)
+            if (string.IsNullOrEmpty(matchingNode.NodeId))
+            {
+                // Extract core name by removing common single-character prefixes
+                string coreName = identifier;
+                if (coreName.Length > 1 && char.IsLetter(coreName[0]) && char.IsUpper(coreName[1]))
+                {
+                    coreName = coreName.Substring(1); // Remove first character if it's a single-letter prefix
+                }
+                
+                matchingNode = _allNodes.FirstOrDefault(n =>
+                {
+                    // Try matching DisplayName core name
+                    string nodeCoreName = n.DisplayName;
+                    if (nodeCoreName.Length > 1 && char.IsLetter(nodeCoreName[0]) && char.IsUpper(nodeCoreName[1]))
+                    {
+                        nodeCoreName = nodeCoreName.Substring(1);
+                    }
+                    
+                    return nodeCoreName.Equals(coreName, StringComparison.OrdinalIgnoreCase) ||
+                           n.DisplayName.EndsWith(coreName, StringComparison.OrdinalIgnoreCase) ||
+                           coreName.EndsWith(nodeCoreName, StringComparison.OrdinalIgnoreCase);
+                });
+                
+                if (!string.IsNullOrEmpty(matchingNode.NodeId))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching browsed node by core name - Identifier: '{identifier}' (core: '{coreName}'), DisplayName: '{matchingNode.DisplayName}', NodeId: '{matchingNode.NodeId}'");
+                }
             }
             
             if (!string.IsNullOrEmpty(matchingNode.NodeId))

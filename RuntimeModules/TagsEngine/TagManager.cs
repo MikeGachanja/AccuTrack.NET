@@ -79,19 +79,36 @@ public sealed class TagManager
 
     public bool UpdateTagValue(string tagName, object? value, TagQuality quality = TagQuality.Good)
     {
-        if (!_tagsByName.TryGetValue(tagName ?? "", out var tag)) return false;
+        if (!_tagsByName.TryGetValue(tagName ?? "", out var tag))
+        {
+            System.Diagnostics.Debug.WriteLine($"[TagManager] UpdateTagValue: Tag '{tagName}' not found in TagManager");
+            return false;
+        }
+        
         var prev = tag.GetValue();
         tag.SetValue(value, quality);
-        if (tag.HasValueChanged(value))
-            NotifySubscriptions(tagName!, value, quality);
+        
+        // Always notify subscriptions when value is updated (for UI updates)
+        // This ensures numeric views and other components get notified even if value hasn't "changed"
+        NotifySubscriptions(tagName!, value, quality);
+        
+        System.Diagnostics.Debug.WriteLine($"[TagManager] UpdateTagValue: Updated tag '{tagName}' from '{prev}' to '{value}' (Quality: {quality})");
         return true;
     }
 
     public bool UpdateTagValueByAddress(string address, object? value, TagQuality quality = TagQuality.Good)
     {
-        if (!_tagsByAddress.TryGetValue(address ?? "", out var tag)) return false;
+        if (!_tagsByAddress.TryGetValue(address ?? "", out var tag))
+        {
+            System.Diagnostics.Debug.WriteLine($"[TagManager] UpdateTagValueByAddress: Tag with address '{address}' not found in TagManager");
+            return false;
+        }
+        
+        var prev = tag.GetValue();
         tag.SetValue(value, quality);
         NotifySubscriptions(tag.Name, value, quality);
+        
+        System.Diagnostics.Debug.WriteLine($"[TagManager] UpdateTagValueByAddress: Updated tag '{tag.Name}' (address: '{address}') from '{prev}' to '{value}' (Quality: {quality})");
         return true;
     }
 
@@ -140,11 +157,24 @@ public sealed class TagManager
         List<TagSubscription>? list;
         lock (_subLock)
             list = _subscriptions.TryGetValue(tagName, out var l) ? l.ToList() : null;
-        if (list == null) return;
+        if (list == null)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TagManager] NotifySubscriptions: No subscriptions found for tag '{tagName}'");
+            return;
+        }
+        
+        System.Diagnostics.Debug.WriteLine($"[TagManager] NotifySubscriptions: Notifying {list.Count} subscription(s) for tag '{tagName}' with value '{value}'");
         foreach (var sub in list)
         {
-            try { sub.Deliver(value, quality); }
-            catch { }
+            try 
+            { 
+                sub.Deliver(value, quality);
+                System.Diagnostics.Debug.WriteLine($"[TagManager] NotifySubscriptions: Successfully delivered update to subscription for tag '{tagName}'");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[TagManager] NotifySubscriptions: Error delivering to subscription for tag '{tagName}': {ex.GetType().Name} - {ex.Message}");
+            }
         }
     }
 }
