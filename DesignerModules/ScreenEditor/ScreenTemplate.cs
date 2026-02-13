@@ -151,6 +151,8 @@ public class ScreenTemplate
                 "Conveyor" => new ConveyorComponent(),
                 "Tab" => new TabComponent(),
                 "Popup" => new PopupComponent(),
+                "SVGView" => new SvgViewComponent(),
+                "Numeric" => new NumericComponent(),
                 _ => null
             };
 

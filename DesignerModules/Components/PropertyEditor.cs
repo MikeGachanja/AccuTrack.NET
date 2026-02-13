@@ -351,6 +351,10 @@ public partial class PropertyEditor : UserControl
         {
             UpdateButtonProperties(layout, button, ref row);
         }
+        else if (_selectedComponent is SvgViewComponent svgView)
+        {
+            UpdateSvgViewProperties(layout, svgView, ref row);
+        }
         else if (_selectedComponent is NumericComponent numeric)
         {
             UpdateNumericProperties(layout, numeric, ref row);
@@ -759,6 +763,112 @@ public partial class PropertyEditor : UserControl
         layout.SetColumnSpan(showLabelsCheckBox, 2);
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
+    }
+
+    private void UpdateSvgViewProperties(TableLayoutPanel layout, SvgViewComponent svgView, ref int row)
+    {
+        // SVG Path
+        layout.Controls.Add(new Label { Text = "SVG Path:", AutoSize = true }, 0, row);
+        var svgPathLayout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
+        var svgPathTextBox = new TextBox { Text = svgView.SvgPath, Width = 300 };
+        svgPathTextBox.TextChanged += (s, e) =>
+        {
+            svgView.SvgPath = svgPathTextBox.Text;
+            TriggerAutoSave();
+            // Invalidate canvas to refresh SVG display
+            if (_selectedComponent != null)
+            {
+                // Trigger redraw by invalidating parent canvas if available
+                // This will be handled by the screen editor's canvas invalidation
+            }
+        };
+        var browseButton = new Button { Text = "Browse...", Width = 80 };
+        browseButton.Click += (s, e) =>
+        {
+            using (var dialog = new OpenFileDialog 
+            { 
+                Filter = "SVG Files|*.svg|All Files|*.*",
+                InitialDirectory = GetSvgBasePath()
+            })
+            {
+                if (dialog.ShowDialog() == DialogResult.OK)
+                {
+                    // Convert to relative path if in SVG directory
+                    string selectedPath = dialog.FileName;
+                    string svgBasePath = GetSvgBasePath();
+                    
+                    if (selectedPath.StartsWith(svgBasePath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Extract relative path
+                        string relativePath = Path.GetRelativePath(svgBasePath, selectedPath);
+                        svgView.SvgPath = relativePath;
+                        svgPathTextBox.Text = relativePath;
+                    }
+                    else
+                    {
+                        // Use full path or just filename as fallback
+                        svgView.SvgPath = Path.GetFileName(selectedPath);
+                        svgPathTextBox.Text = svgView.SvgPath;
+                        EmitWarning("Selected SVG file is not in the SVG directory. Using filename only.");
+                    }
+                    TriggerAutoSave();
+                }
+            }
+        };
+        svgPathLayout.Controls.Add(svgPathTextBox);
+        svgPathLayout.Controls.Add(browseButton);
+        layout.Controls.Add(svgPathLayout, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Border Color
+        layout.Controls.Add(new Label { Text = "Border Color:", AutoSize = true }, 0, row);
+        var borderColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(borderColorButton, svgView.BorderColor);
+        borderColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = svgView.BorderColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    svgView.BorderColor = colorDialog.Color;
+                    UpdateColorButton(borderColorButton, svgView.BorderColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(borderColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Border Width
+        layout.Controls.Add(new Label { Text = "Border Width:", AutoSize = true }, 0, row);
+        var borderWidthNumeric = new NumericUpDown { Minimum = 0, Maximum = 10, Value = svgView.BorderWidth, Width = 100 };
+        borderWidthNumeric.ValueChanged += (s, e) =>
+        {
+            svgView.BorderWidth = (int)borderWidthNumeric.Value;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(borderWidthNumeric, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
+    /// <summary>
+    /// Gets the base SVG directory path (executable directory/svg/).
+    /// </summary>
+    private static string GetSvgBasePath()
+    {
+        string exeDir = Path.GetDirectoryName(System.Windows.Forms.Application.ExecutablePath) ?? System.Windows.Forms.Application.StartupPath;
+        return Path.Combine(exeDir, "svg");
+    }
+
+    /// <summary>
+    /// Emits a warning message (placeholder - can be connected to console if needed).
+    /// </summary>
+    private void EmitWarning(string message)
+    {
+        System.Diagnostics.Debug.WriteLine($"[PropertyEditor Warning] {message}");
     }
 
     private void UpdateColorButton(Button button, Color color)

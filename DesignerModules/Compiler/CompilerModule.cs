@@ -100,6 +100,9 @@ public class CompilerModule
 
             GenerateMinimalConfigs(jsonPath);
 
+            // Copy SVG files used in screens to runtime build output
+            CopySvgFiles(buildPath);
+
             if (!GenerateProjectMetadata(buildPath))
             {
                 EmitError("Failed to generate metadata.iscr");
@@ -236,6 +239,121 @@ public class CompilerModule
         var root = new JObject { ["screens"] = screensArray };
         File.WriteAllText(Path.Combine(jsonPath, "screens.json"), root.ToString());
         return true;
+    }
+
+    /// <summary>
+    /// Copies SVG files referenced in screens to the runtime build output.
+    /// </summary>
+    private void CopySvgFiles(string buildPath)
+    {
+        if (_currentProject == null) return;
+
+        try
+        {
+            // Get source SVG directory (executable directory/svg/)
+            string exeDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? AppDomain.CurrentDomain.BaseDirectory;
+            string sourceSvgPath = Path.Combine(exeDir, "svg");
+            
+            // Create destination SVG directory in build output
+            string destSvgPath = Path.Combine(buildPath, "svg");
+            if (!Directory.Exists(destSvgPath))
+            {
+                Directory.CreateDirectory(destSvgPath);
+            }
+
+            // Collect all SVG paths from screen JSON files
+            var svgPaths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            string screensSrcPath = _currentProject.Paths.ScreensPath;
+            
+            if (Directory.Exists(screensSrcPath))
+            {
+                foreach (var file in Directory.GetFiles(screensSrcPath, "*.json", SearchOption.TopDirectoryOnly))
+                {
+                    try
+                    {
+                        var screenJson = JObject.Parse(File.ReadAllText(file));
+                        
+                        // Extract SVG paths from components
+                        if (screenJson["components"] is JArray components)
+                        {
+                            foreach (var comp in components)
+                            {
+                                if (comp is JObject compObj && compObj["componentType"]?.ToString() == "SVGView")
+                                {
+                                    string? svgPath = compObj["svgPath"]?.ToString();
+                                    if (!string.IsNullOrEmpty(svgPath))
+                                    {
+                                        svgPaths.Add(svgPath);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        EmitWarning($"Error reading screen file {Path.GetFileName(file)} for SVG paths: {ex.Message}");
+                    }
+                }
+            }
+
+            // Copy each referenced SVG file
+            int copiedCount = 0;
+            foreach (var svgPath in svgPaths)
+            {
+                try
+                {
+                    // Get full source path
+                    string fullSourcePath = Path.IsPathRooted(svgPath) 
+                        ? svgPath 
+                        : Path.Combine(sourceSvgPath, svgPath);
+                    
+                    if (File.Exists(fullSourcePath))
+                    {
+                        // Determine destination path (preserve relative directory structure)
+                        string destFilePath;
+                        if (Path.IsPathRooted(svgPath))
+                        {
+                            // If absolute, try to extract relative part or use filename
+                            string fileName = Path.GetFileName(svgPath);
+                            destFilePath = Path.Combine(destSvgPath, fileName);
+                        }
+                        else
+                        {
+                            // Preserve relative directory structure
+                            destFilePath = Path.Combine(destSvgPath, svgPath);
+                        }
+                        
+                        // Ensure destination directory exists
+                        string? destDir = Path.GetDirectoryName(destFilePath);
+                        if (!string.IsNullOrEmpty(destDir) && !Directory.Exists(destDir))
+                        {
+                            Directory.CreateDirectory(destDir);
+                        }
+                        
+                        // Copy file
+                        File.Copy(fullSourcePath, destFilePath, true);
+                        copiedCount++;
+                    }
+                    else
+                    {
+                        EmitWarning($"SVG file not found: {fullSourcePath}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    EmitWarning($"Failed to copy SVG file '{svgPath}': {ex.Message}");
+                }
+            }
+
+            if (copiedCount > 0)
+            {
+                EmitMessage($"Copied {copiedCount} SVG file(s) to runtime build output");
+            }
+        }
+        catch (Exception ex)
+        {
+            EmitWarning($"Error copying SVG files: {ex.Message}");
+        }
     }
 
     private bool GenerateTagsConfig(string jsonPath)
