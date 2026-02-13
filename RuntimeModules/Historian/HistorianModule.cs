@@ -19,7 +19,17 @@ public sealed class HistorianModule : ModuleBase, IHistorian
     public override bool Initialize(JsonObject? config = null)
     {
         // Set database path based on project path
-        var projectPath = ExecutionEngine.Instance.ProjectPath;
+        string? projectPath = null;
+        try
+        {
+            projectPath = Runtime.Modules.ExecutionEngine.ExecutionEngine.Instance.ProjectPath;
+        }
+        catch
+        {
+            // ExecutionEngine.Instance might not be available yet, try to get from config
+            projectPath = config?["projectPath"]?.GetValue<string>();
+        }
+        
         if (!string.IsNullOrEmpty(projectPath))
         {
             // Create data subdirectory in project path for historian database
@@ -47,7 +57,15 @@ public sealed class HistorianModule : ModuleBase, IHistorian
 
         _historianManager.Initialize(config);
         
-        var tagManager = ExecutionEngine.Instance.ModuleManager.GetModule("TagsModule") as TagsModule;
+        TagsModule? tagManager = null;
+        try
+        {
+            tagManager = Runtime.Modules.ExecutionEngine.ExecutionEngine.Instance.ModuleManager.GetModule("TagsModule") as TagsModule;
+        }
+        catch
+        {
+            // ExecutionEngine.Instance might not be available yet
+        }
         if (tagManager != null)
         {
             _historianManager.SetTagManager(tagManager.TagManager);

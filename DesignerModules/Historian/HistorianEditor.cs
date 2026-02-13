@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using Designer.Modules.Historian;
 using Designer.Modules.TagEngine;
 using Designer.Modules.Project;
+using Designer.Modules.Components;
 
 namespace Designer.Modules.Historian;
 
@@ -174,19 +175,18 @@ public partial class HistorianEditor : UserControl
         _tagsGrid.Columns.Add("Enabled", "Enabled");
         _tagsGrid.Columns.Add("Description", "Description");
 
-        // Make TagName a combo box
-        var tagColumn = new DataGridViewComboBoxColumn
+        // Make TagName a button column that opens tag selector dialog
+        var tagColumn = new DataGridViewButtonColumn
         {
             Name = "TagName",
             HeaderText = "Tag Name",
-            DataPropertyName = "TagName",
-            DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton,
-            DisplayStyleForCurrentCellOnly = false,
-            FlatStyle = FlatStyle.Flat
+            Text = "Select Tag...",
+            UseColumnTextForButtonValue = false
         };
-        tagColumn.Items.AddRange(_availableTags.Select(t => t.Name).ToArray());
         _tagsGrid.Columns.Remove("TagName");
         _tagsGrid.Columns.Insert(0, tagColumn);
+        _tagsGrid.CellClick += OnTagNameCellClick;
+        _tagsGrid.CellFormatting += OnTagNameCellFormatting;
 
         // Make Enabled a checkbox
         var enabledColumn = new DataGridViewCheckBoxColumn
@@ -243,58 +243,7 @@ public partial class HistorianEditor : UserControl
     public void SetAvailableTags(List<Tag> tags)
     {
         _availableTags = tags ?? new List<Tag>();
-        
-        // Update the combo box column
-        var tagColumn = _tagsGrid.Columns["TagName"] as DataGridViewComboBoxColumn;
-        if (tagColumn != null)
-        {
-            var currentValues = new List<string>();
-            // Find TagName column index
-            int tagNameIndex = -1;
-            for (int i = 0; i < _tagsGrid.Columns.Count; i++)
-            {
-                if (_tagsGrid.Columns[i].Name == "TagName")
-                {
-                    tagNameIndex = i;
-                    break;
-                }
-            }
-            
-            // Save current values from rows
-            if (tagNameIndex >= 0)
-            {
-                foreach (DataGridViewRow row in _tagsGrid.Rows)
-                {
-                    if (tagNameIndex < row.Cells.Count && row.Cells[tagNameIndex].Value != null)
-                    {
-                        var val = row.Cells[tagNameIndex].Value.ToString();
-                        if (!string.IsNullOrEmpty(val))
-                            currentValues.Add(val);
-                    }
-                }
-            }
-            
-            tagColumn.Items.Clear();
-            tagColumn.Items.AddRange(_availableTags.Select(t => t.Name).ToArray());
-            
-            // Restore values if they still exist in the new list
-            if (tagNameIndex >= 0)
-            {
-                int rowIndex = 0;
-                foreach (DataGridViewRow row in _tagsGrid.Rows)
-                {
-                    if (rowIndex < currentValues.Count && tagNameIndex < row.Cells.Count)
-                    {
-                        var savedValue = currentValues[rowIndex];
-                        if (tagColumn.Items.Contains(savedValue))
-                        {
-                            row.Cells[tagNameIndex].Value = savedValue;
-                        }
-                    }
-                    rowIndex++;
-                }
-            }
-        }
+        // Note: Tag selection is now handled by TagSelectorDialog, so no need to update combo box
     }
 
     private void LoadHistorian()
@@ -341,23 +290,14 @@ public partial class HistorianEditor : UserControl
             row.CreateCells(_tagsGrid);
             
             // Set values using column indices (safer than names)
+            // TagName is a button column, so set the display value
             if (tagNameIndex >= 0 && tagNameIndex < row.Cells.Count)
             {
                 var tagNameCell = row.Cells[tagNameIndex];
-                // For combo box, ensure the value exists in the items list
-                if (tagNameCell is DataGridViewComboBoxCell comboCell)
+                if (tagNameCell != null)
                 {
-                    var tagName = tag.TagName ?? string.Empty;
-                    // Add the tag name to items if it doesn't exist (for backward compatibility)
-                    if (!string.IsNullOrEmpty(tagName) && !comboCell.Items.Contains(tagName))
-                    {
-                        comboCell.Items.Add(tagName);
-                    }
-                    comboCell.Value = tagName;
-                }
-                else if (tagNameCell != null)
-                {
-                    tagNameCell.Value = tag.TagName ?? string.Empty;
+                    // For button column, display the tag name or "Select Tag..." if empty
+                    tagNameCell.Value = string.IsNullOrEmpty(tag.TagName) ? "Select Tag..." : tag.TagName;
                 }
             }
             
@@ -409,6 +349,84 @@ public partial class HistorianEditor : UserControl
         }
     }
 
+    private void OnTagNameCellClick(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.RowIndex >= _tagsGrid.Rows.Count)
+            return;
+
+        var column = _tagsGrid.Columns[e.ColumnIndex];
+        if (column.Name != "TagName")
+            return;
+
+        var row = _tagsGrid.Rows[e.RowIndex];
+        if (row.Tag is not HistorianTag historianTag)
+            return;
+
+        // Get tag tables from the project
+        var tagTables = new List<TagTable>();
+        if (_scadaProject != null)
+        {
+            tagTables = _scadaProject.TagTables.OfType<TagTable>().ToList();
+        }
+
+        // Open tag selector dialog
+        using var dialog = new TagSelectorDialog();
+        dialog.SetTagTables(tagTables);
+        dialog.SetSelectedTagName(historianTag.TagName);
+        
+        if (dialog.ShowDialog(this) == DialogResult.OK && dialog.SelectedTag != null)
+        {
+            historianTag.TagName = dialog.SelectedTagName;
+            historianTag.TagTableName = dialog.SelectedTagTableName;
+            
+            // Update the cell display
+            var cell = row.Cells[e.ColumnIndex];
+            cell.Value = historianTag.TagName;
+            
+            // Update tag table name cell if it exists
+            int tagTableIndex = -1;
+            for (int i = 0; i < _tagsGrid.Columns.Count; i++)
+            {
+                if (_tagsGrid.Columns[i].Name == "TagTableName")
+                {
+                    tagTableIndex = i;
+                    break;
+                }
+            }
+            if (tagTableIndex >= 0 && tagTableIndex < row.Cells.Count)
+            {
+                row.Cells[tagTableIndex].Value = historianTag.TagTableName;
+            }
+            
+            _isModified = true;
+        }
+    }
+
+    private void OnTagNameCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.RowIndex >= _tagsGrid.Rows.Count)
+            return;
+
+        var column = _tagsGrid.Columns[e.ColumnIndex];
+        if (column.Name != "TagName")
+            return;
+
+        var row = _tagsGrid.Rows[e.RowIndex];
+        if (row.Tag is HistorianTag tag)
+        {
+            // Display the tag name in the button, or "Select Tag..." if empty
+            if (string.IsNullOrEmpty(tag.TagName))
+            {
+                e.Value = "Select Tag...";
+            }
+            else
+            {
+                e.Value = tag.TagName;
+            }
+            e.FormattingApplied = true;
+        }
+    }
+
     private void OnCellValueChanged(object? sender, DataGridViewCellEventArgs e)
     {
         if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.RowIndex >= _tagsGrid.Rows.Count)
@@ -425,14 +443,15 @@ public partial class HistorianEditor : UserControl
         if (e.ColumnIndex >= row.Cells.Count)
             return;
 
+        // Skip TagName column as it's handled by button click
+        if (column.Name == "TagName")
+            return;
+
         var cell = row.Cells[e.ColumnIndex];
         var value = cell.Value;
 
         switch (column.Name)
         {
-            case "TagName":
-                tag.TagName = value?.ToString() ?? string.Empty;
-                break;
             case "TagTableName":
                 tag.TagTableName = value?.ToString() ?? string.Empty;
                 break;
