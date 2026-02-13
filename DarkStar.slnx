@@ -35,7 +35,10 @@
     <Project Path="RuntimeModules/Security/Security.csproj" />
     <Project Path="RuntimeModules/TagsEngine/TagsEngine.csproj" />
   </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="Tests/Communication.Tests/Communication.Tests.csproj" />
+    <Project Path="Tests/Designer.Tests/Designer.Tests.csproj" />
+  </Folder>
   <Project Path="Designer/Designer.csproj" />
   <Project Path="Runtime/Runtime.csproj" />
-  <Project Path="Tests/Designer.Tests/Designer.Tests.csproj" />
 </Solution>

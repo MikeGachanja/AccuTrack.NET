@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using Runtime.Modules.ExecutionEngine;
@@ -58,13 +59,23 @@ public sealed class CommunicationModule : ModuleBase, ICommunication
         _statuses[name] = status;
         var config = node["config"] as JsonObject ?? node;
         var typeNorm = type.Trim();
+        var mode = config["mode"]?.GetValue<string>() ?? node["mode"]?.GetValue<string>() ?? "client";
+        
         if (typeNorm.Equals("OPC", StringComparison.OrdinalIgnoreCase) ||
             typeNorm.Equals("OpcUa", StringComparison.OrdinalIgnoreCase) ||
             typeNorm.Equals("OPCUA", StringComparison.OrdinalIgnoreCase) ||
             typeNorm.Equals("OPC UA", StringComparison.OrdinalIgnoreCase))
         {
-            var opcClient = new OpcUaClientConnection(status, node, _tagUpdateCallback);
-            _stubs.Add(opcClient);
+            if (mode.Equals("server", StringComparison.OrdinalIgnoreCase))
+            {
+                var opcServer = new OpcUaServerConnection(status, node);
+                _stubs.Add(opcServer);
+            }
+            else
+            {
+                var opcClient = new OpcUaClientConnection(status, node, _tagUpdateCallback);
+                _stubs.Add(opcClient);
+            }
         }
         else
         {
@@ -101,5 +112,17 @@ public sealed class CommunicationModule : ModuleBase, ICommunication
             if (stub is OpcUaClientConnection opc)
                 opc.SetTagValueCallback(callback);
         }
+    }
+
+    /// <summary>Get the first OPC UA client connection (for testing/debugging).</summary>
+    public OpcUaClientConnection? GetOpcUaClient()
+    {
+        return _stubs.OfType<OpcUaClientConnection>().FirstOrDefault();
+    }
+
+    /// <summary>Get the first OPC UA server connection (for testing/debugging).</summary>
+    public OpcUaServerConnection? GetOpcUaServer()
+    {
+        return _stubs.OfType<OpcUaServerConnection>().FirstOrDefault();
     }
 }

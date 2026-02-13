@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text.Json.Nodes;
@@ -75,23 +77,60 @@ public sealed class OpcUaClientConnection : IConnectionStub
         try
         {
             _appConfig = await CreateApplicationConfigurationAsync().ConfigureAwait(false);
-            var endpointDescription = new EndpointDescription
-            {
-                EndpointUrl = EndpointUrl,
-                SecurityMode = MessageSecurityMode.None,
-                SecurityPolicyUri = "http://opcfoundation.org/UA/SecurityPolicy#None",
-                Server = new ApplicationDescription { ApplicationName = "DarkStar Runtime Server" }
-            };
+            
+            // Discover endpoints from the server
+            _status.Status = "Discovering endpoints...";
             var endpointConfiguration = EndpointConfiguration.Create(_appConfig);
-            var configuredEndpoint = new ConfiguredEndpoint(null, endpointDescription, endpointConfiguration);
+            
+            // Use DiscoveryClient to discover endpoints
+            EndpointDescriptionCollection? endpoints = null;
+            using (var discoveryClient = DiscoveryClient.Create(new Uri(EndpointUrl), endpointConfiguration))
+            {
+                endpoints = await discoveryClient.GetEndpointsAsync(null).ConfigureAwait(false);
+            }
+            
+            if (endpoints == null || endpoints.Count == 0)
+            {
+                _status.Status = "Error: Could not discover endpoints from server";
+                _status.Connected = false;
+                return;
+            }
 
+            // Find an endpoint that supports anonymous authentication
+            EndpointDescription? anonymousEndpoint = null;
+            foreach (var endpoint in endpoints)
+            {
+                if (endpoint.UserIdentityTokens != null)
+                {
+                    foreach (var token in endpoint.UserIdentityTokens)
+                    {
+                        if (token.TokenType == UserTokenType.Anonymous)
+                        {
+                            anonymousEndpoint = endpoint;
+                            break;
+                        }
+                    }
+                }
+                if (anonymousEndpoint != null) break;
+            }
+
+            // If no anonymous endpoint found, try the first endpoint with None security mode
+            if (anonymousEndpoint == null)
+            {
+                anonymousEndpoint = endpoints.FirstOrDefault(e => e.SecurityMode == MessageSecurityMode.None) 
+                    ?? endpoints[0];
+            }
+
+            var configuredEndpoint = new ConfiguredEndpoint(null, anonymousEndpoint, endpointConfiguration);
+
+            _status.Status = "Connecting to server...";
             _session = await Session.Create(
                 _appConfig,
                 configuredEndpoint,
                 false,
                 _appConfig.ApplicationName,
                 60000,
-                new UserIdentity(new AnonymousIdentityToken()),
+                new UserIdentity(), // Anonymous identity (empty constructor)
                 null).ConfigureAwait(false);
 
             _status.Connected = true;
@@ -141,16 +180,45 @@ public sealed class OpcUaClientConnection : IConnectionStub
 
     private async Task<ApplicationConfiguration> CreateApplicationConfigurationAsync()
     {
+        // Create certificate store directory if it doesn't exist
+        var appDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var certStorePath = Path.Combine(appDataPath, "DarkStar", "OPC", "CertificateStores");
+        
+        // Ensure directories exist
+        Directory.CreateDirectory(Path.Combine(certStorePath, "Trusted"));
+        Directory.CreateDirectory(Path.Combine(certStorePath, "Issuers"));
+        Directory.CreateDirectory(Path.Combine(certStorePath, "Rejected"));
+        Directory.CreateDirectory(Path.Combine(certStorePath, "Own"));
+
         var config = new ApplicationConfiguration
         {
             ApplicationName = "DarkStar Runtime",
             ApplicationType = ApplicationType.Client,
             SecurityConfiguration = new SecurityConfiguration
             {
-                ApplicationCertificate = new CertificateIdentifier(),
-                TrustedPeerCertificates = new CertificateTrustList(),
-                TrustedIssuerCertificates = new CertificateTrustList(),
-                RejectedCertificateStore = new CertificateTrustList()
+                ApplicationCertificate = new CertificateIdentifier
+                {
+                    StoreType = "Directory",
+                    StorePath = Path.Combine(certStorePath, "Own"),
+                    SubjectName = "CN=DarkStar Runtime Client"
+                },
+                TrustedPeerCertificates = new CertificateTrustList
+                {
+                    StoreType = "Directory",
+                    StorePath = Path.Combine(certStorePath, "Trusted")
+                },
+                TrustedIssuerCertificates = new CertificateTrustList
+                {
+                    StoreType = "Directory",
+                    StorePath = Path.Combine(certStorePath, "Issuers")
+                },
+                RejectedCertificateStore = new CertificateTrustList
+                {
+                    StoreType = "Directory",
+                    StorePath = Path.Combine(certStorePath, "Rejected")
+                },
+                AutoAcceptUntrustedCertificates = true,
+                RejectSHA1SignedCertificates = false
             },
             TransportConfigurations = new TransportConfigurationCollection(),
             ClientConfiguration = new ClientConfiguration
@@ -208,5 +276,112 @@ public sealed class OpcUaClientConnection : IConnectionStub
         }
         catch { }
         return false;
+    }
+
+    /// <summary>Browse nodes starting from the specified node ID. Returns list of (NodeId, DisplayName) pairs.</summary>
+    public List<(string NodeId, string DisplayName)> BrowseNodes(string? startNodeId = null)
+    {
+        var result = new List<(string, string)>();
+        if (_session == null || !_session.Connected) return result;
+
+        try
+        {
+            var nodeToBrowse = startNodeId != null ? new NodeId(startNodeId) : ObjectIds.ObjectsFolder;
+            var browseDescription = new BrowseDescription
+            {
+                NodeId = nodeToBrowse,
+                BrowseDirection = BrowseDirection.Forward,
+                ReferenceTypeId = ReferenceTypeIds.HierarchicalReferences,
+                IncludeSubtypes = true,
+                NodeClassMask = 0,
+                ResultMask = (uint)BrowseResultMask.All
+            };
+
+            var browseDescriptionCollection = new BrowseDescriptionCollection { browseDescription };
+            _session.Browse(null, null, 0, browseDescriptionCollection, out var results, out var diagnosticInfos);
+
+            if (results != null && results.Count > 0)
+            {
+                foreach (var reference in results[0].References ?? new ReferenceDescriptionCollection())
+                {
+                    var nodeId = reference.NodeId.ToString();
+                    var displayName = reference.DisplayName?.Text ?? nodeId;
+                    result.Add((nodeId, displayName));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            // Log error if needed
+        }
+
+        return result;
+    }
+
+    /// <summary>Recursively browse all nodes starting from the specified node ID.</summary>
+    public List<(string NodeId, string DisplayName)> BrowseAllNodes(string? startNodeId = null)
+    {
+        var result = new List<(string, string)>();
+        if (_session == null || !_session.Connected) return result;
+
+        try
+        {
+            var nodeToBrowse = startNodeId != null ? new NodeId(startNodeId) : ObjectIds.ObjectsFolder;
+            BrowseNodeRecursive(nodeToBrowse, result, new HashSet<string>());
+        }
+        catch { }
+
+        return result;
+    }
+
+    private void BrowseNodeRecursive(NodeId nodeId, List<(string, string)> result, HashSet<string> visited)
+    {
+        if (_session == null || !_session.Connected) return;
+
+        var nodeIdStr = nodeId.ToString();
+        if (visited.Contains(nodeIdStr)) return;
+        visited.Add(nodeIdStr);
+
+        try
+        {
+            var browseDescription = new BrowseDescription
+            {
+                NodeId = nodeId,
+                BrowseDirection = BrowseDirection.Forward,
+                ReferenceTypeId = ReferenceTypeIds.HierarchicalReferences,
+                IncludeSubtypes = true,
+                NodeClassMask = 0,
+                ResultMask = (uint)BrowseResultMask.All
+            };
+
+            var browseDescriptionCollection = new BrowseDescriptionCollection { browseDescription };
+            BrowseResultCollection? results = null;
+            DiagnosticInfoCollection? diagnosticInfos = null;
+            _session.Browse(null, null, 0, browseDescriptionCollection, out results, out diagnosticInfos);
+
+            if (results != null && results.Count > 0 && results[0].References != null)
+            {
+                foreach (var reference in results[0].References)
+                {
+                    var childNodeIdStr = reference.NodeId.ToString();
+                    var displayName = reference.DisplayName?.Text ?? childNodeIdStr;
+                    
+                    // Add to results
+                    result.Add((childNodeIdStr, displayName));
+                    
+                    // Recursively browse children - convert ExpandedNodeId to NodeId
+                    try
+                    {
+                        var childNodeId = ExpandedNodeId.ToNodeId(reference.NodeId, _session.NamespaceUris);
+                        if (childNodeId != null && !childNodeId.IsNullNodeId)
+                        {
+                            BrowseNodeRecursive(childNodeId, result, visited);
+                        }
+                    }
+                    catch { /* Skip if can't browse child */ }
+                }
+            }
+        }
+        catch { /* Skip if can't browse this node */ }
     }
 }
