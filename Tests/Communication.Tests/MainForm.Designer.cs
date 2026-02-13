@@ -46,6 +46,13 @@ namespace Communication.Tests
         private System.Windows.Forms.Button btnAddServerNode;
         private System.Windows.Forms.Label lblServerNodeId;
         private System.Windows.Forms.Label lblServerNodeValue;
+        private System.Windows.Forms.GroupBox grpSubscriptions;
+        private System.Windows.Forms.TextBox txtSubscribeNodeId;
+        private System.Windows.Forms.Button btnSubscribeNode;
+        private System.Windows.Forms.Button btnUnsubscribeNode;
+        private System.Windows.Forms.ListBox lstSubscribedNodes;
+        private System.Windows.Forms.Label lblSubscribedCount;
+        private System.Windows.Forms.Label lblSubscribeNodeId;
 
         protected override void Dispose(bool disposing)
         {
@@ -101,6 +108,13 @@ namespace Communication.Tests
             this.btnAddServerNode = new System.Windows.Forms.Button();
             this.lblServerNodeId = new System.Windows.Forms.Label();
             this.lblServerNodeValue = new System.Windows.Forms.Label();
+            this.grpSubscriptions = new System.Windows.Forms.GroupBox();
+            this.txtSubscribeNodeId = new System.Windows.Forms.TextBox();
+            this.btnSubscribeNode = new System.Windows.Forms.Button();
+            this.btnUnsubscribeNode = new System.Windows.Forms.Button();
+            this.lstSubscribedNodes = new System.Windows.Forms.ListBox();
+            this.lblSubscribedCount = new System.Windows.Forms.Label();
+            this.lblSubscribeNodeId = new System.Windows.Forms.Label();
             this.grpConnection.SuspendLayout();
             this.grpTagMappings.SuspendLayout();
             this.grpNodeOperations.SuspendLayout();
@@ -108,6 +122,7 @@ namespace Communication.Tests
             this.grpNodeValues.SuspendLayout();
             this.grpNodeBrowser.SuspendLayout();
             this.grpServerNodes.SuspendLayout();
+            this.grpSubscriptions.SuspendLayout();
             this.SuspendLayout();
             // 
             // txtEndpointUrl
@@ -573,12 +588,91 @@ namespace Communication.Tests
             this.lblBrowseStartNode.TabIndex = 0;
             this.lblBrowseStartNode.Text = "Start Node:";
             // 
+            // grpSubscriptions
+            // 
+            this.grpSubscriptions.Controls.Add(this.lstSubscribedNodes);
+            this.grpSubscriptions.Controls.Add(this.lblSubscribedCount);
+            this.grpSubscriptions.Controls.Add(this.btnUnsubscribeNode);
+            this.grpSubscriptions.Controls.Add(this.btnSubscribeNode);
+            this.grpSubscriptions.Controls.Add(this.txtSubscribeNodeId);
+            this.grpSubscriptions.Controls.Add(this.lblSubscribeNodeId);
+            this.grpSubscriptions.Dock = System.Windows.Forms.DockStyle.Top;
+            this.grpSubscriptions.Location = new System.Drawing.Point(0, 670);
+            this.grpSubscriptions.Name = "grpSubscriptions";
+            this.grpSubscriptions.Size = new System.Drawing.Size(630, 150);
+            this.grpSubscriptions.TabIndex = 13;
+            this.grpSubscriptions.TabStop = false;
+            this.grpSubscriptions.Text = "Node Subscriptions (Client Mode)";
+            this.grpSubscriptions.Visible = false;
+            // 
+            // lblSubscribeNodeId
+            // 
+            this.lblSubscribeNodeId.AutoSize = true;
+            this.lblSubscribeNodeId.Location = new System.Drawing.Point(6, 22);
+            this.lblSubscribeNodeId.Name = "lblSubscribeNodeId";
+            this.lblSubscribeNodeId.Size = new System.Drawing.Size(55, 15);
+            this.lblSubscribeNodeId.TabIndex = 0;
+            this.lblSubscribeNodeId.Text = "Node ID:";
+            // 
+            // txtSubscribeNodeId
+            // 
+            this.txtSubscribeNodeId.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.txtSubscribeNodeId.Location = new System.Drawing.Point(67, 19);
+            this.txtSubscribeNodeId.Name = "txtSubscribeNodeId";
+            this.txtSubscribeNodeId.Size = new System.Drawing.Size(400, 23);
+            this.txtSubscribeNodeId.TabIndex = 1;
+            // 
+            // btnSubscribeNode
+            // 
+            this.btnSubscribeNode.Location = new System.Drawing.Point(473, 18);
+            this.btnSubscribeNode.Name = "btnSubscribeNode";
+            this.btnSubscribeNode.Size = new System.Drawing.Size(75, 25);
+            this.btnSubscribeNode.TabIndex = 2;
+            this.btnSubscribeNode.Text = "Subscribe";
+            this.btnSubscribeNode.UseVisualStyleBackColor = true;
+            this.btnSubscribeNode.Click += new System.EventHandler(this.btnSubscribeNode_Click);
+            // 
+            // btnUnsubscribeNode
+            // 
+            this.btnUnsubscribeNode.Location = new System.Drawing.Point(554, 18);
+            this.btnUnsubscribeNode.Name = "btnUnsubscribeNode";
+            this.btnUnsubscribeNode.Size = new System.Drawing.Size(70, 25);
+            this.btnUnsubscribeNode.TabIndex = 3;
+            this.btnUnsubscribeNode.Text = "Unsubscribe";
+            this.btnUnsubscribeNode.UseVisualStyleBackColor = true;
+            this.btnUnsubscribeNode.Click += new System.EventHandler(this.btnUnsubscribeNode_Click);
+            // 
+            // lstSubscribedNodes
+            // 
+            this.lstSubscribedNodes.Anchor = ((System.Windows.Forms.AnchorStyles)((((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
+            | System.Windows.Forms.AnchorStyles.Left) 
+            | System.Windows.Forms.AnchorStyles.Right)));
+            this.lstSubscribedNodes.FormattingEnabled = true;
+            this.lstSubscribedNodes.ItemHeight = 15;
+            this.lstSubscribedNodes.Location = new System.Drawing.Point(6, 48);
+            this.lstSubscribedNodes.Name = "lstSubscribedNodes";
+            this.lstSubscribedNodes.Size = new System.Drawing.Size(618, 94);
+            this.lstSubscribedNodes.TabIndex = 4;
+            this.lstSubscribedNodes.DoubleClick += new System.EventHandler(this.lstSubscribedNodes_DoubleClick);
+            // 
+            // lblSubscribedCount
+            // 
+            this.lblSubscribedCount.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.lblSubscribedCount.AutoSize = true;
+            this.lblSubscribedCount.Location = new System.Drawing.Point(6, 145);
+            this.lblSubscribedCount.Name = "lblSubscribedCount";
+            this.lblSubscribedCount.Size = new System.Drawing.Size(75, 15);
+            this.lblSubscribedCount.TabIndex = 5;
+            this.lblSubscribedCount.Text = "Subscribed: 0";
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(7F, 15F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(630, 840);
+            this.ClientSize = new System.Drawing.Size(630, 990);
             this.Controls.Add(this.grpConsole);
+            this.Controls.Add(this.grpSubscriptions);
             this.Controls.Add(this.grpNodeBrowser);
             this.Controls.Add(this.grpServerNodes);
             this.Controls.Add(this.grpNodeValues);
@@ -599,6 +693,8 @@ namespace Communication.Tests
             this.grpNodeBrowser.PerformLayout();
             this.grpServerNodes.ResumeLayout(false);
             this.grpServerNodes.PerformLayout();
+            this.grpSubscriptions.ResumeLayout(false);
+            this.grpSubscriptions.PerformLayout();
             this.ResumeLayout(false);
 
         }

@@ -23,7 +23,9 @@ public sealed class OpcUaClientConnection : IConnectionStub
     private Session? _session;
     private Subscription? _subscription;
     private readonly List<MonitoredItem> _monitoredItems = new();
+    private readonly Dictionary<string, MonitoredItem> _subscribedNodes = new(); // NodeId -> MonitoredItem
     private Action<string, object?>? _onTagValue;
+    private Action<string, object?, DateTime>? _onSubscribedValue; // NodeId, Value, Timestamp
     private volatile bool _running;
     private readonly List<(string NodeId, string DisplayName)> _allNodes = new();
     private readonly object _nodesLock = new();
@@ -483,6 +485,10 @@ public sealed class OpcUaClientConnection : IConnectionStub
                     }
                     
                     _status.Status = $"Connected ({_allNodes.Count} nodes, {subscribedCount} tags subscribed)";
+                    
+                    // After setting up subscriptions, do an initial scan to read all mapped tag values
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Starting initial scan of all mapped tag values...");
+                    ScanAndReadAllTagValues(uniqueTagMappings);
                 }
                 else
                 {
@@ -495,6 +501,16 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 if (tagMappings.Count == 0)
                 {
                     System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: No tag mappings found in configuration");
+                }
+                else if (_onTagValue != null)
+                {
+                    // Even if subscriptions failed, try to read initial values
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Subscriptions not set up, but scanning initial tag values anyway...");
+                    var uniqueTagMappings = tagMappings
+                        .GroupBy(m => m.tagName)
+                        .Select(g => g.First())
+                        .ToList();
+                    ScanAndReadAllTagValues(uniqueTagMappings);
                 }
                 if (_onTagValue == null)
                 {
@@ -645,6 +661,143 @@ public sealed class OpcUaClientConnection : IConnectionStub
         
         System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: Total mappings: {list.Count}");
         return list;
+    }
+
+    /// <summary>Scan and read all mapped tag values to update global tag values immediately.</summary>
+    private void ScanAndReadAllTagValues(List<(string tagName, string nodeId)> tagMappings)
+    {
+        if (_session == null || !_session.Connected || _onTagValue == null)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Cannot scan - session is null or not connected, or callback is null");
+            return;
+        }
+
+        if (tagMappings.Count == 0)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: No tag mappings to scan");
+            return;
+        }
+
+        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Starting scan of {tagMappings.Count} mapped tags...");
+        
+        int successCount = 0;
+        int failedCount = 0;
+
+        // Use batch read for efficiency if possible, otherwise read individually
+        try
+        {
+            var nodeIdsToRead = new List<NodeId>();
+            var tagNamesForNodes = new List<string>();
+            
+            // First, resolve all node IDs
+            foreach (var (tagName, nodeIdStr) in tagMappings)
+            {
+                if (string.IsNullOrWhiteSpace(nodeIdStr))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Skipping tag '{tagName}' - nodeId is empty");
+                    failedCount++;
+                    continue;
+                }
+
+                try
+                {
+                    var resolvedNodeId = TryResolveNodeId(nodeIdStr);
+                    if (resolvedNodeId == null || resolvedNodeId.IsNullNodeId)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Could not resolve NodeId for tag '{tagName}' (nodeId: '{nodeIdStr}')");
+                        failedCount++;
+                        continue;
+                    }
+
+                    nodeIdsToRead.Add(resolvedNodeId);
+                    tagNamesForNodes.Add(tagName);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Error resolving NodeId for tag '{tagName}' (nodeId: '{nodeIdStr}'): {ex.Message}");
+                    failedCount++;
+                }
+            }
+
+            if (nodeIdsToRead.Count == 0)
+            {
+                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: No valid node IDs to read");
+                return;
+            }
+
+            // Read values individually (can be optimized to batch read later if needed)
+            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Reading {nodeIdsToRead.Count} nodes...");
+            
+            for (int i = 0; i < nodeIdsToRead.Count; i++)
+            {
+                var nodeId = nodeIdsToRead[i];
+                var tagName = tagNamesForNodes[i];
+                
+                try
+                {
+                    var dataValue = _session.ReadValue(nodeId);
+                    if (dataValue != null && Opc.Ua.StatusCode.IsGood(dataValue.StatusCode))
+                    {
+                        var value = dataValue.WrappedValue.Value;
+                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Successfully read tag '{tagName}' (NodeId: {nodeId}) = '{value}'");
+                        
+                        try
+                        {
+                            _onTagValue(tagName, value);
+                            successCount++;
+                        }
+                        catch (Exception ex)
+                        {
+                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Error invoking callback for tag '{tagName}': {ex.Message}");
+                            failedCount++;
+                        }
+                    }
+                    else
+                    {
+                        var statusCode = dataValue?.StatusCode ?? StatusCodes.Bad;
+                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Failed to read tag '{tagName}' (NodeId: {nodeId}) - StatusCode: 0x{(uint)statusCode:X8}");
+                        failedCount++;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Exception reading tag '{tagName}' (NodeId: {nodeId}): {ex.Message}");
+                    failedCount++;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Exception during batch read, falling back to individual reads: {ex.Message}");
+            
+            // Fallback to individual reads
+            foreach (var (tagName, nodeIdStr) in tagMappings)
+            {
+                if (string.IsNullOrWhiteSpace(nodeIdStr)) continue;
+                
+                try
+                {
+                    if (ReadTag(nodeIdStr, out var value))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Successfully read tag '{tagName}' = '{value}'");
+                        _onTagValue(tagName, value);
+                        successCount++;
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Failed to read tag '{tagName}' (nodeId: '{nodeIdStr}')");
+                        failedCount++;
+                    }
+                }
+                catch (Exception ex2)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Exception reading tag '{tagName}': {ex2.Message}");
+                    failedCount++;
+                }
+            }
+        }
+
+        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Scan complete - {successCount} succeeded, {failedCount} failed out of {tagMappings.Count} total tags");
     }
 
     /// <summary>Find tag name by NodeId/address - used for resolving notifications that come with NodeId instead of tag name.</summary>
@@ -974,11 +1127,89 @@ public sealed class OpcUaClientConnection : IConnectionStub
             System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to parse '{identifier}' as NodeId, trying alternatives...");
         }
 
-        // Strategy 2: Try as string NodeId in namespace 0 (default namespace)
+        // Strategy 2: Search browsed nodes by DisplayName (case-insensitive)
+        lock (_nodesLock)
+        {
+            var matchingNode = _allNodes.FirstOrDefault(n => 
+                n.DisplayName.Equals(identifier, StringComparison.OrdinalIgnoreCase));
+            
+            if (!string.IsNullOrEmpty(matchingNode.NodeId))
+            {
+                try
+                {
+                    var nodeId = new NodeId(matchingNode.NodeId);
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found node by DisplayName '{identifier}' -> NodeId: {nodeId}");
+                    return nodeId;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to parse found NodeId '{matchingNode.NodeId}': {ex.Message}");
+                }
+            }
+            
+            // Strategy 2b: Search browsed nodes by DisplayName containing the identifier (for partial matches)
+            // This helps with cases like "mFIOPause" matching "iFIOPaused" or "FIOPause"
+            // Try matching the core name (without prefix like 'm' or 'i')
+            string coreIdentifier = identifier;
+            if (coreIdentifier.Length > 1 && char.IsLetter(coreIdentifier[0]) && char.IsUpper(coreIdentifier[1]))
+            {
+                coreIdentifier = coreIdentifier.Substring(1); // Remove first character if it's a prefix
+            }
+            
+            matchingNode = _allNodes.FirstOrDefault(n => 
+            {
+                string nodeCoreName = n.DisplayName;
+                if (nodeCoreName.Length > 1 && char.IsLetter(nodeCoreName[0]) && char.IsUpper(nodeCoreName[1]))
+                {
+                    nodeCoreName = nodeCoreName.Substring(1); // Remove prefix
+                }
+                
+                return nodeCoreName.Equals(coreIdentifier, StringComparison.OrdinalIgnoreCase) ||
+                       n.DisplayName.Contains(coreIdentifier, StringComparison.OrdinalIgnoreCase) ||
+                       coreIdentifier.Contains(nodeCoreName, StringComparison.OrdinalIgnoreCase) ||
+                       n.DisplayName.EndsWith(coreIdentifier, StringComparison.OrdinalIgnoreCase) ||
+                       coreIdentifier.EndsWith(nodeCoreName, StringComparison.OrdinalIgnoreCase);
+            });
+            
+            if (!string.IsNullOrEmpty(matchingNode.NodeId))
+            {
+                try
+                {
+                    var nodeId = new NodeId(matchingNode.NodeId);
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found node by DisplayName partial match '{identifier}' (core: '{coreIdentifier}') -> NodeId: {nodeId} (DisplayName: {matchingNode.DisplayName})");
+                    return nodeId;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to parse found NodeId '{matchingNode.NodeId}': {ex.Message}");
+                }
+            }
+            
+            // Strategy 2c: Search browsed nodes by NodeId string containing the identifier
+            matchingNode = _allNodes.FirstOrDefault(n => 
+                n.NodeId.Contains(identifier, StringComparison.OrdinalIgnoreCase) ||
+                n.NodeId.Contains(coreIdentifier, StringComparison.OrdinalIgnoreCase));
+            
+            if (!string.IsNullOrEmpty(matchingNode.NodeId))
+            {
+                try
+                {
+                    var nodeId = new NodeId(matchingNode.NodeId);
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found node by NodeId partial match '{identifier}' -> NodeId: {nodeId} (DisplayName: {matchingNode.DisplayName})");
+                    return nodeId;
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to parse found NodeId '{matchingNode.NodeId}': {ex.Message}");
+                }
+            }
+        }
+
+        // Strategy 2d: Try as string NodeId in namespace 0 (default namespace) - only if no browsed node match found
         try
         {
             var nodeId = new NodeId(identifier, 0);
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Created string NodeId in namespace 0: {nodeId}");
+            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Created string NodeId in namespace 0: {nodeId} (no browsed node match found)");
             return nodeId;
         }
         catch (Exception ex)
@@ -986,7 +1217,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
             System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to create string NodeId in namespace 0: {ex.Message}");
         }
 
-        // Strategy 3: Check if identifier matches a tag name or address from TagProvider
+        // Strategy 4: Check if identifier matches a tag name or address from TagProvider
         if (_getTagsFunc != null)
         {
             try
@@ -1221,5 +1452,111 @@ public sealed class OpcUaClientConnection : IConnectionStub
             }
         }
         catch { /* Skip if can't browse this node */ }
+    }
+
+    /// <summary>Set callback for subscribed node value updates (nodeId, value, timestamp).</summary>
+    public void SetSubscribedValueCallback(Action<string, object?, DateTime>? callback)
+    {
+        _onSubscribedValue = callback;
+    }
+
+    /// <summary>Subscribe to a node to receive value updates.</summary>
+    public bool SubscribeNode(string nodeId, string? displayName = null)
+    {
+        if (_session == null || !_session.Connected)
+        {
+            return false;
+        }
+
+        var nodeIdStr = nodeId;
+        if (_subscribedNodes.ContainsKey(nodeIdStr))
+        {
+            return true; // Already subscribed
+        }
+
+        try
+        {
+            var resolvedNodeId = TryResolveNodeId(nodeId);
+            if (resolvedNodeId == null || resolvedNodeId.IsNullNodeId)
+            {
+                return false;
+            }
+
+            // Ensure we have a subscription
+            if (_subscription == null)
+            {
+                _subscription = new Subscription(_session.DefaultSubscription)
+                {
+                    PublishingInterval = 1000,
+                    PublishingEnabled = true
+                };
+                _session.AddSubscription(_subscription);
+                _subscription.Create();
+            }
+
+            var item = new MonitoredItem(_subscription.DefaultItem)
+            {
+                StartNodeId = resolvedNodeId,
+                AttributeId = Attributes.Value,
+                SamplingInterval = 1000,
+                DisplayName = displayName ?? nodeId
+            };
+
+            var capturedNodeId = nodeIdStr;
+            item.Notification += (monitoredItem, e) =>
+            {
+                if (e.NotificationValue is MonitoredItemNotification notification && notification.Value?.Value != null)
+                {
+                    var value = notification.Value.Value;
+                    var timestamp = notification.Value.SourceTimestamp != DateTime.MinValue 
+                        ? notification.Value.SourceTimestamp 
+                        : DateTime.UtcNow;
+                    
+                    _onSubscribedValue?.Invoke(capturedNodeId, value, timestamp);
+                }
+            };
+
+            _subscription.AddItem(item);
+            _monitoredItems.Add(item);
+            _subscribedNodes[nodeIdStr] = item;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Unsubscribe from a node.</summary>
+    public bool UnsubscribeNode(string nodeId)
+    {
+        if (!_subscribedNodes.TryGetValue(nodeId, out var item))
+        {
+            return false;
+        }
+
+        try
+        {
+            _subscription?.RemoveItem(item);
+            _monitoredItems.Remove(item);
+            _subscribedNodes.Remove(nodeId);
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>Get list of currently subscribed node IDs.</summary>
+    public List<string> GetSubscribedNodes()
+    {
+        return _subscribedNodes.Keys.ToList();
+    }
+
+    /// <summary>Check if a node is currently subscribed.</summary>
+    public bool IsSubscribed(string nodeId)
+    {
+        return _subscribedNodes.ContainsKey(nodeId);
     }
 }

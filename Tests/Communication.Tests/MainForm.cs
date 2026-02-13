@@ -15,6 +15,7 @@ public partial class MainForm : Form
     private readonly List<NodeInfo> _nodes = new();
     private readonly List<NodeInfo> _filteredNodes = new();
     private readonly Dictionary<string, object?> _nodeValues = new();
+    private readonly Dictionary<string, (object? value, DateTime timestamp)> _subscribedValues = new();
 
     public MainForm()
     {
@@ -145,6 +146,17 @@ public partial class MainForm : Form
                         LogMessage("Failed to get OPC client from module", LogLevel.Error);
                         return;
                     }
+                    
+                    // Set up subscription callback for logging
+                    _opcClient.SetSubscribedValueCallback((nodeId, value, timestamp) =>
+                    {
+                        this.Invoke(() =>
+                        {
+                            _subscribedValues[nodeId] = (value, timestamp);
+                            LogMessage($"Subscribed Node Update: {nodeId} = {value} (Timestamp: {timestamp:HH:mm:ss.fff})", LogLevel.Debug);
+                            UpdateSubscribedNodesList();
+                        });
+                    });
                 }
                 else
                 {
@@ -192,6 +204,10 @@ public partial class MainForm : Form
                                     UpdateServerNodesList();
                                     LogMessage($"Server started successfully on {txtEndpointUrl.Text}", LogLevel.Info);
                                 }
+                                else
+                                {
+                                    UpdateSubscribedNodesList();
+                                }
                             }
                         }
                     };
@@ -224,8 +240,10 @@ public partial class MainForm : Form
             _nodes.Clear();
             _filteredNodes.Clear();
             _nodeValues.Clear();
+            _subscribedValues.Clear();
             UpdateNodeValuesList();
             UpdateBrowsedNodesList();
+            UpdateSubscribedNodesList();
             btnConnect.Enabled = true;
             btnDisconnect.Enabled = false;
             var mode = rdoClientMode.Checked ? "client" : "server";
@@ -492,6 +510,7 @@ public partial class MainForm : Form
         grpNodeOperations.Visible = isClientMode;
         grpNodeValues.Visible = isClientMode;
         grpNodeBrowser.Visible = isClientMode;
+        grpSubscriptions.Visible = isClientMode;
         grpServerNodes.Visible = !isClientMode;
         grpTagMappings.Visible = isClientMode;
     }
@@ -551,6 +570,134 @@ public partial class MainForm : Form
             if (_opcServer.GetNodeValue(nodeId, out var value))
             {
                 lstServerNodes.Items.Add($"{nodeId} = {value}");
+            }
+        }
+    }
+
+    private void btnSubscribeNode_Click(object sender, EventArgs e)
+    {
+        if (_opcClient == null)
+        {
+            LogMessage("OPC client not available. Please connect first.", LogLevel.Warning);
+            return;
+        }
+
+        var nodeId = txtSubscribeNodeId.Text.Trim();
+        if (string.IsNullOrEmpty(nodeId))
+        {
+            LogMessage("Please enter a node ID to subscribe", LogLevel.Warning);
+            return;
+        }
+
+        try
+        {
+            if (_opcClient.IsSubscribed(nodeId))
+            {
+                LogMessage($"Node '{nodeId}' is already subscribed", LogLevel.Info);
+                return;
+            }
+
+            if (_opcClient.SubscribeNode(nodeId))
+            {
+                LogMessage($"Successfully subscribed to node: {nodeId}", LogLevel.Info);
+                txtSubscribeNodeId.Clear();
+                UpdateSubscribedNodesList();
+            }
+            else
+            {
+                LogMessage($"Failed to subscribe to node: {nodeId}", LogLevel.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            LogMessage($"Error subscribing to node: {ex.Message}", LogLevel.Error);
+        }
+    }
+
+    private void btnUnsubscribeNode_Click(object sender, EventArgs e)
+    {
+        if (_opcClient == null)
+        {
+            LogMessage("OPC client not available. Please connect first.", LogLevel.Warning);
+            return;
+        }
+
+        var nodeId = txtSubscribeNodeId.Text.Trim();
+        if (string.IsNullOrEmpty(nodeId))
+        {
+            // Try to get from selected item in list
+            if (lstSubscribedNodes.SelectedItem != null)
+            {
+                var selected = lstSubscribedNodes.SelectedItem.ToString();
+                if (selected != null && selected.Contains(" = "))
+                {
+                    nodeId = selected.Split(new[] { " = " }, StringSplitOptions.None)[0];
+                }
+            }
+        }
+
+        if (string.IsNullOrEmpty(nodeId))
+        {
+            LogMessage("Please enter or select a node ID to unsubscribe", LogLevel.Warning);
+            return;
+        }
+
+        try
+        {
+            if (_opcClient.UnsubscribeNode(nodeId))
+            {
+                LogMessage($"Successfully unsubscribed from node: {nodeId}", LogLevel.Info);
+                _subscribedValues.Remove(nodeId);
+                txtSubscribeNodeId.Clear();
+                UpdateSubscribedNodesList();
+            }
+            else
+            {
+                LogMessage($"Failed to unsubscribe from node: {nodeId} (may not be subscribed)", LogLevel.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            LogMessage($"Error unsubscribing from node: {ex.Message}", LogLevel.Error);
+        }
+    }
+
+    private void UpdateSubscribedNodesList()
+    {
+        lstSubscribedNodes.Items.Clear();
+        
+        if (_opcClient == null)
+        {
+            lblSubscribedCount.Text = "Subscribed: 0";
+            return;
+        }
+
+        var subscribedNodes = _opcClient.GetSubscribedNodes();
+        lblSubscribedCount.Text = $"Subscribed: {subscribedNodes.Count}";
+
+        foreach (var nodeId in subscribedNodes)
+        {
+            if (_subscribedValues.TryGetValue(nodeId, out var valueInfo))
+            {
+                var timestamp = valueInfo.timestamp.ToString("HH:mm:ss.fff");
+                lstSubscribedNodes.Items.Add($"{nodeId} = {valueInfo.value} [{timestamp}]");
+            }
+            else
+            {
+                lstSubscribedNodes.Items.Add($"{nodeId} = (no value yet)");
+            }
+        }
+    }
+
+    private void lstSubscribedNodes_DoubleClick(object sender, EventArgs e)
+    {
+        if (lstSubscribedNodes.SelectedItem != null)
+        {
+            var selected = lstSubscribedNodes.SelectedItem.ToString();
+            if (selected != null && selected.Contains(" = "))
+            {
+                var nodeId = selected.Split(new[] { " = " }, StringSplitOptions.None)[0];
+                txtSubscribeNodeId.Text = nodeId;
             }
         }
     }
