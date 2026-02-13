@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
+using Runtime.Modules.TagsEngine;
 
 namespace Runtime.Modules.Screens;
 
@@ -51,8 +54,116 @@ public sealed class AnimationManager
 
     public bool Initialize() { _initialized = true; return true; }
 
-    /// <summary>Load animations for a screen (stub: optional animations.json; use AddImplicitVisibilityRules for tag-bound visibility).</summary>
-    public bool LoadScreenAnimations(string screenJsonPath, string screenId) => true;
+    /// <summary>Trigger initial animation states for all loaded rules using current tag values from TagManager.</summary>
+    public void TriggerInitialStates(TagManager? tagManager)
+    {
+        if (tagManager == null) return;
+        
+        List<AnimationRule> rulesCopy;
+        lock (_lock)
+        {
+            rulesCopy = _rules.ToList();
+        }
+        
+        // Group by tag name and trigger evaluation
+        var tagsToEvaluate = rulesCopy.Select(r => r.TagName).Distinct(StringComparer.OrdinalIgnoreCase);
+        foreach (var tagName in tagsToEvaluate)
+        {
+            var tag = tagManager.GetTag(tagName);
+            if (tag != null)
+            {
+                var currentValue = tag.GetValue();
+                OnTagValueChanged(tagName, currentValue);
+            }
+        }
+    }
+
+    /// <summary>Load animations for a screen from screen JSON component properties.</summary>
+    public bool LoadScreenAnimations(string screenJsonPath, string screenId)
+    {
+        if (string.IsNullOrEmpty(screenJsonPath) || !File.Exists(screenJsonPath) || string.IsNullOrEmpty(screenId))
+            return false;
+        
+        try
+        {
+            var json = File.ReadAllText(screenJsonPath);
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            
+            if (!root.TryGetProperty("components", out var compArr) || compArr.ValueKind != JsonValueKind.Array)
+                return false;
+            
+            lock (_lock)
+            {
+                // Remove existing rules for this screen
+                _rules.RemoveAll(r => r.ScreenId == screenId);
+                
+                foreach (var comp in compArr.EnumerateArray())
+                {
+                    var componentId = comp.TryGetProperty("id", out var id) ? id.GetString() ?? "" : "";
+                    if (string.IsNullOrEmpty(componentId)) continue;
+                    
+                    // Check for animations in properties
+                    if (comp.TryGetProperty("properties", out var props) && props.ValueKind == JsonValueKind.Object)
+                    {
+                        if (props.TryGetProperty("animations", out var animsProp))
+                        {
+                            // Handle nested animations object: { "animations": { "animations": [...] } }
+                            JsonElement? animsArray = null;
+                            if (animsProp.ValueKind == JsonValueKind.Object && animsProp.TryGetProperty("animations", out var nestedAnims))
+                                animsArray = nestedAnims;
+                            else if (animsProp.ValueKind == JsonValueKind.Array)
+                                animsArray = animsProp;
+                            
+                            if (animsArray.HasValue && animsArray.Value.ValueKind == JsonValueKind.Array)
+                            {
+                                foreach (var anim in animsArray.Value.EnumerateArray())
+                                {
+                                    if (anim.ValueKind != JsonValueKind.Object) continue;
+                                    
+                                    var enabled = anim.TryGetProperty("enabled", out var en) ? en.GetBoolean() : true;
+                                    if (!enabled) continue;
+                                    
+                                    var typeStr = anim.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
+                                    var tagName = anim.TryGetProperty("tagName", out var tag) ? tag.GetString() ?? "" : "";
+                                    
+                                    if (string.IsNullOrEmpty(typeStr) || string.IsNullOrEmpty(tagName)) continue;
+                                    
+                                    if (!Enum.TryParse<AnimationType>(typeStr, out var animType)) continue;
+                                    
+                                    // Extract config
+                                    var config = new Dictionary<string, object>();
+                                    if (anim.TryGetProperty("color", out var color))
+                                        config["color"] = color.GetString() ?? "#00FF00";
+                                    if (anim.TryGetProperty("bitValue", out var bitVal))
+                                        config["bitValue"] = bitVal.GetBoolean();
+                                    if (anim.TryGetProperty("frequency", out var freq))
+                                        config["frequency"] = freq.GetDouble();
+                                    if (anim.TryGetProperty("speed", out var speed))
+                                        config["speed"] = speed.GetDouble();
+                                    
+                                    _rules.Add(new AnimationRule
+                                    {
+                                        ScreenId = screenId,
+                                        ComponentId = componentId,
+                                        TagName = tagName,
+                                        Type = animType,
+                                        Config = config
+                                    });
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     /// <summary>Add one Visibility rule per component that has a tag (tag value != 0 -> visible).</summary>
     public void AddImplicitVisibilityRules(string screenId, IEnumerable<(string componentId, string? tagName)> components)
@@ -117,17 +228,34 @@ public sealed class AnimationManager
             switch (rule.Type)
             {
                 case AnimationType.Visibility:
-                    state.Visible = IsTrue(value);
+                    var bitValue = rule.Config != null && rule.Config.TryGetValue("bitValue", out var bv) && bv is bool b ? b : true;
+                    state.Visible = bitValue ? IsTrue(value) : !IsTrue(value);
                     break;
                 case AnimationType.ColorChange:
-                    state.BackgroundColor = ValueToStubColor(value);
+                    var color = rule.Config != null && rule.Config.TryGetValue("color", out var c) ? c.ToString() : "#00FF00";
+                    var colorBitValue = rule.Config != null && rule.Config.TryGetValue("bitValue", out var cbv) && cbv is bool cb ? cb : true;
+                    state.BackgroundColor = (colorBitValue ? IsTrue(value) : !IsTrue(value)) ? color : null;
                     break;
                 case AnimationType.Flashing:
-                    state.IsFlashing = IsTrue(value);
+                    var flashColor = rule.Config != null && rule.Config.TryGetValue("color", out var fc) ? fc.ToString() : "#FF0000";
+                    var flashFrequency = rule.Config != null && rule.Config.TryGetValue("frequency", out var ff) ? Convert.ToDouble(ff) : 1.0;
+                    if (IsTrue(value))
+                    {
+                        state.IsFlashing = true;
+                        state.BackgroundColor = flashColor;
+                        // Store frequency for flashing animation (could be used by view layer for timing)
+                        if (state.Opacity == null) state.Opacity = flashFrequency;
+                    }
+                    else
+                    {
+                        state.IsFlashing = false;
+                    }
                     break;
                 case AnimationType.Translation:
-                    state.TranslationX = ValueToStubDouble(value, 0);
-                    state.TranslationY = ValueToStubDouble(value, 0);
+                    var speed = rule.Config != null && rule.Config.TryGetValue("speed", out var sp) ? Convert.ToDouble(sp) : 1.0;
+                    var translationValue = ValueToStubDouble(value, 0);
+                    state.TranslationX = translationValue * speed;
+                    state.TranslationY = translationValue * speed;
                     break;
             }
         }
@@ -160,11 +288,6 @@ public sealed class AnimationManager
         return value.ToString()?.Trim() is string s && s.Length > 0 && !s.Equals("0", StringComparison.Ordinal);
     }
 
-    private static string? ValueToStubColor(object? value)
-    {
-        if (value == null) return null;
-        return IsTrue(value) ? "#00FF00" : "#808080";
-    }
 
     private static double ValueToStubDouble(object? value, double defaultVal)
     {
@@ -183,6 +306,14 @@ public sealed class AnimationManager
         lock (_lock)
         {
             _subscriptions.Add((screenId, componentId, callback));
+            
+            // Send initial state if available
+            var key = StateKey(screenId, componentId);
+            if (_lastStateByKey.TryGetValue(key, out var lastState))
+            {
+                try { callback(lastState); }
+                catch { }
+            }
         }
         return new SubscriptionToken(() =>
         {

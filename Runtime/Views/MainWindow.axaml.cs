@@ -115,16 +115,29 @@ public partial class MainWindow : Window
         {
             DisposeScreenSubscriptions();
             var screenDesc = ScreenRenderer.ParseScreen(jsonPath);
-            if (screenDesc != null && _screensModule != null)
+            var screenId = screenDesc?.Id ?? screenDesc?.Name ?? path;
+            
+            if (screenDesc != null && _screensModule != null && !string.IsNullOrEmpty(screenId))
             {
-                var screenId = screenDesc.Id ?? screenDesc.Name ?? path;
                 _screensModule.AnimationManager.UnloadScreenAnimations(screenId);
+                // Load animations from screen JSON component properties
+                _screensModule.AnimationManager.LoadScreenAnimations(jsonPath, screenId);
+                // Also add implicit visibility rules for components with tags
                 _screensModule.AnimationManager.AddImplicitVisibilityRules(screenId, screenDesc.Components.Select(c => (c.Id, (string?)c.TagName)));
             }
+            
+            // Get tag manager and other services for building the view
             var tagsModule = ExecutionEngine.Instance.ModuleManager.GetModule("TagsModule") as ITagsEngine;
             var tagManager = tagsModule?.TagManager;
             var tagIOHandler = tagsModule?.TagIOHandler;
             var eventManager = _screensModule?.EventManager;
+            
+            // Trigger initial animation states with current tag values after loading animations
+            if (screenDesc != null && _screensModule != null && tagManager != null && !string.IsNullOrEmpty(screenId))
+            {
+                _screensModule.AnimationManager.TriggerInitialStates(tagManager);
+            }
+            
             var view = ScreenViewBuilder.Build(screenDesc, tagManager, eventManager, tagIOHandler, 
                 name => _screensModule?.ScreenManager.ResolveImagePath(name), 
                 svgPath => _screensModule?.ScreenManager.ResolveSvgPath(svgPath), 

@@ -544,22 +544,64 @@ public static class ScreenViewBuilder
             control.IsVisible = state.Visible.Value;
         if (state.Opacity.HasValue)
             control.Opacity = Math.Clamp(state.Opacity.Value, 0, 1);
+        
+        // Apply background color to appropriate element based on control type
         if (!string.IsNullOrEmpty(state.BackgroundColor))
         {
             var brush = ParseBrush(state.BackgroundColor);
-            if (control is Avalonia.Controls.Border b)
+            
+            // Try to find common named elements in UserControls
+            if (control is UserControl uc)
+            {
+                // For Indicator, Motor, Pump - apply to ellipse fill
+                var ellipse = uc.FindControl<Avalonia.Controls.Shapes.Ellipse>("TheEllipse");
+                if (ellipse != null)
+                {
+                    ellipse.Fill = brush;
+                }
+                else
+                {
+                    // For other controls, try border background
+                    var border = uc.FindControl<Avalonia.Controls.Border>("TheBorder");
+                    if (border != null)
+                        border.Background = brush;
+                    else if (control is Avalonia.Controls.Border b)
+                        b.Background = brush;
+                }
+            }
+            else if (control is Avalonia.Controls.Border b)
+            {
                 b.Background = brush;
+            }
         }
+        
         if (!string.IsNullOrEmpty(state.ForegroundColor))
         {
             var brush = ParseBrush(state.ForegroundColor);
             if (control is Avalonia.Controls.TextBlock tbf)
                 tbf.Foreground = brush;
+            else if (control is UserControl uc)
+            {
+                // Try to find TextBlock in UserControl
+                var textBlock = uc.FindControl<Avalonia.Controls.TextBlock>("TheText") 
+                    ?? uc.FindControl<Avalonia.Controls.TextBlock>("ButtonText")
+                    ?? uc.FindControl<Avalonia.Controls.TextBlock>("LabelText");
+                if (textBlock != null)
+                    textBlock.Foreground = brush;
+            }
         }
+        
         if (state.IsFlashing.HasValue)
         {
             control.Classes.Set("flashing", state.IsFlashing.Value);
+            // For flashing, toggle opacity if needed
+            if (state.IsFlashing.Value && state.Opacity == null)
+            {
+                // Start flashing animation - could use a timer here for actual flashing
+                // For now, just set the class
+            }
         }
+        
         if (state.TranslationX.HasValue || state.TranslationY.HasValue)
         {
             var tx = state.TranslationX ?? 0;
