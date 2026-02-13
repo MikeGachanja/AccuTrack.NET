@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Runtime.Views.Controls.RuntimeSpinner">
   <StackPanel>
-    <ProgressBar IsIndeterminate="True" Height="6" Margin="0,4" />
+    <ProgressBar x:Name="TheProgressBar" IsIndeterminate="True" Height="6" Margin="0,4" />
     <TextBlock x:Name="LabelText" Text="Loading..." Foreground="#666666" FontSize="10" HorizontalAlignment="Center" IsVisible="False" />
   </StackPanel>
 </UserControl>

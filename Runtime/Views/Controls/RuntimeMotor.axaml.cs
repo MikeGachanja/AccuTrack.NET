@@ -20,6 +20,20 @@ public partial class RuntimeMotor : UserControl
     {
         if (d == null) return;
         
+        // Apply size from descriptor - use the smaller dimension for a circle
+        var size = Math.Min(Math.Max(1, d.Width), Math.Max(1, d.Height));
+        TheEllipse.Width = size;
+        TheEllipse.Height = size;
+        
+        // Scale indicator ellipse proportionally (about 1/4 of main size)
+        var indicatorSize = Math.Max(4, size / 4);
+        IndicatorEllipse.Width = indicatorSize;
+        IndicatorEllipse.Height = indicatorSize;
+        
+        // Scale font size proportionally
+        var fontSize = Math.Max(8, size / 2);
+        MotorText.FontSize = fontSize;
+        
         // Apply label
         LabelText.Text = GetProperty(d, "label", "Motor");
         

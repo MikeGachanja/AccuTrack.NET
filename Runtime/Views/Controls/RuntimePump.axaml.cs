@@ -21,6 +21,15 @@ public partial class RuntimePump : UserControl
     {
         if (d == null) return;
         
+        // Apply size from descriptor - use the smaller dimension for a circle
+        var size = Math.Min(Math.Max(1, d.Width), Math.Max(1, d.Height));
+        TheEllipse.Width = size;
+        TheEllipse.Height = size;
+        
+        // Scale font size proportionally
+        var fontSize = Math.Max(8, size / 2);
+        PumpText.FontSize = fontSize;
+        
         // Apply label
         LabelText.Text = GetProperty(d, "label", "Pump");
         

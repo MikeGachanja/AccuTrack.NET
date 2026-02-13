@@ -18,6 +18,16 @@ public partial class RuntimeTextInput : UserControl
     public void ApplyDescriptor(ComponentDescriptor d)
     {
         if (d == null) return;
+        
+        // Apply size from descriptor - remove MinWidth constraint and use configured size
+        if (d.Width > 0)
+        {
+            TheTextBox.Width = d.Width;
+            TheTextBox.MinWidth = 0; // Remove MinWidth constraint
+        }
+        if (d.Height > 0)
+            TheTextBox.Height = d.Height;
+        
         TheTextBox.Watermark = GetProperty(d, "placeholder", "");
         
         // Apply colors if available

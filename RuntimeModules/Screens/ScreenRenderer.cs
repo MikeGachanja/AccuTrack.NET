@@ -102,7 +102,7 @@ public static class ScreenRenderer
                 "text", "backColor", "foreColor", "borderColor", "borderWidth", "font", "fontSize", "fontStyle", "action",
                 "value", "minimum", "maximum", "needleColor", "textColor", "showValue", "showMinMax", "unit",
                 "level", "tankColor", "fillColor", "lowLevelColor", "highLevelColor", "lowLevelThreshold", "highLevelThreshold", "label", "showLevel",
-                "onColor", "offColor", "faultColor", "color", "backgroundColor", "running", "faulted", "state", "direction"
+                "onColor", "offColor", "faultColor", "warningColor", "errorColor", "color", "backgroundColor", "running", "faulted", "state", "direction", "shape"
             };
             foreach (var propName in rootLevelProperties)
             {

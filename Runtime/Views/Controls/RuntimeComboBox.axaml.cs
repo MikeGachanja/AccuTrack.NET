@@ -16,6 +16,16 @@ public partial class RuntimeComboBox : UserControl
     public void ApplyDescriptor(ComponentDescriptor d)
     {
         if (d == null) return;
+        
+        // Apply size from descriptor - remove MinWidth constraint and use configured size
+        if (d.Width > 0)
+        {
+            TheComboBox.Width = d.Width;
+            TheComboBox.MinWidth = 0; // Remove MinWidth constraint
+        }
+        if (d.Height > 0)
+            TheComboBox.Height = d.Height;
+        
         var label = GetProperty(d, "label", "");
         LabelText.Text = label;
         LabelText.IsVisible = !string.IsNullOrEmpty(label);

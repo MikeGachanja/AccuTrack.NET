@@ -14,6 +14,13 @@ public partial class RuntimeSlider : UserControl
     public void ApplyDescriptor(ComponentDescriptor d)
     {
         if (d == null) return;
+        
+        // Apply size from descriptor
+        if (d.Width > 0)
+            TheSlider.Width = d.Width;
+        if (d.Height > 0)
+            TheSlider.Height = d.Height;
+        
         var label = GetProperty(d, "label", "");
         LabelText.Text = label;
         LabelText.IsVisible = !string.IsNullOrEmpty(label);
