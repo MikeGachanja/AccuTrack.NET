@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ExecutionEngine\ExecutionEngine.csproj" />
+    <ProjectReference Include="..\Communication\Communication.csproj" />
   </ItemGroup>
 
 </Project>

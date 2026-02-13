@@ -12,6 +12,7 @@ public sealed class CommunicationModule : ModuleBase, ICommunication
     private readonly ConcurrentDictionary<string, ConnectionStatus> _statuses = new();
     private readonly List<IConnectionStub> _stubs = new();
     private Action<string, object?>? _tagUpdateCallback;
+    private Func<List<(string tagName, string address)>>? _getTagsFunc;
 
     public override string ModuleName => "CommunicationModule";
     public override string DisplayName => "Communication Module";
@@ -114,6 +115,17 @@ public sealed class CommunicationModule : ModuleBase, ICommunication
         }
     }
 
+    /// <summary>Set function to get tags so OPC clients can get tags for subscriptions.</summary>
+    public void SetTagProvider(Func<List<(string tagName, string address)>>? getTagsFunc)
+    {
+        _getTagsFunc = getTagsFunc;
+        foreach (var stub in _stubs)
+        {
+            if (stub is OpcUaClientConnection opc)
+                opc.SetTagProvider(getTagsFunc);
+        }
+    }
+
     /// <summary>Get the first OPC UA client connection (for testing/debugging).</summary>
     public OpcUaClientConnection? GetOpcUaClient()
     {
@@ -124,5 +136,73 @@ public sealed class CommunicationModule : ModuleBase, ICommunication
     public OpcUaServerConnection? GetOpcUaServer()
     {
         return _stubs.OfType<OpcUaServerConnection>().FirstOrDefault();
+    }
+
+    /// <summary>Read a tag value by address (nodeId for OPC UA, register address for Modbus).</summary>
+    public bool ReadTagByAddress(string address, out object? value)
+    {
+        value = null;
+        if (string.IsNullOrEmpty(address))
+        {
+            System.Diagnostics.Debug.WriteLine($"[CommunicationModule] ReadTagByAddress failed: Address is null or empty");
+            return false;
+        }
+        
+        System.Diagnostics.Debug.WriteLine($"[CommunicationModule] ReadTagByAddress: Attempting to read address '{address}'");
+        
+        // Try OPC UA clients first
+        foreach (var stub in _stubs)
+        {
+            if (stub is OpcUaClientConnection opcClient)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CommunicationModule] ReadTagByAddress: Trying OPC UA client '{opcClient.Name}'");
+                if (opcClient.ReadTag(address, out value))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CommunicationModule] ReadTagByAddress: Successfully read value '{value}' from address '{address}'");
+                    return true;
+                }
+            }
+        }
+        
+        System.Diagnostics.Debug.WriteLine($"[CommunicationModule] ReadTagByAddress: Failed to read address '{address}' - no suitable client found or read failed");
+        // TODO: Add Modbus support here when needed
+        return false;
+    }
+
+    /// <summary>Write a tag value by address (nodeId for OPC UA, register address for Modbus).</summary>
+    public bool WriteTagByAddress(string address, object? value)
+    {
+        if (string.IsNullOrEmpty(address))
+        {
+            System.Diagnostics.Debug.WriteLine($"[CommunicationModule] WriteTagByAddress failed: Address is null or empty. Value: {value}");
+            return false;
+        }
+        
+        System.Diagnostics.Debug.WriteLine($"[CommunicationModule] WriteTagByAddress: Attempting to write address '{address}', Value: '{value}' (Type: {value?.GetType().Name ?? "null"})");
+        
+        // Try OPC UA clients first
+        foreach (var stub in _stubs)
+        {
+            if (stub is OpcUaClientConnection opcClient)
+            {
+                System.Diagnostics.Debug.WriteLine($"[CommunicationModule] WriteTagByAddress: Trying OPC UA client '{opcClient.Name}'");
+                if (opcClient.WriteTag(address, value))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[CommunicationModule] WriteTagByAddress: Successfully wrote value '{value}' to address '{address}'");
+                    return true;
+                }
+            }
+        }
+        
+        System.Diagnostics.Debug.WriteLine($"[CommunicationModule] WriteTagByAddress: Failed to write address '{address}' - no suitable client found or write failed");
+        // TODO: Add Modbus support here when needed
+        return false;
+    }
+
+    /// <summary>Get all browsed nodes from the first OPC UA client connection.</summary>
+    public IReadOnlyList<(string NodeId, string DisplayName)> GetAllBrowsedNodes()
+    {
+        var opcClient = GetOpcUaClient();
+        return opcClient?.GetAllNodes() ?? new List<(string, string)>();
     }
 }

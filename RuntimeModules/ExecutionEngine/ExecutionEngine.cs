@@ -135,7 +135,7 @@ public sealed class ExecutionEngine
         var fileName = moduleName switch
         {
             "CommunicationModule" => "communications.json",
-            "TagsEngine" or "TagsModule" => "tag_tables.json",
+            "TagsEngine" or "TagsModule" => "tags.json", // Changed from tag_tables.json to tags.json
             "AlarmsModule" or "Alarms" => "alarms.json",
             "SchedulesModule" or "Scheduler" => "schedules.json",
             "HistorianModule" or "Historian" => "historian.json",
@@ -149,7 +149,17 @@ public sealed class ExecutionEngine
 
         var path = Path.Combine(jsonDirectory, fileName);
         if (!File.Exists(path))
-            return null;
+        {
+            // For TagsModule, also try tag_tables.json as fallback for backward compatibility
+            if ((moduleName == "TagsEngine" || moduleName == "TagsModule") && File.Exists(Path.Combine(jsonDirectory, "tag_tables.json")))
+            {
+                path = Path.Combine(jsonDirectory, "tag_tables.json");
+            }
+            else
+            {
+                return null;
+            }
+        }
 
         try
         {

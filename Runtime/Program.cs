@@ -39,6 +39,23 @@ internal static class Program
             _animationTagSubscriptions.Add(sub);
         }
     }
+
+    /// <summary>Set up TagProvider function for CommunicationModule to get tags from TagManager.</summary>
+    private static void SetupTagProvider(CommunicationModule commModule, TagsModule tagsModule)
+    {
+        commModule.SetTagProvider(() =>
+        {
+            var tags = new List<(string tagName, string address)>();
+            foreach (var tagName in tagsModule.TagManager.GetTagNames())
+            {
+                var tag = tagsModule.TagManager.GetTag(tagName);
+                if (tag != null)
+                    tags.Add((tagName, tag.Address ?? ""));
+            }
+            System.Diagnostics.Debug.WriteLine($"[Runtime] TagProvider called: Returning {tags.Count} tags from TagManager (Total tags: {tagsModule.TagManager.TagCount})");
+            return tags;
+        });
+    }
     [STAThread]
     public static int Main(string[] args)
     {
@@ -62,6 +79,7 @@ internal static class Program
         engine.ModuleManager.RegisterModule(tagsModule);
         tagsModule.SetCommunicationModule(commModule);
         commModule.SetTagUpdateCallback((name, val) => tagsModule.TagManager.UpdateTagValue(name, val, TagQuality.Good));
+        SetupTagProvider(commModule, tagsModule);
 
         engine.ModuleManager.RegisterModule(new AlarmsModule());
 
@@ -111,6 +129,8 @@ internal static class Program
                     engine.ReinitializeWithProject(projectPath);
                     screensModule.InitializeWithProject(projectPath);
                     WireAnimationManagerToTagManager(screensModule, tagsModule);
+                    // Re-set TagProvider after reinitialization since connections may have been recreated
+                    SetupTagProvider(commModule, tagsModule);
                     engine.StartAll();
                 }
             });
@@ -135,10 +155,13 @@ internal static class Program
                 engine.ReinitializeWithProject(dataPath);
                 screensModule.InitializeWithProject(dataPath);
                 WireAnimationManagerToTagManager(screensModule, tagsModule);
+                // Re-set TagProvider after reinitialization since connections may have been recreated
+                SetupTagProvider(commModule, tagsModule);
                 projectLoaded = true;
                 var projectName = project.CurrentProject?.Name ?? "Unknown";
                 var screenCount = project.CurrentProject?.Screen.Count ?? 0;
                 System.Diagnostics.Debug.WriteLine($"[Runtime] Successfully loaded project: {projectName} with {screenCount} screen(s)");
+                System.Diagnostics.Debug.WriteLine($"[Runtime] Tags loaded: {tagsModule.TagManager.TagCount} tags");
                 if (screenCount > 0)
                 {
                     var firstScreen = project.GetFirstScreenPath();

@@ -35,8 +35,9 @@ public sealed class TagManager
                     var name = item.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
                     var address = item.TryGetProperty("address", out var a) ? a.GetString() ?? "" : "";
                     var description = item.TryGetProperty("description", out var d) ? d.GetString() ?? "" : "";
+                    var dataType = item.TryGetProperty("dataType", out var dt) ? dt.GetString() ?? "" : "";
                     if (!string.IsNullOrEmpty(name))
-                        RegisterTag(name, address, description);
+                        RegisterTag(name, address, description, dataType);
                 }
             }
             return true;
@@ -44,10 +45,15 @@ public sealed class TagManager
         catch { return false; }
     }
 
-    public bool RegisterTag(string tagName, string address = "", string description = "")
+    public bool RegisterTag(string tagName, string address = "", string description = "", string dataType = "")
     {
         if (string.IsNullOrEmpty(tagName)) return false;
-        var tag = new RuntimeTag(tagName) { Address = address ?? "", Description = description ?? "" };
+        var tag = new RuntimeTag(tagName) 
+        { 
+            Address = address ?? "", 
+            Description = description ?? "",
+            DataType = dataType ?? ""
+        };
         _tagsByName[tagName] = tag;
         if (!string.IsNullOrEmpty(address))
             _tagsByAddress[address] = tag;

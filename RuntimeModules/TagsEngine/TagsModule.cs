@@ -28,23 +28,46 @@ public sealed class TagsModule : ModuleBase, ITagsEngine
 
     public override bool Initialize(JsonObject? config = null)
     {
+        // Clear existing tags before loading new ones
+        _tagManager.Clear();
+        
         if (config != null)
         {
             // Config may be path or embedded tags
             if (config["tags"] is JsonArray arr)
             {
+                int loadedCount = 0;
                 foreach (var node in arr)
                 {
                     if (node is not JsonObject obj) continue;
                     var name = obj["name"]?.GetValue<string>() ?? "";
                     var address = obj["address"]?.GetValue<string>() ?? "";
                     var description = obj["description"]?.GetValue<string>() ?? "";
+                    var dataType = obj["dataType"]?.GetValue<string>() ?? obj["type"]?.GetValue<string>() ?? "";
                     if (!string.IsNullOrEmpty(name))
-                        _tagManager.RegisterTag(name, address, description);
+                    {
+                        _tagManager.RegisterTag(name, address, description, dataType);
+                        loadedCount++;
+                    }
+                }
+                System.Diagnostics.Debug.WriteLine($"[TagsModule] Initialize: Loaded {loadedCount} tags from config");
+            }
+            else
+            {
+                // Try loading from file path if config contains a path
+                var configPath = config["path"]?.GetValue<string>();
+                if (!string.IsNullOrEmpty(configPath) && File.Exists(configPath))
+                {
+                    if (_tagManager.LoadFromJsonFile(configPath))
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[TagsModule] Initialize: Loaded tags from file: {configPath}");
+                    }
                 }
             }
         }
-        SetStatus("Initialized");
+        
+        System.Diagnostics.Debug.WriteLine($"[TagsModule] Initialize: Total tags loaded: {_tagManager.TagCount}");
+        SetStatus($"Initialized ({_tagManager.TagCount} tags)");
         RaiseInitialized();
         return true;
     }

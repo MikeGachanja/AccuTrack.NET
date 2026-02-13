@@ -23,6 +23,7 @@ public sealed class RuntimeTag
     public string Name { get; }
     public string Address { get; set; } = "";
     public string Description { get; set; } = "";
+    public string DataType { get; set; } = "";
     public bool IsEnabled { get; set; } = true;
 
     public RuntimeTag(string name)
