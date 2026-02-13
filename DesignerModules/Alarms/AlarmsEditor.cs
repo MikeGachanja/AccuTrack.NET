@@ -13,7 +13,11 @@ namespace Designer.Modules.Alarms;
 /// </summary>
 public partial class AlarmsEditor : UserControl
 {
-    private DataGridView _alarmsGrid;
+    private TabControl _alarmsTabs;
+    private DataGridView _hmiDigitalGrid;
+    private DataGridView _hmiAnalogGrid;
+    private DataGridView _controllerDigitalGrid;
+    private DataGridView _controllerAnalogGrid;
     private Alarms? _alarms;
     private ScadaProject? _scadaProject;
     private List<Tag> _availableTags = new List<Tag>();
@@ -34,26 +38,57 @@ public partial class AlarmsEditor : UserControl
         {
             Dock = DockStyle.Fill,
             ColumnCount = 1,
-            RowCount = 2,
+            RowCount = 1,
             Padding = new Padding(10)
         };
 
-        // Toolbar
-        var toolbar = new ToolStrip
+        // Create tab control for different alarm types
+        _alarmsTabs = new TabControl
         {
-            Dock = DockStyle.Top
+            Dock = DockStyle.Fill
         };
 
-        var addButton = new ToolStripButton("Add Alarm");
-        addButton.Click += (s, e) => AddAlarm();
-        toolbar.Items.Add(addButton);
+        // Create tabs for each alarm type
+        _alarmsTabs.TabPages.Add("HMI Digital");
+        _alarmsTabs.TabPages.Add("HMI Analog");
+        _alarmsTabs.TabPages.Add("Controller Digital");
+        _alarmsTabs.TabPages.Add("Controller Analog");
 
+        // Create grids for each tab
+        _hmiDigitalGrid = CreateAlarmsGrid("HMI", "Digital");
+        _hmiAnalogGrid = CreateAlarmsGrid("HMI", "Analog");
+        _controllerDigitalGrid = CreateAlarmsGrid("Controller", "Digital");
+        _controllerAnalogGrid = CreateAlarmsGrid("Controller", "Analog");
+
+        _alarmsTabs.TabPages[0].Controls.Add(_hmiDigitalGrid);
+        _alarmsTabs.TabPages[1].Controls.Add(_hmiAnalogGrid);
+        _alarmsTabs.TabPages[2].Controls.Add(_controllerDigitalGrid);
+        _alarmsTabs.TabPages[3].Controls.Add(_controllerAnalogGrid);
+
+        mainLayout.Controls.Add(_alarmsTabs, 0, 0);
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+
+        Controls.Add(mainLayout);
+    }
+    
+    /// <summary>
+    /// Creates a DataGridView for alarms with toolbar.
+    /// </summary>
+    private DataGridView CreateAlarmsGrid(string type, string source)
+    {
+        var panel = new Panel { Dock = DockStyle.Fill };
+        
+        // Toolbar
+        var toolbar = new ToolStrip { Dock = DockStyle.Top };
+        var addButton = new ToolStripButton("Add Alarm");
+        addButton.Click += (s, e) => AddAlarm(type, source);
+        toolbar.Items.Add(addButton);
         var removeButton = new ToolStripButton("Remove Alarm");
-        removeButton.Click += (s, e) => RemoveSelectedAlarm();
+        removeButton.Click += (s, e) => RemoveSelectedAlarm(type, source);
         toolbar.Items.Add(removeButton);
 
         // Alarms grid
-        _alarmsGrid = new DataGridView
+        var grid = new DataGridView
         {
             Dock = DockStyle.Fill,
             AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
@@ -62,13 +97,13 @@ public partial class AlarmsEditor : UserControl
             MultiSelect = false
         };
 
-        _alarmsGrid.Columns.Add("Name", "Name");
-        _alarmsGrid.Columns.Add("TagName", "Tag");
-        _alarmsGrid.Columns.Add("Condition", "Condition");
-        _alarmsGrid.Columns.Add("Threshold", "Threshold");
-        _alarmsGrid.Columns.Add("Priority", "Priority");
-        _alarmsGrid.Columns.Add("Message", "Message");
-        _alarmsGrid.Columns.Add("Enabled", "Enabled");
+        grid.Columns.Add("Name", "Name");
+        grid.Columns.Add("TagName", "Tag");
+        grid.Columns.Add("Condition", "Condition");
+        grid.Columns.Add("Threshold", "Threshold");
+        grid.Columns.Add("Priority", "Priority");
+        grid.Columns.Add("Message", "Message");
+        grid.Columns.Add("Enabled", "Enabled");
 
         // Make TagName a combo box with available tags
         var tagColumn = new DataGridViewComboBoxColumn
@@ -78,8 +113,8 @@ public partial class AlarmsEditor : UserControl
             DataPropertyName = "TagName"
         };
         tagColumn.Items.AddRange(_availableTags.Select(t => t.Name).ToArray());
-        _alarmsGrid.Columns.Remove("TagName");
-        _alarmsGrid.Columns.Insert(1, tagColumn);
+        grid.Columns.Remove("TagName");
+        grid.Columns.Insert(1, tagColumn);
 
         // Make Condition a combo box
         var conditionColumn = new DataGridViewComboBoxColumn
@@ -89,8 +124,8 @@ public partial class AlarmsEditor : UserControl
             DataPropertyName = "Condition"
         };
         conditionColumn.Items.AddRange(new[] { "GreaterThan", "LessThan", "EqualTo", "NotEqualTo" });
-        _alarmsGrid.Columns.Remove("Condition");
-        _alarmsGrid.Columns.Insert(2, conditionColumn);
+        grid.Columns.Remove("Condition");
+        grid.Columns.Insert(2, conditionColumn);
 
         // Make Priority a combo box
         var priorityColumn = new DataGridViewComboBoxColumn
@@ -100,8 +135,8 @@ public partial class AlarmsEditor : UserControl
             DataPropertyName = "Priority"
         };
         priorityColumn.Items.AddRange(new[] { "Low", "Medium", "High", "Critical" });
-        _alarmsGrid.Columns.Remove("Priority");
-        _alarmsGrid.Columns.Insert(4, priorityColumn);
+        grid.Columns.Remove("Priority");
+        grid.Columns.Insert(4, priorityColumn);
 
         // Make Enabled a checkbox
         var enabledColumn = new DataGridViewCheckBoxColumn
@@ -110,17 +145,15 @@ public partial class AlarmsEditor : UserControl
             HeaderText = "Enabled",
             DataPropertyName = "Enabled"
         };
-        _alarmsGrid.Columns.Remove("Enabled");
-        _alarmsGrid.Columns.Add(enabledColumn);
+        grid.Columns.Remove("Enabled");
+        grid.Columns.Add(enabledColumn);
 
-        _alarmsGrid.CellValueChanged += OnCellValueChanged;
+        grid.CellValueChanged += (s, e) => OnCellValueChanged(s, e, type, source);
 
-        mainLayout.Controls.Add(toolbar, 0, 0);
-        mainLayout.Controls.Add(_alarmsGrid, 0, 1);
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-        Controls.Add(mainLayout);
+        panel.Controls.Add(grid);
+        panel.Controls.Add(toolbar);
+        
+        return grid;
     }
 
     /// <summary>
@@ -141,35 +174,58 @@ public partial class AlarmsEditor : UserControl
     }
 
     /// <summary>
-    /// Loads alarms into the grid.
+    /// Loads alarms into the grids.
     /// </summary>
     private void LoadAlarms()
     {
-        _alarmsGrid.Rows.Clear();
+        _hmiDigitalGrid.Rows.Clear();
+        _hmiAnalogGrid.Rows.Clear();
+        _controllerDigitalGrid.Rows.Clear();
+        _controllerAnalogGrid.Rows.Clear();
 
         if (_alarms == null)
             return;
 
         foreach (var alarm in _alarms.AlarmDefinitions)
         {
-            int rowIndex = _alarmsGrid.Rows.Add(
-                alarm.Name,
-                alarm.TagName,
-                alarm.Condition,
-                alarm.Threshold,
-                alarm.Priority,
-                alarm.Message,
-                alarm.Enabled
-            );
+            DataGridView targetGrid = GetGridForAlarmType(alarm.Type, alarm.Source);
+            if (targetGrid != null)
+            {
+                int rowIndex = targetGrid.Rows.Add(
+                    alarm.Name,
+                    alarm.TagName,
+                    alarm.Condition,
+                    alarm.Threshold,
+                    alarm.Priority,
+                    alarm.Message,
+                    alarm.Enabled
+                );
 
-            _alarmsGrid.Rows[rowIndex].Tag = alarm;
+                targetGrid.Rows[rowIndex].Tag = alarm;
+            }
         }
+    }
+    
+    /// <summary>
+    /// Gets the appropriate grid for alarm type and source.
+    /// </summary>
+    private DataGridView GetGridForAlarmType(string type, string source)
+    {
+        if (type == "HMI" && source == "Digital")
+            return _hmiDigitalGrid;
+        else if (type == "HMI" && source == "Analog")
+            return _hmiAnalogGrid;
+        else if (type == "Controller" && source == "Digital")
+            return _controllerDigitalGrid;
+        else if (type == "Controller" && source == "Analog")
+            return _controllerAnalogGrid;
+        return _hmiDigitalGrid; // Default
     }
 
     /// <summary>
     /// Adds a new alarm.
     /// </summary>
-    private void AddAlarm()
+    private void AddAlarm(string type, string source)
     {
         if (_alarms == null)
             _alarms = new Alarms();
@@ -177,7 +233,9 @@ public partial class AlarmsEditor : UserControl
         var alarm = new AlarmDefinition
         {
             Name = "New Alarm",
-            Enabled = true
+            Enabled = true,
+            Type = type,
+            Source = source
         };
 
         _alarms.AlarmDefinitions.Add(alarm);
@@ -187,12 +245,13 @@ public partial class AlarmsEditor : UserControl
     /// <summary>
     /// Removes the selected alarm.
     /// </summary>
-    private void RemoveSelectedAlarm()
+    private void RemoveSelectedAlarm(string type, string source)
     {
-        if (_alarmsGrid.SelectedRows.Count == 0 || _alarms == null)
+        var grid = GetGridForAlarmType(type, source);
+        if (grid.SelectedRows.Count == 0 || _alarms == null)
             return;
 
-        var row = _alarmsGrid.SelectedRows[0];
+        var row = grid.SelectedRows[0];
         if (row.Tag is AlarmDefinition alarm)
         {
             _alarms.AlarmDefinitions.Remove(alarm);
@@ -203,15 +262,19 @@ public partial class AlarmsEditor : UserControl
     /// <summary>
     /// Handles cell value changes.
     /// </summary>
-    private void OnCellValueChanged(object? sender, DataGridViewCellEventArgs e)
+    private void OnCellValueChanged(object? sender, DataGridViewCellEventArgs e, string type, string source)
     {
         if (e.RowIndex < 0 || e.ColumnIndex < 0 || _alarms == null)
             return;
 
-        var row = _alarmsGrid.Rows[e.RowIndex];
+        var grid = sender as DataGridView;
+        if (grid == null)
+            return;
+
+        var row = grid.Rows[e.RowIndex];
         if (row.Tag is AlarmDefinition alarm)
         {
-            var columnName = _alarmsGrid.Columns[e.ColumnIndex].Name;
+            var columnName = grid.Columns[e.ColumnIndex].Name;
 
             switch (columnName)
             {
@@ -239,6 +302,10 @@ public partial class AlarmsEditor : UserControl
                         alarm.Enabled = enabled;
                     break;
             }
+            
+            // Ensure alarm type and source match the grid
+            alarm.Type = type;
+            alarm.Source = source;
         }
     }
 }

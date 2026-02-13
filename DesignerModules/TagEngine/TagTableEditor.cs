@@ -17,6 +17,14 @@ public partial class TagTableEditor : UserControl
     private List<TagTable> _tagTables = new List<TagTable>();
     private bool _modified;
     private bool _isAllTagsView;
+    
+    // Drag-fill state
+    private bool _isDragging = false;
+    private Point _dragStartPos;
+    private int _dragSourceRow = -1;
+    private int _dragSourceColumn = -1;
+    private HashSet<int> _draggedOverRows = new HashSet<int>();
+    private const int DRAG_THRESHOLD = 5; // Pixels to move before drag starts
 
     // Available data types for dropdown
     private static readonly string[] DataTypes = new[]
@@ -105,6 +113,12 @@ public partial class TagTableEditor : UserControl
         _tagsGrid.UserDeletingRow += OnUserDeletingRow;
         _tagsGrid.DefaultValuesNeeded += OnDefaultValuesNeeded;
         _tagsGrid.RowValidated += OnRowValidated;
+        
+        // Drag-fill events
+        _tagsGrid.MouseDown += OnMouseDown;
+        _tagsGrid.MouseMove += OnMouseMove;
+        _tagsGrid.MouseUp += OnMouseUp;
+        _tagsGrid.CellPainting += OnCellPainting;
 
         Controls.Add(_tagsGrid);
     }
@@ -300,7 +314,7 @@ public partial class TagTableEditor : UserControl
     }
 
     /// <summary>
-    /// Handles cell formatting to highlight mismatches.
+    /// Handles cell formatting to highlight mismatches and duplicates.
     /// </summary>
     private void OnCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
     {
@@ -315,19 +329,33 @@ public partial class TagTableEditor : UserControl
             return;
 
         var columnName = _tagsGrid.Columns[e.ColumnIndex].Name;
+        
+        // Reset to default colors first
+        e.CellStyle.BackColor = _tagsGrid.DefaultCellStyle.BackColor;
+        e.CellStyle.ForeColor = _tagsGrid.DefaultCellStyle.ForeColor;
 
-        // Highlight Address column if it doesn't match DataType
+        // Check for duplicate names
+        if (columnName == "Name")
+        {
+            if (IsDuplicateName(tag.Name, e.RowIndex))
+            {
+                e.CellStyle.BackColor = Color.LightYellow; // Yellow highlight for duplicate name
+                e.CellStyle.ForeColor = Color.DarkOrange;
+            }
+        }
+        
+        // Check for duplicate addresses
         if (columnName == "Address")
         {
-            if (!IsAddressMatchingDataType(tag.Address, tag.DataType))
+            if (IsDuplicateAddress(tag.Address, e.RowIndex))
             {
-                e.CellStyle.BackColor = Color.LightCoral; // Red highlight for mismatch
-                e.CellStyle.ForeColor = Color.DarkRed;
+                e.CellStyle.BackColor = Color.LightYellow; // Yellow highlight for duplicate address
+                e.CellStyle.ForeColor = Color.DarkOrange;
             }
-            else
+            else if (!IsAddressMatchingDataType(tag.Address, tag.DataType))
             {
-                e.CellStyle.BackColor = _tagsGrid.DefaultCellStyle.BackColor;
-                e.CellStyle.ForeColor = _tagsGrid.DefaultCellStyle.ForeColor;
+                e.CellStyle.BackColor = Color.LightCoral; // Red highlight for type mismatch
+                e.CellStyle.ForeColor = Color.DarkRed;
             }
         }
         // Highlight DataType column if it doesn't match Address
@@ -338,12 +366,59 @@ public partial class TagTableEditor : UserControl
                 e.CellStyle.BackColor = Color.LightCoral; // Red highlight for mismatch
                 e.CellStyle.ForeColor = Color.DarkRed;
             }
-            else
+        }
+    }
+    
+    /// <summary>
+    /// Checks if a tag name is duplicate.
+    /// </summary>
+    private bool IsDuplicateName(string name, int currentRowIndex)
+    {
+        if (string.IsNullOrEmpty(name))
+            return false;
+            
+        int count = 0;
+        foreach (DataGridViewRow row in _tagsGrid.Rows)
+        {
+            if (row.IsNewRow) continue;
+            
+            var rowData = row.Tag as TagRowData;
+            if (rowData?.Tag != null && 
+                string.Equals(rowData.Tag.Name, name, StringComparison.OrdinalIgnoreCase))
             {
-                e.CellStyle.BackColor = _tagsGrid.DefaultCellStyle.BackColor;
-                e.CellStyle.ForeColor = _tagsGrid.DefaultCellStyle.ForeColor;
+                count++;
+                if (count > 1)
+                    return true;
             }
         }
+        
+        return false;
+    }
+    
+    /// <summary>
+    /// Checks if a tag address is duplicate.
+    /// </summary>
+    private bool IsDuplicateAddress(string address, int currentRowIndex)
+    {
+        if (string.IsNullOrEmpty(address))
+            return false;
+            
+        int count = 0;
+        foreach (DataGridViewRow row in _tagsGrid.Rows)
+        {
+            if (row.IsNewRow) continue;
+            
+            var rowData = row.Tag as TagRowData;
+            if (rowData?.Tag != null && 
+                string.Equals(rowData.Tag.Address, address, StringComparison.OrdinalIgnoreCase))
+            {
+                count++;
+                if (count > 1)
+                    return true;
+            }
+        }
+        
+        return false;
     }
 
     /// <summary>
@@ -458,8 +533,16 @@ public partial class TagTableEditor : UserControl
                     }
                 }
 
-                // Refresh formatting after value change
+                // Refresh formatting after value change (check for duplicates)
                 _tagsGrid.InvalidateRow(e.RowIndex);
+                // Also invalidate other rows to update duplicate highlighting
+                foreach (DataGridViewRow gridRow in _tagsGrid.Rows)
+                {
+                    if (!gridRow.IsNewRow && gridRow.Index != e.RowIndex)
+                    {
+                        _tagsGrid.InvalidateRow(gridRow.Index);
+                    }
+                }
                 SetModified(true);
             }
             catch (Exception ex)
@@ -950,6 +1033,325 @@ public partial class TagTableEditor : UserControl
             ModifiedChanged?.Invoke(this, modified);
         }
     }
+    
+    #region Drag-Fill Functionality
+    
+    /// <summary>
+    /// Handles mouse down event to start drag-fill.
+    /// </summary>
+    private void OnMouseDown(object? sender, MouseEventArgs e)
+    {
+        if (e.Button != MouseButtons.Left)
+            return;
+            
+        var hitTest = _tagsGrid.HitTest(e.X, e.Y);
+        if (hitTest.Type == DataGridViewHitTestType.Cell)
+        {
+            var column = _tagsGrid.Columns[hitTest.ColumnIndex];
+            // Only enable drag-fill for DataType and Address columns
+            if (column.Name == "DataType" || column.Name == "Address")
+            {
+                _isDragging = false;
+                _dragStartPos = e.Location;
+                _dragSourceRow = hitTest.RowIndex;
+                _dragSourceColumn = hitTest.ColumnIndex;
+                _draggedOverRows.Clear();
+                
+                // Don't allow drag-fill on header or new row
+                if (_dragSourceRow >= 0 && _dragSourceRow < _tagsGrid.Rows.Count && 
+                    !_tagsGrid.Rows[_dragSourceRow].IsNewRow)
+                {
+                    _tagsGrid.Capture = true;
+                }
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Handles mouse move event to track drag-fill.
+    /// </summary>
+    private void OnMouseMove(object? sender, MouseEventArgs e)
+    {
+        if (!_tagsGrid.Capture || _dragSourceRow < 0 || _dragSourceColumn < 0)
+            return;
+            
+        int deltaX = Math.Abs(e.X - _dragStartPos.X);
+        int deltaY = Math.Abs(e.Y - _dragStartPos.Y);
+        
+        // Start dragging if mouse moved beyond threshold
+        if (!_isDragging && (deltaX > DRAG_THRESHOLD || deltaY > DRAG_THRESHOLD))
+        {
+            _isDragging = true;
+        }
+        
+        if (_isDragging)
+        {
+            var hitTest = _tagsGrid.HitTest(e.X, e.Y);
+            if (hitTest.Type == DataGridViewHitTestType.Cell && hitTest.RowIndex >= 0)
+            {
+                var column = _tagsGrid.Columns[hitTest.ColumnIndex];
+                // Only allow drag-fill on same column type
+                if (column.Name == _tagsGrid.Columns[_dragSourceColumn].Name)
+                {
+                    int targetRow = hitTest.RowIndex;
+                    
+                    // Update dragged over rows set
+                    _draggedOverRows.Clear();
+                    if (targetRow != _dragSourceRow)
+                    {
+                        int startRow = Math.Min(_dragSourceRow, targetRow);
+                        int endRow = Math.Max(_dragSourceRow, targetRow);
+                        for (int i = startRow; i <= endRow; i++)
+                        {
+                            if (i != _dragSourceRow && i < _tagsGrid.Rows.Count && 
+                                !_tagsGrid.Rows[i].IsNewRow)
+                            {
+                                _draggedOverRows.Add(i);
+                            }
+                        }
+                    }
+                    
+                    _tagsGrid.Invalidate();
+                }
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Handles mouse up event to apply drag-fill.
+    /// </summary>
+    private void OnMouseUp(object? sender, MouseEventArgs e)
+    {
+        if (!_tagsGrid.Capture)
+            return;
+            
+        _tagsGrid.Capture = false;
+        
+        if (_isDragging && _draggedOverRows.Count > 0 && _dragSourceRow >= 0 && _dragSourceColumn >= 0)
+        {
+            var column = _tagsGrid.Columns[_dragSourceColumn];
+            var sourceRow = _tagsGrid.Rows[_dragSourceRow];
+            var sourceValue = sourceRow.Cells[_dragSourceColumn].Value?.ToString();
+            
+            if (column.Name == "DataType")
+            {
+                // Fill data type
+                foreach (int rowIndex in _draggedOverRows)
+                {
+                    if (rowIndex < _tagsGrid.Rows.Count && !_tagsGrid.Rows[rowIndex].IsNewRow)
+                    {
+                        var row = _tagsGrid.Rows[rowIndex];
+                        var rowData = row.Tag as TagRowData;
+                        
+                        if (rowData?.Tag != null && !string.IsNullOrEmpty(sourceValue))
+                        {
+                            row.Cells[_dragSourceColumn].Value = sourceValue;
+                            rowData.Tag.DataType = sourceValue;
+                            
+                            // Auto-adjust address if it doesn't match new data type
+                            if (!IsAddressMatchingDataType(rowData.Tag.Address, sourceValue))
+                            {
+                                string prefix = ExtractAddressPrefix(rowData.Tag.Address);
+                                var suggestedAddress = FindNextAvailableAddress(sourceValue, prefix);
+                                if (!string.IsNullOrEmpty(suggestedAddress))
+                                {
+                                    rowData.Tag.Address = suggestedAddress;
+                                    row.Cells["Address"].Value = suggestedAddress;
+                                }
+                            }
+                            
+                            // Save tag table
+                            if (rowData.TagTable != null && !string.IsNullOrEmpty(rowData.TagTable.FilePath))
+                            {
+                                rowData.TagTable.SaveToFile(rowData.TagTable.FilePath);
+                            }
+                        }
+                    }
+                }
+            }
+            else if (column.Name == "Address")
+            {
+                // Fill address with auto-increment
+                if (!string.IsNullOrEmpty(sourceValue))
+                {
+                    var sourceAddress = sourceValue.ToUpper();
+                    string prefix = ExtractAddressPrefix(sourceAddress);
+                    string format = ExtractAddressFormat(sourceAddress);
+                    int baseOffset = ExtractAddressOffset(sourceAddress);
+                    
+                    int stepCount = 0;
+                    var sortedRows = _draggedOverRows.OrderBy(r => r).ToList();
+                    
+                    foreach (int rowIndex in sortedRows)
+                    {
+                        if (rowIndex < _tagsGrid.Rows.Count && !_tagsGrid.Rows[rowIndex].IsNewRow)
+                        {
+                            var row = _tagsGrid.Rows[rowIndex];
+                            var rowData = row.Tag as TagRowData;
+                            
+                            if (rowData?.Tag != null)
+                            {
+                                stepCount++;
+                                string newAddress = IncrementAddress(sourceAddress, stepCount, format);
+                                
+                                row.Cells[_dragSourceColumn].Value = newAddress;
+                                rowData.Tag.Address = newAddress;
+                                
+                                // Auto-adjust data type if address doesn't match
+                                if (!IsAddressMatchingDataType(newAddress, rowData.Tag.DataType))
+                                {
+                                    var suggestedDataType = GetDataTypeFromAddress(newAddress);
+                                    if (!string.IsNullOrEmpty(suggestedDataType))
+                                    {
+                                        rowData.Tag.DataType = suggestedDataType;
+                                        row.Cells["DataType"].Value = suggestedDataType;
+                                    }
+                                }
+                                
+                                // Save tag table
+                                if (rowData.TagTable != null && !string.IsNullOrEmpty(rowData.TagTable.FilePath))
+                                {
+                                    rowData.TagTable.SaveToFile(rowData.TagTable.FilePath);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            SetModified(true);
+            _tagsGrid.Invalidate();
+        }
+        
+        // Reset drag state
+        _isDragging = false;
+        _dragStartPos = Point.Empty;
+        _dragSourceRow = -1;
+        _dragSourceColumn = -1;
+        _draggedOverRows.Clear();
+    }
+    
+    /// <summary>
+    /// Handles cell painting to show drag-fill visual feedback.
+    /// </summary>
+    private void OnCellPainting(object? sender, DataGridViewCellPaintingEventArgs e)
+    {
+        if (_isDragging && _draggedOverRows.Contains(e.RowIndex) && 
+            e.ColumnIndex == _dragSourceColumn && e.RowIndex >= 0)
+        {
+            // Highlight cells that will be filled
+            e.CellStyle.BackColor = Color.LightBlue;
+            e.CellStyle.SelectionBackColor = Color.LightBlue;
+        }
+    }
+    
+    /// <summary>
+    /// Extracts address prefix (I, Q, or M).
+    /// </summary>
+    private string ExtractAddressPrefix(string address)
+    {
+        if (string.IsNullOrEmpty(address))
+            return "M";
+            
+        address = address.ToUpper();
+        if (address.StartsWith("I"))
+            return "I";
+        else if (address.StartsWith("Q") || address.StartsWith("O"))
+            return "Q";
+        else
+            return "M";
+    }
+    
+    /// <summary>
+    /// Extracts address format (W, D, B, or . for bit).
+    /// </summary>
+    private string ExtractAddressFormat(string address)
+    {
+        if (string.IsNullOrEmpty(address))
+            return ".";
+            
+        address = address.ToUpper();
+        if (address.Contains("."))
+            return ".";
+        else if (address.Contains("W"))
+            return "W";
+        else if (address.Contains("D"))
+            return "D";
+        else if (address.Contains("B"))
+            return "B";
+        else
+            return ".";
+    }
+    
+    /// <summary>
+    /// Extracts numeric offset from address.
+    /// </summary>
+    private int ExtractAddressOffset(string address)
+    {
+        if (string.IsNullOrEmpty(address))
+            return 0;
+            
+        // Extract number from address (e.g., "MW10" -> 10, "M0.5" -> 0)
+        var match = Regex.Match(address, @"\d+");
+        if (match.Success && int.TryParse(match.Value, out int offset))
+            return offset;
+            
+        return 0;
+    }
+    
+    /// <summary>
+    /// Increments an address by the specified step count.
+    /// </summary>
+    private string IncrementAddress(string sourceAddress, int stepCount, string format)
+    {
+        if (string.IsNullOrEmpty(sourceAddress))
+            return sourceAddress;
+            
+        string prefix = ExtractAddressPrefix(sourceAddress);
+        int baseOffset = ExtractAddressOffset(sourceAddress);
+        
+        if (format == ".")
+        {
+            // Bit address: M0.0 -> M0.1, M0.7 -> M1.0
+            int byteOffset = baseOffset / 10;
+            int bitOffset = baseOffset % 10;
+            
+            bitOffset += stepCount;
+            while (bitOffset >= 8)
+            {
+                byteOffset++;
+                bitOffset -= 8;
+            }
+            
+            return $"{prefix}{byteOffset}.{bitOffset}";
+        }
+        else if (format == "W")
+        {
+            // Word address: MW0 -> MW2, MW2 -> MW4 (words are 2 bytes)
+            int newOffset = baseOffset + (stepCount * 2);
+            return $"{prefix}W{newOffset}";
+        }
+        else if (format == "D")
+        {
+            // Double word address: MD0 -> MD4, MD4 -> MD8 (dwords are 4 bytes)
+            int newOffset = baseOffset + (stepCount * 4);
+            return $"{prefix}D{newOffset}";
+        }
+        else if (format == "B")
+        {
+            // Byte address: MB0 -> MB1, MB1 -> MB2
+            int newOffset = baseOffset + stepCount;
+            return $"{prefix}B{newOffset}";
+        }
+        else
+        {
+            // Default: increment as number
+            int newOffset = baseOffset + stepCount;
+            return $"{prefix}{newOffset}";
+        }
+    }
+    
+    #endregion
 }
 
 /// <summary>

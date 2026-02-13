@@ -9,15 +9,6 @@
         Background="White">
   <Panel>
     <DockPanel>
-      <!-- Top: small menu strip with page controls only (Home, Logs, Alarms) -->
-      <Border DockPanel.Dock="Top" Background="#f0f0f0" Padding="6,4" MinHeight="36">
-        <StackPanel Orientation="Horizontal" Spacing="6">
-          <Button x:Name="HomeButton" Content="Home" Width="70" Height="28" FontSize="12" />
-          <Button x:Name="LogsButton" Content="Logs" Width="70" Height="28" FontSize="12" />
-          <Button x:Name="AlarmsButton" Content="Alarms" Width="70" Height="28" FontSize="12" />
-        </StackPanel>
-      </Border>
-
       <!-- Bottom: connection status strip -->
       <Border DockPanel.Dock="Bottom" Background="#f0f0f0" Padding="8,5" MinHeight="28">
         <StackPanel Orientation="Horizontal" Spacing="12">

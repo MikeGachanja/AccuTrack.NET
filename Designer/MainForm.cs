@@ -319,18 +319,101 @@ namespace Designer
                 return;
             }
 
+            var currentProject = _projectManager.GetCurrentProject();
+            var currentProjectPath = currentProject.Path;
+            var currentProjectDir = Path.GetDirectoryName(currentProjectPath) ?? string.Empty;
+
             using var dialog = new SaveFileDialog
             {
                 Title = "Save Project As",
                 Filter = "SCADA Projects (*.isc)|*.isc",
-                FileName = _projectManager.GetCurrentProject().Name + ".isc",
+                FileName = currentProject.Name + ".isc",
                 InitialDirectory = ProjectDirectory.GetDefaultProjectsPath()
             };
 
             if (dialog.ShowDialog() == DialogResult.OK)
             {
-                // TODO: Implement save as logic (copy project to new location)
-                MessageBox.Show("Save As functionality - copy project to new location", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                try
+                {
+                    string newProjectFilePath = dialog.FileName;
+                    string newProjectDir = Path.GetDirectoryName(newProjectFilePath) ?? string.Empty;
+                    string newProjectName = Path.GetFileNameWithoutExtension(newProjectFilePath);
+
+                    // If saving to a different directory, copy the entire project directory
+                    if (!string.Equals(currentProjectDir, newProjectDir, StringComparison.OrdinalIgnoreCase))
+                    {
+                        // Create new project directory if it doesn't exist
+                        if (!Directory.Exists(newProjectDir))
+                        {
+                            Directory.CreateDirectory(newProjectDir);
+                        }
+
+                        // Copy all files and subdirectories from current project to new location
+                        if (Directory.Exists(currentProjectDir))
+                        {
+                            CopyDirectory(currentProjectDir, newProjectDir, true);
+                        }
+                    }
+
+                    // Update project name and path
+                    currentProject.Name = newProjectName;
+                    currentProject.Path = newProjectFilePath;
+
+                    // Save the project with new path
+                    if (_projectManager.SaveProject())
+                    {
+                        // Update recent projects
+                        ProjectDirectory.SetLastOpenedProject(newProjectDir);
+                        statusStrip.Items.Clear();
+                        statusStrip.Items.Add($"Project saved as '{newProjectName}'.");
+                        UpdateWindowTitle();
+                    }
+                    else
+                    {
+                        MessageBox.Show("Failed to save project.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error saving project: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Recursively copies a directory and its contents.
+        /// </summary>
+        private void CopyDirectory(string sourceDir, string destDir, bool copySubDirs)
+        {
+            DirectoryInfo dir = new DirectoryInfo(sourceDir);
+
+            if (!dir.Exists)
+            {
+                throw new DirectoryNotFoundException($"Source directory does not exist: {sourceDir}");
+            }
+
+            DirectoryInfo[] dirs = dir.GetDirectories();
+            if (!Directory.Exists(destDir))
+            {
+                Directory.CreateDirectory(destDir);
+            }
+
+            // Copy files
+            FileInfo[] files = dir.GetFiles();
+            foreach (FileInfo file in files)
+            {
+                string tempPath = Path.Combine(destDir, file.Name);
+                file.CopyTo(tempPath, false);
+            }
+
+            // Copy subdirectories
+            if (copySubDirs)
+            {
+                foreach (DirectoryInfo subdir in dirs)
+                {
+                    string tempPath = Path.Combine(destDir, subdir.Name);
+                    CopyDirectory(subdir.FullName, tempPath, copySubDirs);
+                }
             }
         }
 
@@ -400,37 +483,82 @@ namespace Designer
 
         private void Cut()
         {
-            // TODO: Implement cut for active editor
-            var focusedControl = ActiveControl;
-            if (focusedControl is TextBox textBox)
+            var activeTab = editorTabs.SelectedTab;
+            if (activeTab?.Controls.Count > 0)
             {
-                textBox.Cut();
+                if (activeTab.Controls[0] is ScreenEditor screenEditor)
+                {
+                    screenEditor.CutSelectedComponents();
+                }
+                else
+                {
+                    var focusedControl = ActiveControl;
+                    if (focusedControl is TextBox textBox)
+                    {
+                        textBox.Cut();
+                    }
+                }
             }
         }
 
         private void Copy()
         {
-            // TODO: Implement copy for active editor
-            var focusedControl = ActiveControl;
-            if (focusedControl is TextBox textBox)
+            var activeTab = editorTabs.SelectedTab;
+            if (activeTab?.Controls.Count > 0)
             {
-                textBox.Copy();
+                if (activeTab.Controls[0] is ScreenEditor screenEditor)
+                {
+                    screenEditor.CopySelectedComponents();
+                }
+                else
+                {
+                    var focusedControl = ActiveControl;
+                    if (focusedControl is TextBox textBox)
+                    {
+                        textBox.Copy();
+                    }
+                }
             }
         }
 
         private void Paste()
         {
-            // TODO: Implement paste for active editor
-            var focusedControl = ActiveControl;
-            if (focusedControl is TextBox textBox)
+            var activeTab = editorTabs.SelectedTab;
+            if (activeTab?.Controls.Count > 0)
             {
-                textBox.Paste();
+                if (activeTab.Controls[0] is ScreenEditor screenEditor)
+                {
+                    screenEditor.PasteComponents();
+                }
+                else
+                {
+                    var focusedControl = ActiveControl;
+                    if (focusedControl is TextBox textBox)
+                    {
+                        textBox.Paste();
+                    }
+                }
             }
         }
 
         private void Delete()
         {
-            // TODO: Implement delete for active editor/selection
+            var activeTab = editorTabs.SelectedTab;
+            if (activeTab?.Controls.Count > 0)
+            {
+                if (activeTab.Controls[0] is ScreenEditor screenEditor)
+                {
+                    screenEditor.DeleteSelectedComponents();
+                }
+                else
+                {
+                    var focusedControl = ActiveControl;
+                    if (focusedControl is TextBox textBox && textBox.SelectionLength > 0)
+                    {
+                        textBox.SelectedText = "";
+                    }
+                }
+            }
         }
 
         private void ZoomIn()
@@ -439,7 +567,7 @@ namespace Designer
             var activeTab = editorTabs.SelectedTab;
             if (activeTab?.Controls.Count > 0 && activeTab.Controls[0] is ScreenEditor screenEditor)
             {
-                // TODO: Implement zoom in for ScreenEditor
+                screenEditor.ZoomIn();
             }
         }
 
@@ -449,7 +577,7 @@ namespace Designer
             var activeTab = editorTabs.SelectedTab;
             if (activeTab?.Controls.Count > 0 && activeTab.Controls[0] is ScreenEditor screenEditor)
             {
-                // TODO: Implement zoom out for ScreenEditor
+                screenEditor.ZoomOut();
             }
         }
 
@@ -459,7 +587,7 @@ namespace Designer
             var activeTab = editorTabs.SelectedTab;
             if (activeTab?.Controls.Count > 0 && activeTab.Controls[0] is ScreenEditor screenEditor)
             {
-                // TODO: Implement reset zoom for ScreenEditor
+                screenEditor.ResetZoom();
             }
         }
 
@@ -818,20 +946,26 @@ namespace Designer
 
         private void ShowCustomize()
         {
-            // TODO: Implement customize dialog
-            MessageBox.Show("Customize dialog not yet implemented.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            using (var dialog = new Designer.Modules.Tools.CustomizeDialog())
+            {
+                dialog.ShowDialog();
+            }
         }
 
         private void ShowExternalTools()
         {
-            // TODO: Implement external tools dialog
-            MessageBox.Show("External tools dialog not yet implemented.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            using (var dialog = new Designer.Modules.Tools.ExternalToolsDialog())
+            {
+                dialog.ShowDialog();
+            }
         }
 
         private void ShowPackageManager()
         {
-            // TODO: Implement package manager dialog
-            MessageBox.Show("Package manager not yet implemented.", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            using (var dialog = new Designer.Modules.Tools.PackageManagerDialog())
+            {
+                dialog.ShowDialog();
+            }
         }
 
         private void OpenDocumentation()
@@ -1607,16 +1741,26 @@ namespace Designer
                 _propertyEditor.SetAvailableScreens(screens);
                 
                 _propertyEditor.SetScadaProject(scadaProject);
-                
-                // Connect screen editor selection events to property editor
-                editor.SelectionChanged += (s, selectedComponent) =>
-                {
-                    if (_propertyEditor != null)
-                    {
-                        _propertyEditor.UpdateEditor(selectedComponent);
-                    }
-                };
             }
+            
+            // Connect screen editor selection events to property editor (always connect, even if property editor setup failed)
+            editor.SelectionChanged += (s, selectedComponent) =>
+            {
+                if (_propertyEditor != null)
+                {
+                    _propertyEditor.UpdateEditor(selectedComponent);
+                }
+            };
+            
+            // Connect double-click to open Properties tab
+            editor.ComponentDoubleClicked += (s, component) =>
+            {
+                if (_propertyEditor != null && bottomTabWidget != null && bottomTabWidget.TabPages.Count >= 3)
+                {
+                    // Select the Properties tab
+                    bottomTabWidget.SelectedTab = bottomTabWidget.TabPages[2]; // Properties tab is at index 2
+                }
+            };
 
             var tabPage = new TabPage(tabName);
             tabPage.Controls.Add(editor);

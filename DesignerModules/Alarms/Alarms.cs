@@ -64,6 +64,8 @@ public class AlarmDefinition
     public string Priority { get; set; } = "Medium";
     public string Message { get; set; } = string.Empty;
     public bool Enabled { get; set; } = true;
+    public string Type { get; set; } = "HMI"; // "HMI" or "Controller"
+    public string Source { get; set; } = "Digital"; // "Digital" or "Analog"
 
     /// <summary>
     /// Converts alarm definition to JSON object.
@@ -79,7 +81,9 @@ public class AlarmDefinition
             ["threshold"] = Threshold,
             ["priority"] = Priority,
             ["message"] = Message,
-            ["enabled"] = Enabled
+            ["enabled"] = Enabled,
+            ["type"] = Type,
+            ["source"] = Source
         };
     }
 
@@ -96,7 +100,9 @@ public class AlarmDefinition
             Threshold = json["threshold"]?.ToObject<double>() ?? 0,
             Priority = json["priority"]?.ToString() ?? "Medium",
             Message = json["message"]?.ToString() ?? string.Empty,
-            Enabled = json["enabled"]?.ToObject<bool>() ?? true
+            Enabled = json["enabled"]?.ToObject<bool>() ?? true,
+            Type = json["type"]?.ToString() ?? "HMI",
+            Source = json["source"]?.ToString() ?? "Digital"
         };
 
         if (Guid.TryParse(json["id"]?.ToString(), out Guid id))

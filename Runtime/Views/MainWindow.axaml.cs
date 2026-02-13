@@ -2,11 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Controls;
-using Avalonia.Interactivity;
-using Avalonia.Markup.Xaml;
-using Runtime.Modules.Alarms;
 using Runtime.Modules.Communication;
-using Runtime.Modules.Console;
 using Runtime.Modules.Discovery;
 using Runtime.Modules.ExecutionEngine;
 using Runtime.Modules.Project;
@@ -17,7 +13,6 @@ namespace Runtime.Views;
 
 public partial class MainWindow : Window
 {
-    private IConsole? _console;
     private IProject? _project;
     private ProjectTransferServer? _transferServer;
     private ICommunication? _communication;
@@ -30,19 +25,58 @@ public partial class MainWindow : Window
         InitializeComponent();
         
         _screenContainer = this.FindControl<ContentControl>("ScreenContainer");
-        HomeButton.Click += OnHomeClicked;
-        LogsButton.Click += OnLogsClicked;
-        AlarmsButton.Click += OnAlarmsClicked;
     }
 
-    internal void SetConsole(IConsole console)
+    internal void SetProject(IProject? project)
     {
-        _console = console;
-        if (_console != null)
-            _console.NewLogEntry += OnNewLogEntry;
+        // Unsubscribe from previous project if any
+        if (_project != null)
+        {
+            _project.ResolutionChanged -= OnProjectResolutionChanged;
+        }
+        
+        _project = project;
+        
+        // Subscribe to resolution changes
+        if (_project != null)
+        {
+            _project.ResolutionChanged += OnProjectResolutionChanged;
+            // Apply resolution immediately if project is already loaded
+            if (_project.CurrentProject != null)
+            {
+                ResizeWindowToProjectResolution();
+            }
+        }
     }
 
-    internal void SetProject(IProject? project) => _project = project;
+    private void OnProjectResolutionChanged(object? sender, EventArgs e)
+    {
+        // Resize window when project resolution changes (e.g., after upload)
+        Avalonia.Threading.Dispatcher.UIThread.Post(ResizeWindowToProjectResolution);
+    }
+
+    private void ResizeWindowToProjectResolution()
+    {
+        if (_project == null) return;
+        
+        var width = _project.ResolutionWidth;
+        var height = _project.ResolutionHeight;
+        
+        // Only resize if we have valid dimensions
+        if (width > 0 && height > 0)
+        {
+            // Ensure minimum size constraints are respected
+            var minWidth = Math.Max(640, width);
+            var minHeight = Math.Max(480, height);
+            
+            Width = width;
+            Height = height;
+            MinWidth = minWidth;
+            MinHeight = minHeight;
+            
+            System.Diagnostics.Debug.WriteLine($"[MainWindow] Resized to match project resolution: {width}x{height}");
+        }
+    }
 
     internal void SetScreensModule(IScreens? screensModule)
     {
@@ -72,24 +106,8 @@ public partial class MainWindow : Window
             _screenContainer.Content = null;
             return;
         }
-        if (path.IndexOf("Logs", StringComparison.OrdinalIgnoreCase) >= 0)
-        {
-            var logsView = new LogsView();
-            logsView.SetConsole(_console);
-            logsView.RequestClose += (_, _) => { _screensModule?.ScreenManager.UnloadScreen(path); SetScreenContent(""); };
-            _screenContainer.Content = logsView;
-            return;
-        }
-        if (path.IndexOf("Alarms", StringComparison.OrdinalIgnoreCase) >= 0)
-        {
-            var alarmsView = new AlarmsView();
-            var alarms = ExecutionEngine.Instance.ModuleManager.GetModule("AlarmsModule") as IAlarms;
-            alarmsView.SetAlarms(alarms);
-            alarmsView.RequestClose += (_, _) => { _screensModule?.ScreenManager.UnloadScreen(path); SetScreenContent(""); };
-            _screenContainer.Content = alarmsView;
-            return;
-        }
-        // Project screen: path may be full path to screen JSON
+        
+        // Only load project screens (JSON files)
         var jsonPath = path;
         if (!path.EndsWith(".json", StringComparison.OrdinalIgnoreCase))
             jsonPath = path + ".json";
@@ -135,29 +153,6 @@ public partial class MainWindow : Window
         _statusTimer.Start();
     }
 
-    private void OnNewLogEntry(object? sender, LogEntry entry)
-    {
-        // TODO: Update Logs view when it's implemented
-    }
-
-    private void OnHomeClicked(object? sender, RoutedEventArgs e)
-    {
-        var firstScreen = _project?.GetFirstScreenPath();
-        if (!string.IsNullOrEmpty(firstScreen))
-            _screensModule?.ScreenManager.LoadScreen(firstScreen);
-        else
-            SetScreenContent("");
-    }
-
-    private void OnLogsClicked(object? sender, RoutedEventArgs e)
-    {
-        _screensModule?.ScreenManager.LoadScreen("Logs");
-    }
-
-    private void OnAlarmsClicked(object? sender, RoutedEventArgs e)
-    {
-        _screensModule?.ScreenManager.LoadScreen("Alarms");
-    }
 
     internal void UpdateConnectionStatuses()
     {

@@ -56,6 +56,7 @@ public class CommunicationModule
     public Dictionary<string, object> Settings { get; set; } = new Dictionary<string, object>();
     public bool Enabled { get; set; } = true;
     public string Description { get; set; } = string.Empty;
+    public List<TagMapping> TagMappings { get; set; } = new List<TagMapping>();
 
     public JObject ToJson()
     {
@@ -65,6 +66,12 @@ public class CommunicationModule
             settingsObj[setting.Key] = JToken.FromObject(setting.Value);
         }
 
+        var mappingsArray = new JArray();
+        foreach (var mapping in TagMappings)
+        {
+            mappingsArray.Add(mapping.ToJson());
+        }
+
         return new JObject
         {
             ["id"] = Id.ToString(),
@@ -72,7 +79,8 @@ public class CommunicationModule
             ["type"] = Type,
             ["settings"] = settingsObj,
             ["enabled"] = Enabled,
-            ["description"] = Description
+            ["description"] = Description,
+            ["tagMappings"] = mappingsArray
         };
     }
 
@@ -100,6 +108,63 @@ public class CommunicationModule
             }
         }
 
+        var mappingsArray = json["tagMappings"] as JArray;
+        if (mappingsArray != null)
+        {
+            foreach (var item in mappingsArray)
+            {
+                if (item is JObject mappingObj)
+                {
+                    module.TagMappings.Add(TagMapping.FromJson(mappingObj));
+                }
+            }
+        }
+
         return module;
+    }
+}
+
+/// <summary>
+/// Represents a tag mapping between a tag and a communication module address.
+/// </summary>
+public class TagMapping
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public string TagName { get; set; } = string.Empty;
+    public string Address { get; set; } = string.Empty;
+    public string DataType { get; set; } = "Float32";
+    public bool Enabled { get; set; } = true;
+    public string Description { get; set; } = string.Empty;
+
+    public JObject ToJson()
+    {
+        return new JObject
+        {
+            ["id"] = Id.ToString(),
+            ["tagName"] = TagName,
+            ["address"] = Address,
+            ["dataType"] = DataType,
+            ["enabled"] = Enabled,
+            ["description"] = Description
+        };
+    }
+
+    public static TagMapping FromJson(JObject json)
+    {
+        var mapping = new TagMapping
+        {
+            TagName = json["tagName"]?.ToString() ?? string.Empty,
+            Address = json["address"]?.ToString() ?? string.Empty,
+            DataType = json["dataType"]?.ToString() ?? "Float32",
+            Enabled = json["enabled"]?.ToObject<bool>() ?? true,
+            Description = json["description"]?.ToString() ?? string.Empty
+        };
+
+        if (Guid.TryParse(json["id"]?.ToString(), out Guid id))
+        {
+            mapping.Id = id;
+        }
+
+        return mapping;
     }
 }

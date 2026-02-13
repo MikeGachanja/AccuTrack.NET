@@ -25,12 +25,16 @@ public partial class ScreenEditor : UserControl
     // Component management fields
     private List<BaseComponent> _components = new List<BaseComponent>();
     private BaseComponent? _selectedComponent;
+    private List<BaseComponent> _selectedComponents = new List<BaseComponent>(); // Multi-select support
     private Point _dragStartPoint;
     private Point _dragStartComponentLocation; // Original component location when drag starts
     private Size _dragStartComponentSize; // Original component size when resize starts
     private bool _isDragging;
     private bool _isResizing;
     private Rectangle? _selectionRect;
+    
+    // Clipboard for copy/paste
+    private List<BaseComponent>? _clipboardComponents;
     
     private const int ResizeHandleSize = 8;
     
@@ -53,6 +57,7 @@ public partial class ScreenEditor : UserControl
 
     public event EventHandler<bool>? ModifiedChanged;
     public event EventHandler<BaseComponent?>? SelectionChanged;
+    public event EventHandler<BaseComponent?>? ComponentDoubleClicked;
 
     public ScreenEditor()
     {
@@ -92,10 +97,45 @@ public partial class ScreenEditor : UserControl
         toolbar.Items.Add(new ToolStripSeparator());
 
         var showGridButton = new ToolStripButton("Show Grid") { CheckOnClick = true, Checked = true };
+        showGridButton.CheckedChanged += (s, e) =>
+        {
+            ShowGridEnabled = showGridButton.Checked;
+        };
         toolbar.Items.Add(showGridButton);
 
         var snapToGridButton = new ToolStripButton("Snap to Grid") { CheckOnClick = true, Checked = true };
+        snapToGridButton.CheckedChanged += (s, e) =>
+        {
+            SnapToGridEnabled = snapToGridButton.Checked;
+        };
         toolbar.Items.Add(snapToGridButton);
+
+        toolbar.Items.Add(new ToolStripSeparator());
+
+        // Alignment tools
+        var alignLeftButton = new ToolStripButton("Align Left");
+        alignLeftButton.Click += (s, e) => AlignSelectedComponents(Alignment.Left);
+        toolbar.Items.Add(alignLeftButton);
+
+        var alignRightButton = new ToolStripButton("Align Right");
+        alignRightButton.Click += (s, e) => AlignSelectedComponents(Alignment.Right);
+        toolbar.Items.Add(alignRightButton);
+
+        var alignTopButton = new ToolStripButton("Align Top");
+        alignTopButton.Click += (s, e) => AlignSelectedComponents(Alignment.Top);
+        toolbar.Items.Add(alignTopButton);
+
+        var alignBottomButton = new ToolStripButton("Align Bottom");
+        alignBottomButton.Click += (s, e) => AlignSelectedComponents(Alignment.Bottom);
+        toolbar.Items.Add(alignBottomButton);
+
+        var alignCenterHButton = new ToolStripButton("Center H");
+        alignCenterHButton.Click += (s, e) => AlignSelectedComponents(Alignment.CenterHorizontal);
+        toolbar.Items.Add(alignCenterHButton);
+
+        var alignCenterVButton = new ToolStripButton("Center V");
+        alignCenterVButton.Click += (s, e) => AlignSelectedComponents(Alignment.CenterVertical);
+        toolbar.Items.Add(alignCenterVButton);
 
         // Container panel with margins for centering the canvas
         _canvasContainer = new Panel
@@ -116,6 +156,7 @@ public partial class ScreenEditor : UserControl
 
         _canvas.Paint += OnCanvasPaint;
         _canvas.MouseClick += OnCanvasMouseClick;
+        _canvas.MouseDoubleClick += OnCanvasMouseDoubleClick;
         _canvas.MouseMove += OnCanvasMouseMove;
         _canvas.MouseDown += OnCanvasMouseDown;
         _canvas.MouseUp += OnCanvasMouseUp;
@@ -126,7 +167,36 @@ public partial class ScreenEditor : UserControl
         _canvasContainer.Paint += OnContainerPaint;
         _canvasContainer.Controls.Add(_canvas);
         _canvasContainer.Scroll += (s, e) => _canvas.Invalidate(); // Invalidate canvas when scrolling
-        _canvasContainer.Resize += (s, e) => UpdateCanvasPosition(); // Recenter canvas on resize
+        _canvasContainer.Resize += (s, e) =>
+        {
+            // Recalculate zoom to fit screen when container is resized (if zoom is still at default)
+            if (_zoomFactor == 1.0f && _scadaResolution.Width > 0 && _scadaResolution.Height > 0)
+            {
+                CalculateInitialZoom();
+                UpdateCanvasSize();
+            }
+            else
+            {
+                UpdateCanvasPosition();
+            }
+        };
+        
+        // Calculate initial zoom when container handle is created
+        _canvasContainer.HandleCreated += (s, e) =>
+        {
+            if (_zoomFactor == 1.0f && _scadaResolution.Width > 0 && _scadaResolution.Height > 0)
+            {
+                // Use BeginInvoke to ensure container size is available
+                BeginInvoke(new Action(() =>
+                {
+                    if (_zoomFactor == 1.0f && _scadaResolution.Width > 0 && _scadaResolution.Height > 0)
+                    {
+                        CalculateInitialZoom();
+                        UpdateCanvasSize();
+                    }
+                }));
+            }
+        };
 
         mainLayout.Controls.Add(toolbar, 0, 0);
         mainLayout.Controls.Add(_canvasContainer, 0, 1);
@@ -150,6 +220,15 @@ public partial class ScreenEditor : UserControl
     public void SetScadaResolution(Size resolution)
     {
         _scadaResolution = resolution;
+        // Reset zoom to fit screen when resolution changes
+        _zoomFactor = 1.0f;
+        
+        // Calculate initial zoom if container is already created
+        if (_canvasContainer != null && _canvasContainer.IsHandleCreated)
+        {
+            CalculateInitialZoom();
+        }
+        
         UpdateCanvasSize();
     }
 
@@ -336,26 +415,29 @@ public partial class ScreenEditor : UserControl
         var g = e.Graphics;
         g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
 
-        // Draw grid
+        // Apply zoom transform to scale everything
+        g.ScaleTransform(_zoomFactor, _zoomFactor);
+
+        // Draw grid (will be scaled by zoom transform)
         DrawGrid(g);
 
-        // Draw components
+        // Draw components (will be scaled by zoom transform)
         foreach (var component in _components)
         {
             bool isSelected = component == _selectedComponent;
             component.Draw(g, isSelected);
             
-            // Draw resize handles for selected component
+            // Draw resize handles for selected component (scaled by zoom)
             if (isSelected)
             {
                 DrawResizeHandles(g, component.Bounds);
             }
         }
         
-        // Draw selection rectangle if dragging
+        // Draw selection rectangle if dragging (scaled by zoom)
         if (_selectionRect.HasValue)
         {
-            using (var pen = new Pen(Color.Blue, 2) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash })
+            using (var pen = new Pen(Color.Blue, 2 / _zoomFactor) { DashStyle = System.Drawing.Drawing2D.DashStyle.Dash })
             {
                 g.DrawRectangle(pen, _selectionRect.Value);
             }
@@ -364,17 +446,25 @@ public partial class ScreenEditor : UserControl
 
     private void DrawGrid(Graphics g)
     {
+        if (!_showGrid)
+            return;
+            
         int gridSize = 20;
-        var pen = new Pen(Color.LightGray, 1);
+        // Pen width should account for zoom - thinner lines when zoomed out
+        var pen = new Pen(Color.LightGray, 1 / _zoomFactor);
 
-        for (int x = 0; x < _canvas.Width; x += gridSize)
+        // Draw grid using actual canvas size (not zoomed)
+        int actualCanvasWidth = (int)(_canvas.Width / _zoomFactor);
+        int actualCanvasHeight = (int)(_canvas.Height / _zoomFactor);
+        
+        for (int x = 0; x <= actualCanvasWidth; x += gridSize)
         {
-            g.DrawLine(pen, x, 0, x, _canvas.Height);
+            g.DrawLine(pen, x, 0, x, actualCanvasHeight);
         }
 
-        for (int y = 0; y < _canvas.Height; y += gridSize)
+        for (int y = 0; y <= actualCanvasHeight; y += gridSize)
         {
-            g.DrawLine(pen, 0, y, _canvas.Width, y);
+            g.DrawLine(pen, 0, y, actualCanvasWidth, y);
         }
     }
 
@@ -425,7 +515,17 @@ public partial class ScreenEditor : UserControl
     {
         if (_scadaResolution.Width > 0 && _scadaResolution.Height > 0)
         {
-            _canvas.Size = _scadaResolution;
+            // Calculate initial zoom to fit screen if not already set
+            if (_zoomFactor == 1.0f && _canvasContainer != null)
+            {
+                CalculateInitialZoom();
+            }
+            
+            // Set canvas size with zoom applied
+            _canvas.Size = new Size(
+                (int)(_scadaResolution.Width * _zoomFactor),
+                (int)(_scadaResolution.Height * _zoomFactor)
+            );
             UpdateCanvasPosition();
             
             // Update container's auto-scroll minimum size to include margins
@@ -437,6 +537,32 @@ public partial class ScreenEditor : UserControl
             _canvas.Invalidate();
             _canvasContainer.Invalidate();
         }
+    }
+    
+    /// <summary>
+    /// Calculates initial zoom factor to fit the screen in the viewport.
+    /// </summary>
+    private void CalculateInitialZoom()
+    {
+        if (_canvasContainer == null || _scadaResolution.Width == 0 || _scadaResolution.Height == 0)
+            return;
+        
+        // Get available space in container (accounting for margins)
+        int availableWidth = _canvasContainer.ClientSize.Width - (MarginSize * 2);
+        int availableHeight = _canvasContainer.ClientSize.Height - (MarginSize * 2);
+        
+        if (availableWidth <= 0 || availableHeight <= 0)
+            return;
+        
+        // Calculate zoom to fit both width and height
+        float zoomX = (float)availableWidth / _scadaResolution.Width;
+        float zoomY = (float)availableHeight / _scadaResolution.Height;
+        
+        // Use the smaller zoom to ensure entire screen fits
+        _zoomFactor = Math.Min(zoomX, zoomY);
+        
+        // Clamp zoom factor to reasonable bounds
+        _zoomFactor = Math.Max(0.1f, Math.Min(_zoomFactor, 5.0f));
     }
 
     /// <summary>
@@ -481,13 +607,14 @@ public partial class ScreenEditor : UserControl
     private void OnCanvasDragDrop(object? sender, DragEventArgs e)
     {
         Point dropPoint = _canvas.PointToClient(new Point(e.X, e.Y));
+        Point canvasDropPoint = ScreenToCanvas(dropPoint); // dropPoint is already relative to canvas
         
         // Handle component drag-drop
         if (e.Data?.GetData(ComponentsView.ComponentDragDropFormat) is BaseComponent component)
         {
             // Clone the component and place it at drop location
             var newComponent = component.Clone();
-            Point location = SnapToGrid(dropPoint);
+            Point location = SnapToGrid(canvasDropPoint);
             // Constrain to screen bounds
             location = ConstrainToScreenBounds(location, newComponent.Size);
             newComponent.Location = location;
@@ -512,7 +639,7 @@ public partial class ScreenEditor : UserControl
                 if (!string.IsNullOrEmpty(screenName))
                 {
                     // Create a navigation button component
-                    Point location = SnapToGrid(dropPoint);
+                    Point location = SnapToGrid(canvasDropPoint);
                     Size buttonSize = new Size(120, 35);
                     // Constrain to screen bounds
                     location = ConstrainToScreenBounds(location, buttonSize);
@@ -556,7 +683,7 @@ public partial class ScreenEditor : UserControl
             {
                 if (!string.IsNullOrEmpty(svgPath))
                 {
-                    Point location = SnapToGrid(dropPoint);
+                    Point location = SnapToGrid(canvasDropPoint);
                     Size svgSize = new Size(100, 100);
                     // Constrain to screen bounds
                     location = ConstrainToScreenBounds(location, svgSize);
@@ -592,9 +719,45 @@ public partial class ScreenEditor : UserControl
         }
     }
 
+    /// <summary>
+    /// Converts screen coordinates to canvas coordinates accounting for zoom.
+    /// Note: For mouse events on _canvas, e.Location is already relative to the canvas.
+    /// </summary>
+    private Point ScreenToCanvas(Point screenPoint)
+    {
+        // e.Location from canvas mouse events is already relative to the canvas
+        // Just need to convert from zoomed coordinates to actual canvas coordinates
+        if (_zoomFactor <= 0)
+            return screenPoint; // Safety check - avoid division by zero
+        
+        return new Point(
+            (int)(screenPoint.X / _zoomFactor),
+            (int)(screenPoint.Y / _zoomFactor)
+        );
+    }
+    
+    /// <summary>
+    /// Converts container coordinates to canvas coordinates accounting for zoom and canvas position.
+    /// Use this for drag-drop events that come from the container.
+    /// </summary>
+    private Point ContainerToCanvas(Point containerPoint)
+    {
+        // Account for canvas position in container
+        Point relativeToCanvas = new Point(
+            containerPoint.X - _canvas.Location.X,
+            containerPoint.Y - _canvas.Location.Y
+        );
+        
+        // Convert from zoomed coordinates to actual canvas coordinates
+        return new Point(
+            (int)(relativeToCanvas.X / _zoomFactor),
+            (int)(relativeToCanvas.Y / _zoomFactor)
+        );
+    }
+
     private void OnCanvasMouseClick(object? sender, MouseEventArgs e)
     {
-        Point clickPoint = e.Location;
+        Point clickPoint = ScreenToCanvas(e.Location);
         
         // Check if clicking on a component
         BaseComponent? clickedComponent = null;
@@ -613,13 +776,42 @@ public partial class ScreenEditor : UserControl
         // This method is mainly for component selection
     }
 
+    private void OnCanvasMouseDoubleClick(object? sender, MouseEventArgs e)
+    {
+        Point clickPoint = ScreenToCanvas(e.Location);
+        
+        // Check if double-clicking on a component
+        BaseComponent? clickedComponent = null;
+        for (int i = _components.Count - 1; i >= 0; i--)
+        {
+            if (_components[i].Contains(clickPoint))
+            {
+                clickedComponent = _components[i];
+                break;
+            }
+        }
+        
+        if (clickedComponent != null)
+        {
+            // Select the component first
+            SetSelectedComponent(clickedComponent);
+            
+            // Trigger double-click event to open Properties tab
+            ComponentDoubleClicked?.Invoke(this, clickedComponent);
+        }
+    }
+
     private void OnCanvasMouseMove(object? sender, MouseEventArgs e)
     {
         if (_isDragging && _selectedComponent != null)
         {
-            // Calculate the mouse movement delta from the original drag start point
-            int deltaX = e.X - _dragStartPoint.X;
-            int deltaY = e.Y - _dragStartPoint.Y;
+            // Convert current mouse position to canvas coordinates
+            Point currentCanvasPoint = ScreenToCanvas(e.Location);
+            Point startCanvasPoint = ScreenToCanvas(_dragStartPoint);
+            
+            // Calculate the mouse movement delta in canvas coordinates
+            int deltaX = currentCanvasPoint.X - startCanvasPoint.X;
+            int deltaY = currentCanvasPoint.Y - startCanvasPoint.Y;
             
             // Calculate new location based on original component location + mouse delta
             Point newLocation = new Point(
@@ -642,7 +834,15 @@ public partial class ScreenEditor : UserControl
         }
         else if (_isResizing && _selectedComponent != null && _activeResizeHandle != ResizeHandle.None)
         {
-            Point delta = new Point(e.X - _dragStartPoint.X, e.Y - _dragStartPoint.Y);
+            // Convert current mouse position to canvas coordinates
+            Point currentCanvasPoint = ScreenToCanvas(e.Location);
+            Point startCanvasPoint = ScreenToCanvas(_dragStartPoint);
+            
+            // Calculate delta in canvas coordinates
+            Point delta = new Point(
+                currentCanvasPoint.X - startCanvasPoint.X,
+                currentCanvasPoint.Y - startCanvasPoint.Y
+            );
             Point newLocation = _dragStartComponentLocation;
             Size newSize = _dragStartComponentSize;
             
@@ -756,11 +956,13 @@ public partial class ScreenEditor : UserControl
             {
                 // First constrain the size
                 newSize = ConstrainSizeToScreenBounds(newLocation, newSize);
-                // Then adjust location if needed
-                if (newLocation.X + newSize.Width > _canvas.Width)
-                    newLocation = new Point(_canvas.Width - newSize.Width, newLocation.Y);
-                if (newLocation.Y + newSize.Height > _canvas.Height)
-                    newLocation = new Point(newLocation.X, _canvas.Height - newSize.Height);
+                // Then adjust location if needed (using actual canvas size)
+                int actualCanvasWidth = (int)(_canvas.Width / _zoomFactor);
+                int actualCanvasHeight = (int)(_canvas.Height / _zoomFactor);
+                if (newLocation.X + newSize.Width > actualCanvasWidth)
+                    newLocation = new Point(actualCanvasWidth - newSize.Width, newLocation.Y);
+                if (newLocation.Y + newSize.Height > actualCanvasHeight)
+                    newLocation = new Point(newLocation.X, actualCanvasHeight - newSize.Height);
                 if (newLocation.X < 0)
                     newLocation = new Point(0, newLocation.Y);
                 if (newLocation.Y < 0)
@@ -776,7 +978,8 @@ public partial class ScreenEditor : UserControl
             // Update cursor based on resize handle
             if (_selectedComponent != null)
             {
-                ResizeHandle handle = GetResizeHandleAtPoint(e.Location, _selectedComponent.Bounds);
+                Point canvasPoint = ScreenToCanvas(e.Location);
+                ResizeHandle handle = GetResizeHandleAtPoint(canvasPoint, _selectedComponent.Bounds);
                 _canvas.Cursor = GetCursorForResizeHandle(handle);
             }
             else
@@ -790,12 +993,12 @@ public partial class ScreenEditor : UserControl
     {
         if (e.Button == MouseButtons.Left)
         {
-            Point clickPoint = e.Location;
+            Point clickPoint = ScreenToCanvas(e.Location);
             
             // Check if clicking on selected component
             if (_selectedComponent != null && _selectedComponent.Contains(clickPoint))
             {
-                _dragStartPoint = clickPoint;
+                _dragStartPoint = e.Location; // Store screen coordinates for delta calculation
                 _dragStartComponentLocation = _selectedComponent.Location; // Store original location
                 _isDragging = true;
             }
@@ -804,14 +1007,14 @@ public partial class ScreenEditor : UserControl
                 _activeResizeHandle = GetResizeHandleAtPoint(clickPoint, _selectedComponent.Bounds);
                 if (_activeResizeHandle != ResizeHandle.None)
                 {
-                    _dragStartPoint = clickPoint;
+                    _dragStartPoint = e.Location; // Store screen coordinates for delta calculation
                     _dragStartComponentSize = _selectedComponent.Size;
                     _isResizing = true;
                 }
             }
             else
             {
-                // Start selection rectangle
+                // Start selection rectangle (in canvas coordinates)
                 _selectionRect = new Rectangle(clickPoint, Size.Empty);
             }
         }
@@ -823,6 +1026,12 @@ public partial class ScreenEditor : UserControl
         {
             if (_isDragging || _isResizing)
             {
+                SetModified(true);
+            }
+            else if (_selectionRect.HasValue)
+            {
+                // Convert selection rectangle to canvas coordinates if needed
+                // Selection rectangle is already in canvas coordinates from MouseDown
                 SetModified(true);
             }
             _isDragging = false;
@@ -853,8 +1062,36 @@ public partial class ScreenEditor : UserControl
         }
     }
 
+    private bool _snapToGrid = true;
+    private bool _showGrid = true;
+    
+    /// <summary>
+    /// Gets or sets whether to snap components to grid.
+    /// </summary>
+    public bool SnapToGridEnabled
+    {
+        get => _snapToGrid;
+        set => _snapToGrid = value;
+    }
+    
+    /// <summary>
+    /// Gets or sets whether to show the grid.
+    /// </summary>
+    public bool ShowGridEnabled
+    {
+        get => _showGrid;
+        set
+        {
+            _showGrid = value;
+            _canvas.Invalidate();
+        }
+    }
+
     private Point SnapToGrid(Point point)
     {
+        if (!_snapToGrid)
+            return point;
+            
         int gridSize = 20;
         return new Point(
             (point.X / gridSize) * gridSize,
@@ -864,6 +1101,9 @@ public partial class ScreenEditor : UserControl
     
     private Size SnapSizeToGrid(Size size)
     {
+        if (!_snapToGrid)
+            return size;
+            
         int gridSize = 20;
         return new Size(
             ((size.Width + gridSize / 2) / gridSize) * gridSize,
@@ -928,8 +1168,9 @@ public partial class ScreenEditor : UserControl
     private void DrawResizeHandles(Graphics g, Rectangle bounds)
     {
         // Draw resize handles on all corners and edges
+        // Note: Graphics is already scaled by zoom, so handles will be scaled automatically
         using (var brush = new SolidBrush(Color.Blue))
-        using (var outlinePen = new Pen(Color.White, 1))
+        using (var outlinePen = new Pen(Color.White, 1 / _zoomFactor))
         {
             int size = ResizeHandleSize;
             int halfSize = size / 2;
@@ -962,23 +1203,37 @@ public partial class ScreenEditor : UserControl
         g.DrawRectangle(outlinePen, handleRect);
     }
 
-    private void ZoomIn()
+    /// <summary>
+    /// Zooms in the canvas.
+    /// </summary>
+    public void ZoomIn()
     {
         _zoomFactor = Math.Min(_zoomFactor * 1.2f, 5.0f);
         UpdateZoom();
     }
 
-    private void ZoomOut()
+    /// <summary>
+    /// Zooms out the canvas.
+    /// </summary>
+    public void ZoomOut()
     {
         _zoomFactor = Math.Max(_zoomFactor / 1.2f, 0.2f);
         UpdateZoom();
     }
 
-    private void ResetZoom()
+    /// <summary>
+    /// Resets zoom to 100%.
+    /// </summary>
+    public void ResetZoom()
     {
         _zoomFactor = 1.0f;
         UpdateZoom();
     }
+    
+    /// <summary>
+    /// Gets the current zoom factor.
+    /// </summary>
+    public float GetZoomFactor() => _zoomFactor;
 
     private void UpdateZoom()
     {
@@ -1020,31 +1275,215 @@ public partial class ScreenEditor : UserControl
 
     /// <summary>
     /// Checks if a location and size are within the screen bounds.
+    /// Uses actual canvas size (not zoomed size).
     /// </summary>
     private bool IsWithinScreenBounds(Point location, Size size)
     {
+        int actualCanvasWidth = (int)(_canvas.Width / _zoomFactor);
+        int actualCanvasHeight = (int)(_canvas.Height / _zoomFactor);
         return location.X >= 0 && location.Y >= 0 &&
-               location.X + size.Width <= _canvas.Width &&
-               location.Y + size.Height <= _canvas.Height;
+               location.X + size.Width <= actualCanvasWidth &&
+               location.Y + size.Height <= actualCanvasHeight;
     }
 
     /// <summary>
     /// Constrains a location to ensure the component stays within screen bounds.
+    /// Uses actual canvas size (not zoomed size).
     /// </summary>
     private Point ConstrainToScreenBounds(Point location, Size size)
     {
-        int x = Math.Max(0, Math.Min(location.X, _canvas.Width - size.Width));
-        int y = Math.Max(0, Math.Min(location.Y, _canvas.Height - size.Height));
+        int actualCanvasWidth = (int)(_canvas.Width / _zoomFactor);
+        int actualCanvasHeight = (int)(_canvas.Height / _zoomFactor);
+        int x = Math.Max(0, Math.Min(location.X, actualCanvasWidth - size.Width));
+        int y = Math.Max(0, Math.Min(location.Y, actualCanvasHeight - size.Height));
         return new Point(x, y);
     }
 
     /// <summary>
+    /// Alignment types for component alignment.
+    /// </summary>
+    private enum Alignment
+    {
+        Left,
+        Right,
+        Top,
+        Bottom,
+        CenterHorizontal,
+        CenterVertical
+    }
+
+    /// <summary>
+    /// Copies the selected component(s) to clipboard.
+    /// </summary>
+    public void CopySelectedComponents()
+    {
+        var componentsToCopy = GetSelectedComponents();
+        if (componentsToCopy.Count == 0)
+            return;
+
+        // Deep copy components using Clone()
+        _clipboardComponents = new List<BaseComponent>();
+        foreach (var comp in componentsToCopy)
+        {
+            var copy = comp.Clone();
+            copy.Id = Guid.NewGuid(); // New ID for pasted component
+            copy.Location = new Point(comp.Location.X + 20, comp.Location.Y + 20); // Offset for paste
+            _clipboardComponents.Add(copy);
+        }
+    }
+
+    /// <summary>
+    /// Cuts the selected component(s) to clipboard (copies and deletes).
+    /// </summary>
+    public void CutSelectedComponents()
+    {
+        CopySelectedComponents();
+        DeleteSelectedComponents();
+    }
+
+    /// <summary>
+    /// Deletes the selected component(s).
+    /// </summary>
+    public void DeleteSelectedComponents()
+    {
+        var selected = GetSelectedComponents();
+        if (selected.Count == 0)
+            return;
+
+        foreach (var comp in selected)
+        {
+            _components.Remove(comp);
+        }
+
+        _selectedComponent = null;
+        _selectedComponents.Clear();
+        SetModified(true);
+        SelectionChanged?.Invoke(this, null);
+        _canvas.Invalidate();
+    }
+
+    /// <summary>
+    /// Pastes components from clipboard.
+    /// </summary>
+    public void PasteComponents()
+    {
+        if (_clipboardComponents == null || _clipboardComponents.Count == 0)
+            return;
+
+        // Clear current selection
+        _selectedComponent = null;
+        _selectedComponents.Clear();
+
+        // Add pasted components
+        foreach (var comp in _clipboardComponents)
+        {
+            // Ensure component is within bounds
+            comp.Location = ConstrainToScreenBounds(comp.Location, comp.Size);
+            _components.Add(comp);
+            _selectedComponents.Add(comp);
+        }
+
+        if (_selectedComponents.Count > 0)
+        {
+            _selectedComponent = _selectedComponents[0];
+        }
+
+        SetModified(true);
+        SelectionChanged?.Invoke(this, _selectedComponent);
+        _canvas.Invalidate();
+    }
+
+    /// <summary>
+    /// Gets the list of currently selected components.
+    /// </summary>
+    private List<BaseComponent> GetSelectedComponents()
+    {
+        var selected = new List<BaseComponent>();
+        if (_selectedComponent != null)
+        {
+            selected.Add(_selectedComponent);
+        }
+        // Add multi-selected components if any
+        foreach (var comp in _selectedComponents)
+        {
+            if (comp != _selectedComponent && !selected.Contains(comp))
+            {
+                selected.Add(comp);
+            }
+        }
+        return selected;
+    }
+
+    /// <summary>
+    /// Aligns selected components according to the specified alignment type.
+    /// </summary>
+    private void AlignSelectedComponents(Alignment alignment)
+    {
+        var selected = GetSelectedComponents();
+        if (selected.Count < 2)
+            return; // Need at least 2 components to align
+
+        // Find reference component (first selected)
+        var reference = selected[0];
+        int refLeft = reference.Location.X;
+        int refRight = reference.Location.X + reference.Size.Width;
+        int refTop = reference.Location.Y;
+        int refBottom = reference.Location.Y + reference.Size.Height;
+        int refCenterX = reference.Location.X + reference.Size.Width / 2;
+        int refCenterY = reference.Location.Y + reference.Size.Height / 2;
+
+        // Align all other components
+        for (int i = 1; i < selected.Count; i++)
+        {
+            var comp = selected[i];
+            Point newLocation = comp.Location;
+
+            switch (alignment)
+            {
+                case Alignment.Left:
+                    newLocation.X = refLeft;
+                    break;
+                case Alignment.Right:
+                    newLocation.X = refRight - comp.Size.Width;
+                    break;
+                case Alignment.Top:
+                    newLocation.Y = refTop;
+                    break;
+                case Alignment.Bottom:
+                    newLocation.Y = refBottom - comp.Size.Height;
+                    break;
+                case Alignment.CenterHorizontal:
+                    newLocation.X = refCenterX - comp.Size.Width / 2;
+                    break;
+                case Alignment.CenterVertical:
+                    newLocation.Y = refCenterY - comp.Size.Height / 2;
+                    break;
+            }
+
+            // Constrain to screen bounds
+            newLocation = ConstrainToScreenBounds(newLocation, comp.Size);
+            comp.Location = SnapToGrid(newLocation);
+        }
+
+        SetModified(true);
+        _canvas.Invalidate();
+    }
+
+    /// <summary>
+    /// Checks if there are components in the clipboard.
+    /// </summary>
+    public bool HasClipboardComponents() => _clipboardComponents != null && _clipboardComponents.Count > 0;
+
+    /// <summary>
     /// Constrains a size to ensure the component stays within screen bounds.
+    /// Uses actual canvas size (not zoomed size).
     /// </summary>
     private Size ConstrainSizeToScreenBounds(Point location, Size size)
     {
-        int maxWidth = _canvas.Width - location.X;
-        int maxHeight = _canvas.Height - location.Y;
+        int actualCanvasWidth = (int)(_canvas.Width / _zoomFactor);
+        int actualCanvasHeight = (int)(_canvas.Height / _zoomFactor);
+        int maxWidth = actualCanvasWidth - location.X;
+        int maxHeight = actualCanvasHeight - location.Y;
         return new Size(
             Math.Min(size.Width, maxWidth),
             Math.Min(size.Height, maxHeight)

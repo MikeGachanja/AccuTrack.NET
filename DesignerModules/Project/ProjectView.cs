@@ -80,6 +80,9 @@ public partial class ProjectView : UserControl
     /// </summary>
     public void RefreshView()
     {
+        // Save expansion state before clearing
+        var expandedPaths = SaveExpansionState();
+
         _treeView.Nodes.Clear();
 
         if (_projectManager?.GetCurrentProject() == null)
@@ -124,6 +127,9 @@ public partial class ProjectView : UserControl
         _treeView.Nodes.Add(rootNode);
         rootNode.Expand();
         scadaFolderNode.Expand();
+
+        // Restore expansion state after rebuilding
+        RestoreExpansionState(expandedPaths);
     }
 
     private TreeNode CreateScadaNode(ScadaProject scada)
@@ -518,7 +524,166 @@ public partial class ProjectView : UserControl
             return;
         }
 
+        // Create default screens if selected
+        if (dialog.AddAlarmsScreen)
+        {
+            CreateDefaultScreen(scadaName, "Alarms", "Alarms monitoring screen");
+        }
+        if (dialog.AddLogsScreen)
+        {
+            CreateDefaultScreen(scadaName, "Logs", "System logs screen");
+        }
+
         RefreshView();
+    }
+
+    private void CreateDefaultScreen(string scadaName, string screenName, string description)
+    {
+        if (_projectManager == null) return;
+        
+        var scada = _projectManager.FindScadaProject(scadaName);
+        if (scada == null) return;
+        
+        // Create ScreenTemplate using reflection to avoid circular dependency
+        var screenTemplateType = Type.GetType("Designer.Modules.ScreenEditor.ScreenTemplate, ScreenEditor");
+        if (screenTemplateType != null)
+        {
+            var screen = Activator.CreateInstance(screenTemplateType);
+            if (screen != null)
+            {
+                // Set properties via reflection
+                screenTemplateType.GetProperty("Name")?.SetValue(screen, screenName);
+                screenTemplateType.GetProperty("Description")?.SetValue(screen, description);
+                screenTemplateType.GetProperty("Size")?.SetValue(screen, scada.Resolution);
+                screenTemplateType.GetProperty("BackgroundColor")?.SetValue(screen, System.Drawing.Color.White);
+                
+                // Get Components list to add buttons
+                var componentsProperty = screenTemplateType.GetProperty("Components");
+                var components = componentsProperty?.GetValue(screen) as System.Collections.IList;
+                
+                if (components != null)
+                {
+                    // Get ButtonComponent type
+                    var buttonComponentType = Type.GetType("Designer.Modules.Components.ButtonComponent, Components");
+                    if (buttonComponentType != null)
+                    {
+                        var resolution = scada.Resolution;
+                        int buttonWidth = 120;
+                        int buttonHeight = 35;
+                        int buttonSpacing = 10;
+                        int topMargin = 20;
+                        int leftMargin = 20;
+                        
+                        // Calculate button positions (top-right area)
+                        int startX = resolution.Width - buttonWidth - leftMargin;
+                        int startY = topMargin;
+                        
+                        // Back button (always present)
+                        var backButton = CreateButton(
+                            buttonComponentType,
+                            "Back",
+                            new System.Drawing.Point(startX, startY),
+                            new System.Drawing.Size(buttonWidth, buttonHeight),
+                            "PreviousScreen",
+                            System.Drawing.Color.FromArgb(70, 130, 180), // Steel blue
+                            System.Drawing.Color.White
+                        );
+                        components.Add(backButton);
+                        startY += buttonHeight + buttonSpacing;
+                        
+                        // Clear button
+                        var clearButton = CreateButton(
+                            buttonComponentType,
+                            "Clear",
+                            new System.Drawing.Point(startX, startY),
+                            new System.Drawing.Size(buttonWidth, buttonHeight),
+                            screenName == "Alarms" ? "ClearData" : "ClearLogs",
+                            System.Drawing.Color.FromArgb(220, 53, 69), // Red
+                            System.Drawing.Color.White
+                        );
+                        components.Add(clearButton);
+                        startY += buttonHeight + buttonSpacing;
+                        
+                        // Print button
+                        var printButton = CreateButton(
+                            buttonComponentType,
+                            "Print",
+                            new System.Drawing.Point(startX, startY),
+                            new System.Drawing.Size(buttonWidth, buttonHeight),
+                            "PrintScreen",
+                            System.Drawing.Color.FromArgb(40, 167, 69), // Green
+                            System.Drawing.Color.White
+                        );
+                        components.Add(printButton);
+                        
+                        // Acknowledge button (only for Alarms screen)
+                        if (screenName == "Alarms")
+                        {
+                            startY += buttonHeight + buttonSpacing;
+                            var acknowledgeButton = CreateButton(
+                                buttonComponentType,
+                                "Acknowledge",
+                                new System.Drawing.Point(startX, startY),
+                                new System.Drawing.Size(buttonWidth, buttonHeight),
+                                "AcknowledgeAllAlarms", // Action to acknowledge all alarms (will be handled by runtime)
+                                System.Drawing.Color.FromArgb(255, 193, 7), // Amber/Yellow
+                                System.Drawing.Color.Black
+                            );
+                            components.Add(acknowledgeButton);
+                        }
+                    }
+                }
+                
+                // Save screen to file
+                string screensPath = scada.Paths.ScreensPath;
+                if (!System.IO.Directory.Exists(screensPath))
+                {
+                    System.IO.Directory.CreateDirectory(screensPath);
+                }
+
+                string screenFile = System.IO.Path.Combine(screensPath, $"{screenName}.json");
+                screenTemplateType.GetProperty("FilePath")?.SetValue(screen, screenFile);
+
+                // Serialize using ToJson method
+                var toJsonMethod = screenTemplateType.GetMethod("ToJson");
+                if (toJsonMethod != null)
+                {
+                    var json = toJsonMethod.Invoke(screen, null);
+                    if (json != null)
+                    {
+                        var jsonObj = json as Newtonsoft.Json.Linq.JObject;
+                        jsonObj["filePath"] = screenFile;
+                        System.IO.File.WriteAllText(screenFile, jsonObj.ToString());
+                    }
+                }
+
+                // Trigger event to notify screen was created
+                ScreenCreated?.Invoke(this, new ScreenCreatedEventArgs(screen, scadaName));
+            }
+        }
+    }
+
+    private object CreateButton(Type buttonComponentType, string text, System.Drawing.Point location, System.Drawing.Size size, string action, System.Drawing.Color backColor, System.Drawing.Color foreColor)
+    {
+        var button = Activator.CreateInstance(buttonComponentType);
+        if (button != null)
+        {
+            // Set button properties via reflection
+            buttonComponentType.GetProperty("Id")?.SetValue(button, Guid.NewGuid());
+            buttonComponentType.GetProperty("Name")?.SetValue(button, $"btn{text}");
+            buttonComponentType.GetProperty("Location")?.SetValue(button, location);
+            buttonComponentType.GetProperty("Size")?.SetValue(button, size);
+            buttonComponentType.GetProperty("Text")?.SetValue(button, text);
+            buttonComponentType.GetProperty("Action")?.SetValue(button, action);
+            buttonComponentType.GetProperty("BackColor")?.SetValue(button, backColor);
+            buttonComponentType.GetProperty("ForeColor")?.SetValue(button, foreColor);
+            buttonComponentType.GetProperty("BorderColor")?.SetValue(button, System.Drawing.Color.FromArgb(backColor.R / 2, backColor.G / 2, backColor.B / 2));
+            buttonComponentType.GetProperty("BorderWidth")?.SetValue(button, 2);
+            buttonComponentType.GetProperty("Font")?.SetValue(button, new System.Drawing.Font("Arial", 9, System.Drawing.FontStyle.Bold));
+            buttonComponentType.GetProperty("Visible")?.SetValue(button, true);
+            buttonComponentType.GetProperty("Enabled")?.SetValue(button, true);
+        }
+        return button ?? throw new InvalidOperationException($"Failed to create button component: {text}");
     }
 
     private void RenameNode(TreeNode node)
@@ -716,13 +881,25 @@ public partial class ProjectView : UserControl
 
     private void ShowScadaProjectProperties(ProjectNodeData nodeData)
     {
-        if (nodeData.Data is ScadaProject scada)
+        if (nodeData.Data is ScadaProject scadaProject)
         {
-            MessageBox.Show(
-                $"SCADA Project: {scada.Name}\nType: {scada.Type}\nVersion: {scada.Version}\nResolution: {scada.Resolution.Width}x{scada.Resolution.Height}",
-                "Properties",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
+            using (var dialog = new ScadaProjectPropertiesDialog(scadaProject))
+            {
+                if (dialog.ShowDialog() == DialogResult.OK)
+                {
+                    // Properties are updated in the dialog's OnFormClosing
+                    // Save the project
+                    if (_projectManager != null)
+                    {
+                        _projectManager.SaveProject();
+                        RefreshView(); // Refresh to show updated name if changed
+                    }
+                }
+            }
+        }
+        else
+        {
+            MessageBox.Show("No SCADA project selected.", "Properties", MessageBoxButtons.OK, MessageBoxIcon.Information);
         }
     }
 
@@ -751,6 +928,113 @@ public partial class ProjectView : UserControl
                     break;
                 // Add other rename handlers as needed
             }
+        }
+    }
+
+    /// <summary>
+    /// Saves the expansion state of all nodes in the tree view.
+    /// </summary>
+    private HashSet<string> SaveExpansionState()
+    {
+        var expandedPaths = new HashSet<string>();
+        foreach (TreeNode node in _treeView.Nodes)
+        {
+            SaveNodeExpansionState(node, "", expandedPaths);
+        }
+        return expandedPaths;
+    }
+
+    /// <summary>
+    /// Recursively saves the expansion state of a node and its children.
+    /// Uses node Tag data when available for more reliable identification.
+    /// </summary>
+    private void SaveNodeExpansionState(TreeNode node, string parentPath, HashSet<string> expandedPaths)
+    {
+        // Build path using Tag data when available for better identification
+        string nodeIdentifier = GetNodeIdentifier(node);
+        string currentPath = string.IsNullOrEmpty(parentPath) ? nodeIdentifier : $"{parentPath}/{nodeIdentifier}";
+        
+        if (node.IsExpanded)
+        {
+            expandedPaths.Add(currentPath);
+        }
+
+        foreach (TreeNode child in node.Nodes)
+        {
+            SaveNodeExpansionState(child, currentPath, expandedPaths);
+        }
+    }
+
+    /// <summary>
+    /// Gets a unique identifier for a node, using Tag data when available.
+    /// </summary>
+    private string GetNodeIdentifier(TreeNode node)
+    {
+        if (node.Tag is ProjectNodeData nodeData)
+        {
+            // Use type and name/data for unique identification
+            if (nodeData.Data != null)
+            {
+                // Try to get a name from the data object
+                try
+                {
+                    if (nodeData.Data is ScadaProject scada)
+                        return $"{nodeData.Type}:{scada.Name}";
+                    if (nodeData.Data is TagTable tagTable)
+                        return $"{nodeData.Type}:{tagTable.Name}";
+                    if (nodeData.Data is LuaScript script)
+                        return $"{nodeData.Type}:{script.Name}";
+                    
+                    // Try dynamic access for ScreenTemplate
+                    dynamic? screenObj = nodeData.Data;
+                    if (screenObj != null)
+                    {
+                        string? screenName = screenObj.Name?.ToString();
+                        if (!string.IsNullOrEmpty(screenName))
+                            return $"{nodeData.Type}:{screenName}";
+                    }
+                }
+                catch { }
+            }
+            
+            // Fall back to type and scada name if available
+            if (!string.IsNullOrEmpty(nodeData.ScadaName))
+                return $"{nodeData.Type}:{nodeData.ScadaName}:{node.Text}";
+            
+            return $"{nodeData.Type}:{node.Text}";
+        }
+        
+        // Fall back to node text
+        return node.Text;
+    }
+
+    /// <summary>
+    /// Restores the expansion state of nodes in the tree view.
+    /// </summary>
+    private void RestoreExpansionState(HashSet<string> expandedPaths)
+    {
+        foreach (TreeNode node in _treeView.Nodes)
+        {
+            RestoreNodeExpansionState(node, "", expandedPaths);
+        }
+    }
+
+    /// <summary>
+    /// Recursively restores the expansion state of a node and its children.
+    /// </summary>
+    private void RestoreNodeExpansionState(TreeNode node, string parentPath, HashSet<string> expandedPaths)
+    {
+        string nodeIdentifier = GetNodeIdentifier(node);
+        string currentPath = string.IsNullOrEmpty(parentPath) ? nodeIdentifier : $"{parentPath}/{nodeIdentifier}";
+        
+        if (expandedPaths.Contains(currentPath))
+        {
+            node.Expand();
+        }
+
+        foreach (TreeNode child in node.Nodes)
+        {
+            RestoreNodeExpansionState(child, currentPath, expandedPaths);
         }
     }
 }

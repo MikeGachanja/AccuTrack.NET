@@ -6,6 +6,7 @@ using System.Linq;
 using System.Windows.Forms;
 using Designer.Modules.TagEngine;
 using Designer.Modules.Events;
+using Newtonsoft.Json.Linq;
 // Removed using Designer.Modules.Project; to break circular dependency
 // Removed using Designer.Modules.ScreenEditor; to break circular dependency
 // ScadaProject and ScreenTemplate will be handled via object/dynamic
@@ -35,6 +36,7 @@ public partial class PropertyEditor : UserControl
     private Button _removeEventButton;
     private Button _editEventButton;
     private Button _saveEventButton;
+    private TextBox _eventNameTextBox;
     private ComboBox _eventCategoryCombo;
     private ComboBox _eventActionCombo;
     private ComboBox _eventTriggerCombo;
@@ -47,6 +49,21 @@ public partial class PropertyEditor : UserControl
     private TextBox? _valueTextBox;
     private TextBox? _scriptPathTextBox;
     private TextBox? _argsTextBox;
+    
+    // Animation tab controls
+    private ListBox? _animationsList;
+    private Button? _addAnimationButton;
+    private Button? _removeAnimationButton;
+    private Button? _saveAnimationButton;
+    private ComboBox? _animationTypeCombo;
+    private TagSelectorWidget? _animationTagSelector;
+    private CheckBox? _animationBitValueCheckBox;
+    private Button? _animationColorButton;
+    private NumericUpDown? _animationFrequencyNumeric;
+    private NumericUpDown? _animationSpeedNumeric;
+    private CheckBox? _animationEnabledCheckBox;
+    private AnimationConfig? _currentEditingAnimation;
+    private List<AnimationConfig> _componentAnimations = new List<AnimationConfig>();
 
     public event EventHandler? RequestAutoSave;
 
@@ -79,6 +96,7 @@ public partial class PropertyEditor : UserControl
         _tabControl.TabPages[3].Controls.Add(_tagsTab);
 
         SetupEventsTab();
+        SetupAnimationTab();
         
         Controls.Add(_tabControl);
     }
@@ -96,10 +114,16 @@ public partial class PropertyEditor : UserControl
             return;
         }
 
+        // Ensure EventsModule is initialized if we have a SCADA project
+        if (_eventsModule == null && _scadaProject != null)
+        {
+            SetScadaProject(_scadaProject);
+        }
+
         UpdateGeneralTab();
         UpdateEventsTab();
+        UpdateAnimationTab();
         UpdateTagsTab();
-        // Animation tab can be implemented later
     }
 
     /// <summary>
@@ -108,6 +132,12 @@ public partial class PropertyEditor : UserControl
     public void SetAvailableTagTables(List<TagTable> tagTables)
     {
         _availableTagTables = tagTables ?? new List<TagTable>();
+        
+        // Update tag selector in animation tab if it exists
+        if (_animationTagSelector != null)
+        {
+            _animationTagSelector.SetAvailableTags(_availableTagTables);
+        }
     }
 
     /// <summary>
@@ -125,8 +155,11 @@ public partial class PropertyEditor : UserControl
     {
         _scadaProject = project;
         
-        // Initialize events module
-        _eventsModule = new EventsModule();
+        // Initialize events module if not already initialized
+        if (_eventsModule == null)
+        {
+            _eventsModule = new EventsModule();
+        }
         _eventsModule.SetScadaProject(project);
         
         // Ensure events.json path is set correctly
@@ -159,6 +192,7 @@ public partial class PropertyEditor : UserControl
     {
         _generalTab.Controls.Clear();
         _eventsTab.Controls.Clear();
+        _animationTab.Controls.Clear();
         _tagsTab.Controls.Clear();
     }
 
@@ -384,6 +418,28 @@ public partial class PropertyEditor : UserControl
 
         int configRow = 0;
 
+        // Event Name
+        configLayout.Controls.Add(new Label { Text = "Event Name:", AutoSize = true }, 0, configRow);
+        _eventNameTextBox = new TextBox { Dock = DockStyle.Fill, Height = 23 };
+        _eventNameTextBox.TextChanged += (s, e) =>
+        {
+            // Update the event name in memory when typing
+            if (_currentEditingEvent != null)
+            {
+                _currentEditingEvent.Name = _eventNameTextBox.Text;
+                // Refresh the list display to show updated name
+                int selectedIndex = _eventsList.SelectedIndex;
+                if (selectedIndex >= 0)
+                {
+                    _eventsList.Items[selectedIndex] = new EventListItem(_currentEditingEvent);
+                    _eventsList.SelectedIndex = selectedIndex;
+                }
+            }
+        };
+        configLayout.Controls.Add(_eventNameTextBox, 1, configRow);
+        configLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        configRow++;
+
         // Category
         configLayout.Controls.Add(new Label { Text = "Category:", AutoSize = true }, 0, configRow);
         _eventCategoryCombo = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
@@ -559,19 +615,36 @@ public partial class PropertyEditor : UserControl
         // Reset event configuration panel when switching components
         ResetEventConfigurationPanel();
         
-        if (_selectedComponent == null || _eventsModule == null)
+        if (_selectedComponent == null)
         {
-            _eventsList.Items.Clear();
+            if (_eventsList != null)
+                _eventsList.Items.Clear();
             return;
         }
 
-        _eventsList.Items.Clear();
-        var componentId = _selectedComponent.Id.ToString();
-        var events = _eventsModule.GetEventsForComponent(componentId);
-        
-        foreach (var evt in events)
+        // Ensure EventsModule is initialized
+        if (_eventsModule == null && _scadaProject != null)
         {
-            _eventsList.Items.Add(new EventListItem(evt));
+            SetScadaProject(_scadaProject);
+        }
+
+        if (_eventsModule == null)
+        {
+            if (_eventsList != null)
+                _eventsList.Items.Clear();
+            return;
+        }
+
+        if (_eventsList != null)
+        {
+            _eventsList.Items.Clear();
+            var componentId = _selectedComponent.Id.ToString();
+            var events = _eventsModule.GetEventsForComponent(componentId);
+            
+            foreach (var evt in events)
+            {
+                _eventsList.Items.Add(new EventListItem(evt));
+            }
         }
     }
     
@@ -588,6 +661,12 @@ public partial class PropertyEditor : UserControl
         if (_eventsList != null)
         {
             _eventsList.SelectedIndex = -1;
+        }
+        
+        // Clear event name
+        if (_eventNameTextBox != null)
+        {
+            _eventNameTextBox.Text = string.Empty;
         }
         
         // Reset combo boxes to defaults
@@ -645,6 +724,440 @@ public partial class PropertyEditor : UserControl
 
         _tagsTab.Controls.Add(layout);
     }
+    
+    private void SetupAnimationTab()
+    {
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 1,
+            Padding = new Padding(5)
+        };
+
+        // Animations list group
+        var listGroup = new GroupBox { Text = "Animations", Dock = DockStyle.Fill };
+        var listLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(5) };
+
+        _animationsList = new ListBox { Dock = DockStyle.Fill, Height = 150 };
+        _animationsList.SelectedIndexChanged += OnAnimationSelected;
+        listLayout.Controls.Add(_animationsList, 0, 0);
+        listLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 60F));
+
+        // Animation buttons
+        var buttonPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Height = 30 };
+        _addAnimationButton = new Button { Text = "Add Animation", Width = 100 };
+        _addAnimationButton.Click += OnAddAnimation;
+        _removeAnimationButton = new Button { Text = "Remove", Width = 80 };
+        _removeAnimationButton.Click += OnRemoveAnimation;
+        _saveAnimationButton = new Button { Text = "Save", Width = 80, Enabled = false };
+        _saveAnimationButton.Click += OnSaveAnimation;
+        buttonPanel.Controls.Add(_addAnimationButton);
+        buttonPanel.Controls.Add(_removeAnimationButton);
+        buttonPanel.Controls.Add(_saveAnimationButton);
+        listLayout.Controls.Add(buttonPanel, 0, 1);
+        listLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 35F));
+
+        listGroup.Controls.Add(listLayout);
+        layout.Controls.Add(listGroup, 0, 0);
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 40F));
+
+        // Animation properties group
+        var propsGroup = new GroupBox { Text = "Animation Properties", Dock = DockStyle.Fill };
+        var propsLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(5) };
+        propsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        propsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+        int propRow = 0;
+
+        // Animation type
+        propsLayout.Controls.Add(new Label { Text = "Type:", AutoSize = true }, 0, propRow);
+        _animationTypeCombo = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+        _animationTypeCombo.Items.AddRange(new[] { "Visibility", "ColorChange", "Flashing", "Translation" });
+        _animationTypeCombo.SelectedIndexChanged += OnAnimationTypeChanged;
+        propsLayout.Controls.Add(_animationTypeCombo, 1, propRow);
+        propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        propRow++;
+
+        // Tag selector
+        propsLayout.Controls.Add(new Label { Text = "Tag:", AutoSize = true }, 0, propRow);
+        _animationTagSelector = new TagSelectorWidget { Dock = DockStyle.Fill, Height = 25 };
+        propsLayout.Controls.Add(_animationTagSelector, 1, propRow);
+        propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        propRow++;
+
+        // Bit value (for Visibility)
+        _animationBitValueCheckBox = new CheckBox { Text = "Show when tag is true", Checked = true };
+        propsLayout.Controls.Add(_animationBitValueCheckBox, 0, propRow);
+        propsLayout.SetColumnSpan(_animationBitValueCheckBox, 2);
+        propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        propRow++;
+
+        // Color (for ColorChange/Flashing)
+        propsLayout.Controls.Add(new Label { Text = "Color:", AutoSize = true }, 0, propRow);
+        _animationColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(_animationColorButton, Color.Red);
+        _animationColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = _animationColorButton.BackColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    UpdateColorButton(_animationColorButton, colorDialog.Color);
+                }
+            }
+        };
+        propsLayout.Controls.Add(_animationColorButton, 1, propRow);
+        propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        propRow++;
+
+        // Frequency (for Flashing)
+        propsLayout.Controls.Add(new Label { Text = "Frequency (Hz):", AutoSize = true }, 0, propRow);
+        _animationFrequencyNumeric = new NumericUpDown { Minimum = 0.1m, Maximum = 10m, DecimalPlaces = 1, Value = 1.0m, Width = 100 };
+        propsLayout.Controls.Add(_animationFrequencyNumeric, 1, propRow);
+        propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        propRow++;
+
+        // Speed (for Translation)
+        propsLayout.Controls.Add(new Label { Text = "Speed (px/s):", AutoSize = true }, 0, propRow);
+        _animationSpeedNumeric = new NumericUpDown { Minimum = 0.1m, Maximum = 1000m, DecimalPlaces = 1, Value = 1.0m, Width = 100 };
+        propsLayout.Controls.Add(_animationSpeedNumeric, 1, propRow);
+        propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        propRow++;
+
+        // Enabled
+        _animationEnabledCheckBox = new CheckBox { Text = "Enabled", Checked = true };
+        propsLayout.Controls.Add(_animationEnabledCheckBox, 0, propRow);
+        propsLayout.SetColumnSpan(_animationEnabledCheckBox, 2);
+        propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+        propsGroup.Controls.Add(propsLayout);
+        layout.Controls.Add(propsGroup, 0, 1);
+        layout.RowStyles.Add(new RowStyle(SizeType.Percent, 60F));
+
+        _animationTab.Controls.Add(layout);
+        
+        // Initialize type combo
+        _animationTypeCombo.SelectedIndex = 0;
+        OnAnimationTypeChanged(null, EventArgs.Empty);
+    }
+    
+    private void UpdateAnimationTab()
+    {
+        if (_selectedComponent == null)
+        {
+            if (_animationsList != null)
+                _animationsList.Items.Clear();
+            _componentAnimations.Clear();
+            return;
+        }
+
+        // Load animations from component properties
+        _componentAnimations.Clear();
+        if (_animationsList != null)
+            _animationsList.Items.Clear();
+
+        if (_selectedComponent.Properties.ContainsKey("animations"))
+        {
+            try
+            {
+                var animationsObj = _selectedComponent.Properties["animations"];
+                if (animationsObj is JObject animationsJson)
+                {
+                    var animationsArray = animationsJson["animations"] as Newtonsoft.Json.Linq.JArray;
+                    if (animationsArray != null && _animationsList != null)
+                    {
+                        foreach (var item in animationsArray)
+                        {
+                            if (item is JObject animObj)
+                            {
+                                var config = AnimationConfig.FromJson(animObj);
+                                _componentAnimations.Add(config);
+                                _animationsList.Items.Add(config.Name);
+                            }
+                        }
+                    }
+                }
+                else if (animationsObj is Newtonsoft.Json.Linq.JArray directArray && _animationsList != null)
+                {
+                    // Handle case where animations is stored directly as an array
+                    foreach (var item in directArray)
+                    {
+                        if (item is JObject animObj)
+                        {
+                            var config = AnimationConfig.FromJson(animObj);
+                            _componentAnimations.Add(config);
+                            _animationsList.Items.Add(config.Name);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Failed to load animations, start fresh
+                System.Diagnostics.Debug.WriteLine($"Failed to load animations: {ex.Message}");
+            }
+        }
+    }
+    
+    private void OnAddAnimation(object? sender, EventArgs e)
+    {
+        if (_selectedComponent == null)
+            return;
+
+        string baseName = $"Animation {_componentAnimations.Count + 1}";
+        string uniqueName = GenerateUniqueAnimationName(baseName);
+
+        var config = new AnimationConfig
+        {
+            Name = uniqueName,
+            Type = AnimationType.Visibility,
+            TagName = string.Empty,
+            BitValue = true,
+            Color = "#FF0000",
+            Frequency = 1.0,
+            Speed = 1.0,
+            Enabled = true
+        };
+
+        _componentAnimations.Add(config);
+        if (_animationsList != null)
+        {
+            _animationsList.Items.Add(config.Name);
+            _animationsList.SelectedItem = config.Name;
+        }
+        _currentEditingAnimation = config;
+        if (_saveAnimationButton != null)
+            _saveAnimationButton.Enabled = true;
+    }
+    
+    private void OnRemoveAnimation(object? sender, EventArgs e)
+    {
+        if (_animationsList?.SelectedItem == null)
+            return;
+
+        string selectedName = _animationsList.SelectedItem.ToString() ?? string.Empty;
+        var config = _componentAnimations.FirstOrDefault(a => a.Name == selectedName);
+        if (config != null)
+        {
+            _componentAnimations.Remove(config);
+            _animationsList.Items.Remove(selectedName);
+            SaveAnimationsToComponent();
+            TriggerAutoSave();
+        }
+    }
+    
+    private void OnSaveAnimation(object? sender, EventArgs e)
+    {
+        if (_currentEditingAnimation == null || _selectedComponent == null)
+            return;
+
+        // Update animation config from UI
+        if (_animationTypeCombo != null)
+        {
+            if (Enum.TryParse<AnimationType>(_animationTypeCombo.SelectedItem?.ToString(), out AnimationType type))
+            {
+                _currentEditingAnimation.Type = type;
+            }
+        }
+
+        if (_animationTagSelector != null)
+        {
+            _currentEditingAnimation.TagName = _animationTagSelector.SelectedTagName();
+        }
+
+        if (_animationBitValueCheckBox != null)
+        {
+            _currentEditingAnimation.BitValue = _animationBitValueCheckBox.Checked;
+        }
+
+        if (_animationColorButton != null)
+        {
+            _currentEditingAnimation.Color = ColorToHex(_animationColorButton.BackColor);
+        }
+
+        if (_animationFrequencyNumeric != null)
+        {
+            _currentEditingAnimation.Frequency = (double)_animationFrequencyNumeric.Value;
+        }
+
+        if (_animationSpeedNumeric != null)
+        {
+            _currentEditingAnimation.Speed = (double)_animationSpeedNumeric.Value;
+        }
+
+        if (_animationEnabledCheckBox != null)
+        {
+            _currentEditingAnimation.Enabled = _animationEnabledCheckBox.Checked;
+        }
+
+        // Update list if name changed
+        if (_animationsList != null && _animationsList.SelectedIndex >= 0)
+        {
+            int index = _animationsList.SelectedIndex;
+            _animationsList.Items[index] = _currentEditingAnimation.Name;
+        }
+
+        SaveAnimationsToComponent();
+        TriggerAutoSave();
+        _saveAnimationButton!.Enabled = false;
+    }
+    
+    private void OnAnimationSelected(object? sender, EventArgs e)
+    {
+        if (_animationsList?.SelectedItem == null)
+        {
+            _currentEditingAnimation = null;
+            _saveAnimationButton!.Enabled = false;
+            return;
+        }
+
+        string selectedName = _animationsList.SelectedItem.ToString() ?? string.Empty;
+        _currentEditingAnimation = _componentAnimations.FirstOrDefault(a => a.Name == selectedName);
+        
+        if (_currentEditingAnimation != null)
+        {
+            LoadAnimationToUI(_currentEditingAnimation);
+            _saveAnimationButton!.Enabled = true;
+        }
+    }
+    
+    private void LoadAnimationToUI(AnimationConfig config)
+    {
+        if (_animationTypeCombo != null)
+        {
+            int index = _animationTypeCombo.Items.IndexOf(config.Type.ToString());
+            if (index >= 0)
+                _animationTypeCombo.SelectedIndex = index;
+        }
+
+        if (_animationTagSelector != null)
+        {
+            _animationTagSelector.SetSelectedTagName(config.TagName);
+        }
+
+        if (_animationBitValueCheckBox != null)
+        {
+            _animationBitValueCheckBox.Checked = config.BitValue;
+        }
+
+        if (_animationColorButton != null)
+        {
+            UpdateColorButton(_animationColorButton, ParseColor(config.Color));
+        }
+
+        if (_animationFrequencyNumeric != null)
+        {
+            _animationFrequencyNumeric.Value = (decimal)config.Frequency;
+        }
+
+        if (_animationSpeedNumeric != null)
+        {
+            _animationSpeedNumeric.Value = (decimal)config.Speed;
+        }
+
+        if (_animationEnabledCheckBox != null)
+        {
+            _animationEnabledCheckBox.Checked = config.Enabled;
+        }
+
+        OnAnimationTypeChanged(null, EventArgs.Empty);
+    }
+    
+    private void OnAnimationTypeChanged(object? sender, EventArgs e)
+    {
+        if (_animationTypeCombo == null)
+            return;
+
+        bool isVisibility = _animationTypeCombo.SelectedItem?.ToString() == "Visibility";
+        bool isColorChange = _animationTypeCombo.SelectedItem?.ToString() == "ColorChange";
+        bool isFlashing = _animationTypeCombo.SelectedItem?.ToString() == "Flashing";
+        bool isTranslation = _animationTypeCombo.SelectedItem?.ToString() == "Translation";
+
+        if (_animationBitValueCheckBox != null)
+            _animationBitValueCheckBox.Visible = isVisibility;
+        if (_animationColorButton != null)
+            _animationColorButton.Visible = isColorChange || isFlashing;
+        if (_animationFrequencyNumeric != null)
+            _animationFrequencyNumeric.Visible = isFlashing;
+        if (_animationSpeedNumeric != null)
+            _animationSpeedNumeric.Visible = isTranslation;
+    }
+    
+    private void SaveAnimationsToComponent()
+    {
+        if (_selectedComponent == null)
+            return;
+
+        var animationsArray = new Newtonsoft.Json.Linq.JArray();
+        foreach (var config in _componentAnimations)
+        {
+            animationsArray.Add(config.ToJson());
+        }
+
+        var animationsObj = new JObject
+        {
+            ["animations"] = animationsArray
+        };
+
+        _selectedComponent.Properties["animations"] = animationsObj;
+    }
+    
+    private string GenerateUniqueAnimationName(string baseName)
+    {
+        // Get all animation names from current component and other components in the scene
+        var usedNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        
+        // Add names from current component
+        foreach (var anim in _componentAnimations)
+        {
+            if (!string.IsNullOrEmpty(anim.Name))
+                usedNames.Add(anim.Name);
+        }
+
+        // Check if base name is unique
+        if (!usedNames.Contains(baseName))
+            return baseName;
+
+        // Generate unique name
+        int counter = 1;
+        while (true)
+        {
+            string candidate = $"{baseName} {counter}";
+            if (!usedNames.Contains(candidate))
+                return candidate;
+            counter++;
+            
+            if (counter > 1000)
+                return $"{baseName} {Guid.NewGuid()}";
+        }
+    }
+    
+    private Color ParseColor(string colorHex)
+    {
+        try
+        {
+            if (colorHex.StartsWith("#"))
+            {
+                colorHex = colorHex.Substring(1);
+            }
+            
+            if (colorHex.Length == 6)
+            {
+                int r = Convert.ToInt32(colorHex.Substring(0, 2), 16);
+                int g = Convert.ToInt32(colorHex.Substring(2, 2), 16);
+                int b = Convert.ToInt32(colorHex.Substring(4, 2), 16);
+                return Color.FromArgb(r, g, b);
+            }
+        }
+        catch { }
+        
+        return Color.Red; // Default
+    }
+    
+    private string ColorToHex(Color color)
+    {
+        return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
+    }
 
     private void OnAddEvent(object? sender, EventArgs e)
     {
@@ -653,6 +1166,10 @@ public partial class PropertyEditor : UserControl
 
         // Clear UI for new event
         _currentEditingEvent = null;
+        if (_eventNameTextBox != null)
+        {
+            _eventNameTextBox.Text = $"Event {_eventsList.Items.Count + 1}";
+        }
         _eventTriggerCombo.SelectedIndex = 0;
         _eventCategoryCombo.SelectedIndex = 0;
         if (_eventActionCombo.Items.Count > 0)
@@ -677,6 +1194,17 @@ public partial class PropertyEditor : UserControl
                 if (_eventsModule.UpdateEvent(evt.Id, evt))
                 {
                     System.Diagnostics.Debug.WriteLine($"[PropertyEditor] Updated event: {evt.Id}");
+                    // Refresh the events list to show updated name
+                    UpdateEventsTab();
+                    // Reselect the updated event
+                    for (int i = 0; i < _eventsList.Items.Count; i++)
+                    {
+                        if (_eventsList.Items[i] is EventListItem item && item.Event.Id == evt.Id)
+                        {
+                            _eventsList.SelectedIndex = i;
+                            break;
+                        }
+                    }
                 }
             }
             else
@@ -690,6 +1218,17 @@ public partial class PropertyEditor : UserControl
                     if (!_selectedComponent.EventIds.Contains(evt.Id))
                     {
                         _selectedComponent.EventIds.Add(evt.Id);
+                    }
+                    
+                    // Refresh the events list and select the new event
+                    UpdateEventsTab();
+                    for (int i = 0; i < _eventsList.Items.Count; i++)
+                    {
+                        if (_eventsList.Items[i] is EventListItem item && item.Event.Id == evt.Id)
+                        {
+                            _eventsList.SelectedIndex = i;
+                            break;
+                        }
                     }
                 }
             }
@@ -748,10 +1287,25 @@ public partial class PropertyEditor : UserControl
         if (_selectedComponent == null)
             return null;
 
+        // Get event name from TextBox, or generate default name
+        string eventName = string.Empty;
+        if (_eventNameTextBox != null && !string.IsNullOrWhiteSpace(_eventNameTextBox.Text))
+        {
+            eventName = _eventNameTextBox.Text.Trim();
+        }
+        else if (_currentEditingEvent != null && !string.IsNullOrEmpty(_currentEditingEvent.Name))
+        {
+            eventName = _currentEditingEvent.Name;
+        }
+        else
+        {
+            eventName = $"Event {_eventsList.Items.Count + 1}";
+        }
+
         var evt = new ScadaEvent
         {
             Id = _currentEditingEvent?.Id ?? Guid.NewGuid().ToString(),
-            Name = _currentEditingEvent?.Name ?? $"Event {_eventsList.Items.Count + 1}",
+            Name = eventName,
             Description = _currentEditingEvent?.Description ?? "",
             Trigger = new EventTrigger
             {
@@ -833,6 +1387,12 @@ public partial class PropertyEditor : UserControl
     private void LoadEventToUI(ScadaEvent evt)
     {
         _currentEditingEvent = evt;
+        
+        // Set event name
+        if (_eventNameTextBox != null)
+        {
+            _eventNameTextBox.Text = evt.Name ?? string.Empty;
+        }
         
         // Set trigger
         int triggerIndex = _eventTriggerCombo.Items.IndexOf(evt.Trigger.Type);
