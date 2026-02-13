@@ -80,36 +80,36 @@ Step into: Stepping over non-user code 'Runtime.Program.<>c__DisplayClass3_0..ct
 [OpcUaClientConnection] Start: Starting OPC UA client connection 'Module1' to endpoint 'opc.tcp://localhost:4840'
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Avalonia.Desktop.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Avalonia.Fonts.Inter.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
-'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Microsoft.Extensions.Logging.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Avalonia.Win32.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\MicroCom.Runtime.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\8.0.24\System.Numerics.Vectors.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Microsoft.Extensions.Logging.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\8.0.24\System.Security.Cryptography.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\System.Diagnostics.DiagnosticSource.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\System.Collections.Immutable.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Avalonia.Skia.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\SkiaSharp.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Microsoft.Extensions.Logging.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Microsoft.Extensions.DependencyInjection.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\8.0.24\System.ComponentModel.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Microsoft.Extensions.DependencyInjection.Abstractions.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Microsoft.Extensions.Options.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
-'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\SkiaSharp.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Avalonia.OpenGL.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\8.0.24\System.Collections.NonGeneric.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Avalonia.Vulkan.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Opc.Ua.Security.Certificates.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\8.0.24\System.Net.NameResolution.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
-'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Avalonia.Vulkan.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Discovering endpoints from 'opc.tcp://localhost:4840'
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\8.0.24\System.Xml.ReaderWriter.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\8.0.24\System.Private.Xml.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\8.0.24\System.Runtime.Serialization.Xml.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\8.0.24\System.Private.DataContractSerialization.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Avalonia.MicroCom.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
-'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Avalonia.Markup.Xaml.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Avalonia.Metal.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Avalonia.Markup.Xaml.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Avalonia.Themes.Fluent.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
-'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Avalonia.Dialogs.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\8.0.24\System.Threading.ThreadPool.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Avalonia.Dialogs.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\HarfBuzzSharp.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 'Runtime.exe' (CoreCLR: clrhost): Loaded 'D:\Dev\DarkStar\bin\Debug\Runtime\Avalonia.Markup.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
 [MainWindow] Resized to match project resolution: 1366x768
@@ -123,11 +123,11 @@ Step into: Stepping over non-user code 'Runtime.Program.<>c__DisplayClass3_0..ct
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Creating session to endpoint 'opc.tcp://localhost:4840/'...
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Session created successfully
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully connected to OPC UA server at opc.tcp://localhost:4840
-[OpcUaClientConnection] ConnectAndSubscribeAsync: Session ID: ns=1;i=100010, Session Name: DarkStar Runtime
+[OpcUaClientConnection] ConnectAndSubscribeAsync: Session ID: ns=1;i=100011, Session Name: DarkStar Runtime
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Endpoint URL: opc.tcp://localhost:4840/
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Server Description: OPCUAServer@Gachanja
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Starting to browse all nodes from server...
-The thread '.NET Long Running Task' (25748) has exited with code 0 (0x0).
+The thread '.NET Long Running Task' (10968) has exited with code 0 (0x0).
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully browsed 119 nodes from server
 [OpcUaClientConnection] GetTagMappings: Found 0 tag mappings in config
 [Runtime] TagProvider called: Returning 5 tags from TagManager (Total tags: 5)
@@ -146,6 +146,8 @@ Exception thrown: 'System.ArgumentException' in Opc.Ua.Types.dll
 [OpcUaClientConnection] TryResolveNodeId: Failed to parse 'MD4' as NodeId, trying alternatives...
 [OpcUaClientConnection] TryResolveNodeId: Created string NodeId in namespace 0: s=MD4
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Resolved NodeId 'MD4' to s=MD4
+Exception thrown: 'Opc.Ua.ServiceResultException' in System.Private.CoreLib.dll
+[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Failed to verify node 's=MD4' before subscribing: [80340000]
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully added subscription for tag 'mFIOCycles'
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Node 'M0.2' not found in browsed nodes, but will attempt subscription anyway
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Attempting to subscribe to tag 'mFIOPause' with NodeId 'M0.2'
@@ -153,6 +155,8 @@ Exception thrown: 'System.ArgumentException' in Opc.Ua.Types.dll
 [OpcUaClientConnection] TryResolveNodeId: Failed to parse 'M0.2' as NodeId, trying alternatives...
 [OpcUaClientConnection] TryResolveNodeId: Created string NodeId in namespace 0: s=M0.2
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Resolved NodeId 'M0.2' to s=M0.2
+Exception thrown: 'Opc.Ua.ServiceResultException' in System.Private.CoreLib.dll
+[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Failed to verify node 's=M0.2' before subscribing: [80340000]
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully added subscription for tag 'mFIOPause'
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Node 'M0.0' not found in browsed nodes, but will attempt subscription anyway
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Attempting to subscribe to tag 'mFIORun' with NodeId 'M0.0'
@@ -160,6 +164,8 @@ Exception thrown: 'System.ArgumentException' in Opc.Ua.Types.dll
 [OpcUaClientConnection] TryResolveNodeId: Failed to parse 'M0.0' as NodeId, trying alternatives...
 [OpcUaClientConnection] TryResolveNodeId: Created string NodeId in namespace 0: s=M0.0
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Resolved NodeId 'M0.0' to s=M0.0
+Exception thrown: 'Opc.Ua.ServiceResultException' in System.Private.CoreLib.dll
+[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Failed to verify node 's=M0.0' before subscribing: [80340000]
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully added subscription for tag 'mFIORun'
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Node 'MD0' not found in browsed nodes, but will attempt subscription anyway
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Attempting to subscribe to tag 'mFIOTimeScale' with NodeId 'MD0'
@@ -167,6 +173,8 @@ Exception thrown: 'System.ArgumentException' in Opc.Ua.Types.dll
 [OpcUaClientConnection] TryResolveNodeId: Failed to parse 'MD0' as NodeId, trying alternatives...
 [OpcUaClientConnection] TryResolveNodeId: Created string NodeId in namespace 0: s=MD0
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Resolved NodeId 'MD0' to s=MD0
+Exception thrown: 'Opc.Ua.ServiceResultException' in System.Private.CoreLib.dll
+[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Failed to verify node 's=MD0' before subscribing: [80340000]
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully added subscription for tag 'mFIOTimeScale'
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Node 'M0.1' not found in browsed nodes, but will attempt subscription anyway
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Attempting to subscribe to tag 'mFIOReset' with NodeId 'M0.1'
@@ -174,8 +182,71 @@ Exception thrown: 'System.ArgumentException' in Opc.Ua.Types.dll
 [OpcUaClientConnection] TryResolveNodeId: Failed to parse 'M0.1' as NodeId, trying alternatives...
 [OpcUaClientConnection] TryResolveNodeId: Created string NodeId in namespace 0: s=M0.1
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Resolved NodeId 'M0.1' to s=M0.1
+Exception thrown: 'Opc.Ua.ServiceResultException' in System.Private.CoreLib.dll
+[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Failed to verify node 's=M0.1' before subscribing: [80340000]
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully added subscription for tag 'mFIOReset'
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Adding subscription to session (5 items, 0 failed)
-The thread '.NET Long Running Task' (25020) has exited with code 0 (0x0).
-[OpcUaClientConnection] ConnectAndSubscribeAsync: Subscription created successfully. Subscription ID: 1, PublishingInterval: 1000ms
+The thread '.NET Long Running Task' (19760) has exited with code 0 (0x0).
+[OpcUaClientConnection] ConnectAndSubscribeAsync: Subscription created successfully. Subscription ID: 2, PublishingInterval: 1000ms
+[OpcUaClientConnection] ConnectAndSubscribeAsync: Created 5 monitored items. Status will be determined by notification callbacks.
+[OpcUaClientConnection] ConnectAndSubscribeAsync: MonitoredItem 'mFIOCycles' (NodeId: s=MD4, ClientHandle: 3)
+[OpcUaClientConnection] ConnectAndSubscribeAsync: MonitoredItem 'mFIOPause' (NodeId: s=M0.2, ClientHandle: 4)
+[OpcUaClientConnection] ConnectAndSubscribeAsync: MonitoredItem 'mFIORun' (NodeId: s=M0.0, ClientHandle: 5)
+[OpcUaClientConnection] ConnectAndSubscribeAsync: MonitoredItem 'mFIOTimeScale' (NodeId: s=MD0, ClientHandle: 6)
+[OpcUaClientConnection] ConnectAndSubscribeAsync: MonitoredItem 'mFIOReset' (NodeId: s=M0.1, ClientHandle: 7)
 [OpcUaClientConnection] ConnectAndSubscribeAsync: Connection setup complete. Connected: True, Status: Connected (119 nodes, 5 tags subscribed)
+[TagIOHandler] WriteTag: Starting write operation for tag 'mFIORun', Value: '1' (Type: Int32)
+[TagIOHandler] WriteTag: Tag found - Name: 'mFIORun', Address: 'M0.0', DataType: 'Bit'
+[TagIOHandler] WriteTag: Converted value from '1' (Type: Int32) to 'True' (Type: Boolean) for DataType 'Bit'
+[TagIOHandler] WriteTag: Attempting to write tag 'mFIORun' by address 'M0.0'
+[CommunicationModule] WriteTagByAddress: Attempting to write address 'M0.0', Value: 'True' (Type: Boolean)
+[CommunicationModule] WriteTagByAddress: Trying OPC UA client 'Module1'
+[OpcUaClientConnection] WriteTag: Attempting to write NodeId='M0.0', Value='True' (Type: Boolean)
+Exception thrown: 'System.ArgumentException' in Opc.Ua.Types.dll
+[OpcUaClientConnection] TryResolveNodeId: Failed to parse 'M0.0' as NodeId, trying alternatives...
+[OpcUaClientConnection] TryResolveNodeId: Created string NodeId in namespace 0: s=M0.0
+[OpcUaClientConnection] WriteTag: NodeId resolved: s=M0.0
+[OpcUaClientConnection] WriteTag: Creating Variant from value type Boolean
+[OpcUaClientConnection] WriteTag: Preserving boolean value: True
+[OpcUaClientConnection] WriteTag: Creating Variant with converted value type Boolean
+[OpcUaClientConnection] WriteTag: Variant created successfully. Type: Boolean
+[OpcUaClientConnection] WriteTag: DataValue created successfully
+[OpcUaClientConnection] WriteTag: WriteValue created successfully
+[OpcUaClientConnection] WriteTag: Calling session.Write...
+Exception thrown: 'System.FormatException' in Opc.Ua.Types.dll
+[OpcUaClientConnection] WriteTag Exception: FormatException - Invalid format string: 'X8'.
+'Runtime.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\8.0.24\System.Diagnostics.StackTrace.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+'Runtime.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\8.0.24\System.Reflection.Metadata.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+'Runtime.exe' (CoreCLR: clrhost): Loaded 'C:\Program Files\dotnet\shared\Microsoft.NETCore.App\8.0.24\System.IO.MemoryMappedFiles.dll'. Skipped loading symbols. Module is optimized and the debugger option 'Just My Code' is enabled.
+[OpcUaClientConnection] WriteTag Exception StackTrace:    at Opc.Ua.StatusCode.ToString(String format, IFormatProvider formatProvider)
+   at System.Runtime.CompilerServices.DefaultInterpolatedStringHandler.AppendFormatted[T](T value, String format)
+   at Runtime.Modules.Communication.OpcUaClientConnection.WriteTag(String nodeIdOrTagName, Object value) in D:\Dev\DarkStar\RuntimeModules\Communication\OpcUaClientConnection.cs:line 679
+[OpcUaClientConnection] WriteTag Exception Details - NodeId: 'M0.0', Value: 'True', ValueType: Boolean
+[CommunicationModule] WriteTagByAddress: Failed to write address 'M0.0' - no suitable client found or write failed
+[TagIOHandler] WriteTag: Write by address 'M0.0' returned False
+[TagIOHandler] WriteTag: Failed to write tag 'mFIORun' by address 'M0.0', will try tag name
+[TagIOHandler] WriteTag: Attempting to write tag 'mFIORun' by name
+[CommunicationModule] WriteTagByAddress: Attempting to write address 'mFIORun', Value: 'True' (Type: Boolean)
+[CommunicationModule] WriteTagByAddress: Trying OPC UA client 'Module1'
+[OpcUaClientConnection] WriteTag: Attempting to write NodeId='mFIORun', Value='True' (Type: Boolean)
+Exception thrown: 'System.ArgumentException' in Opc.Ua.Types.dll
+[OpcUaClientConnection] TryResolveNodeId: Failed to parse 'mFIORun' as NodeId, trying alternatives...
+[OpcUaClientConnection] TryResolveNodeId: Created string NodeId in namespace 0: s=mFIORun
+[OpcUaClientConnection] WriteTag: NodeId resolved: s=mFIORun
+[OpcUaClientConnection] WriteTag: Creating Variant from value type Boolean
+[OpcUaClientConnection] WriteTag: Preserving boolean value: True
+[OpcUaClientConnection] WriteTag: Creating Variant with converted value type Boolean
+[OpcUaClientConnection] WriteTag: Variant created successfully. Type: Boolean
+[OpcUaClientConnection] WriteTag: DataValue created successfully
+[OpcUaClientConnection] WriteTag: WriteValue created successfully
+[OpcUaClientConnection] WriteTag: Calling session.Write...
+Exception thrown: 'System.FormatException' in Opc.Ua.Types.dll
+[OpcUaClientConnection] WriteTag Exception: FormatException - Invalid format string: 'X8'.
+[OpcUaClientConnection] WriteTag Exception StackTrace:    at Opc.Ua.StatusCode.ToString(String format, IFormatProvider formatProvider)
+   at System.Runtime.CompilerServices.DefaultInterpolatedStringHandler.AppendFormatted[T](T value, String format)
+   at Runtime.Modules.Communication.OpcUaClientConnection.WriteTag(String nodeIdOrTagName, Object value) in D:\Dev\DarkStar\RuntimeModules\Communication\OpcUaClientConnection.cs:line 679
+[OpcUaClientConnection] WriteTag Exception Details - NodeId: 'mFIORun', Value: 'True', ValueType: Boolean
+[CommunicationModule] WriteTagByAddress: Failed to write address 'mFIORun' - no suitable client found or write failed
+[TagIOHandler] WriteTag: Write by name 'mFIORun' returned False
+[TagIOHandler] WriteTag: Failed to write tag 'mFIORun' by name
+[TagIOHandler] WriteTag: Updating TagManager with quality NotConnected
