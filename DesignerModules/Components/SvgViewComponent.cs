@@ -63,11 +63,43 @@ public class SvgViewComponent : BaseComponent
                     var svgDoc = SvgDocument.Open(fullSvgPath);
                     if (svgDoc != null)
                     {
-                        // Calculate draw size with padding
-                        var drawSize = new SizeF(
-                            Math.Max(1, rect.Width - 4),
-                            Math.Max(1, rect.Height - 4)
-                        );
+                        // Calculate draw area with padding
+                        float drawWidth = Math.Max(1, rect.Width - 4);
+                        float drawHeight = Math.Max(1, rect.Height - 4);
+                        
+                        // Get original SVG bounds
+                        var originalBounds = svgDoc.Bounds;
+                        float originalWidth = originalBounds.Width > 0 ? originalBounds.Width : (svgDoc.Width.Value > 0 ? svgDoc.Width.Value : 0);
+                        float originalHeight = originalBounds.Height > 0 ? originalBounds.Height : (svgDoc.Height.Value > 0 ? svgDoc.Height.Value : 0);
+                        
+                        // If original dimensions are invalid, try to calculate from viewBox
+                        if (originalWidth <= 0 || originalHeight <= 0)
+                        {
+                            if (svgDoc.ViewBox.Width > 0 && svgDoc.ViewBox.Height > 0)
+                            {
+                                originalWidth = svgDoc.ViewBox.Width;
+                                originalHeight = svgDoc.ViewBox.Height;
+                            }
+                            else
+                            {
+                                // Fallback: use draw size
+                                originalWidth = drawWidth;
+                                originalHeight = drawHeight;
+                            }
+                        }
+                        
+                        // Set SVG document dimensions to fill the component space
+                        svgDoc.Width = new Svg.SvgUnit(Svg.SvgUnitType.Pixel, drawWidth);
+                        svgDoc.Height = new Svg.SvgUnit(Svg.SvgUnitType.Pixel, drawHeight);
+                        
+                        // Set ViewBox to original SVG bounds to ensure proper scaling
+                        if (originalWidth > 0 && originalHeight > 0)
+                        {
+                            svgDoc.ViewBox = new Svg.SvgViewBox(0, 0, originalWidth, originalHeight);
+                        }
+                        
+                        // Set aspect ratio to none to allow stretching (fill mode)
+                        svgDoc.AspectRatio = new Svg.SvgAspectRatio(Svg.SvgPreserveAspectRatio.none);
                         
                         // Save graphics state
                         var state = g.Save();
@@ -75,8 +107,8 @@ public class SvgViewComponent : BaseComponent
                         // Translate to draw position with padding
                         g.TranslateTransform(rect.X + 2, rect.Y + 2);
                         
-                        // Render SVG to fit the component bounds
-                        svgDoc.Draw(g, drawSize);
+                        // Render SVG to fill the component bounds
+                        svgDoc.Draw(g);
                         
                         // Restore graphics state
                         g.Restore(state);
