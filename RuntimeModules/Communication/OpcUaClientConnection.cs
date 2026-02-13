@@ -199,6 +199,17 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 }
                 _status.Status = $"Connected ({_allNodes.Count} nodes discovered)";
                 System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully browsed {_allNodes.Count} nodes from server");
+                
+                // Log first 20 nodes for debugging (to help identify available NodeIds)
+                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Sample of available nodes (first 20):");
+                foreach (var node in _allNodes.Take(20))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection]   - NodeId: {node.NodeId}, DisplayName: {node.DisplayName}");
+                }
+                if (_allNodes.Count > 20)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection]   ... and {_allNodes.Count - 20} more nodes");
+                }
             }
             catch (Exception ex)
             {
@@ -270,7 +281,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                             else
                             {
                                 var statusCode = testRead?.StatusCode ?? StatusCodes.Bad;
-                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Node '{nodeId}' is not readable. StatusCode: 0x{statusCode:X8}. Subscription may fail.");
+                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Node '{nodeId}' is not readable. StatusCode: 0x{(uint)statusCode:X8}. Subscription may fail.");
                             }
                         }
                         catch (Exception ex)
@@ -294,7 +305,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                                 var statusCode = n.Value.StatusCode;
                                 var sourceTimestamp = n.Value.SourceTimestamp;
                                 
-                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Tag '{tagName}' changed to '{value}' (Type: {value.GetType().Name}, StatusCode: 0x{statusCode:X8}, Timestamp: {sourceTimestamp})");
+                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Tag '{tagName}' changed to '{value}' (Type: {value.GetType().Name}, StatusCode: 0x{(uint)statusCode:X8}, Timestamp: {sourceTimestamp})");
                                 
                                 if (Opc.Ua.StatusCode.IsGood(statusCode))
                                 {
@@ -302,7 +313,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                                 }
                                 else
                                 {
-                                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Tag '{tagName}' has bad status code 0x{statusCode:X8}, not invoking callback");
+                                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Tag '{tagName}' has bad status code 0x{(uint)statusCode:X8}, not invoking callback");
                                 }
                             }
                             else
@@ -529,7 +540,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: Read failed with StatusCode: {dataValue?.StatusCode:X8} for NodeId '{nodeIdOrTagName}'");
+                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: Read failed with StatusCode: 0x{(uint)(dataValue?.StatusCode ?? StatusCodes.Bad):X8} for NodeId '{nodeIdOrTagName}'");
             }
         }
         catch (ArgumentException ex)
@@ -676,7 +687,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Write failed with StatusCode: 0x{statusCode:X8} for NodeId '{nodeIdOrTagName}'");
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Write failed with StatusCode: 0x{(uint)statusCode:X8} for NodeId '{nodeIdOrTagName}'");
                 }
             }
             else
@@ -860,23 +871,37 @@ public sealed class OpcUaClientConnection : IConnectionStub
         // Strategy 4: Search browsed nodes by DisplayName or NodeId string
         lock (_nodesLock)
         {
+            // Try exact match first
             var matchingNode = _allNodes.FirstOrDefault(n => 
                 n.DisplayName.Equals(identifier, StringComparison.OrdinalIgnoreCase) ||
-                n.NodeId.Equals(identifier, StringComparison.OrdinalIgnoreCase) ||
-                n.NodeId.EndsWith(identifier, StringComparison.OrdinalIgnoreCase));
+                n.NodeId.Equals(identifier, StringComparison.OrdinalIgnoreCase));
+            
+            // If no exact match, try partial matches
+            if (string.IsNullOrEmpty(matchingNode.NodeId))
+            {
+                matchingNode = _allNodes.FirstOrDefault(n => 
+                    n.DisplayName.Contains(identifier, StringComparison.OrdinalIgnoreCase) ||
+                    n.NodeId.Contains(identifier, StringComparison.OrdinalIgnoreCase) ||
+                    n.NodeId.EndsWith(identifier, StringComparison.OrdinalIgnoreCase) ||
+                    identifier.EndsWith(n.DisplayName, StringComparison.OrdinalIgnoreCase));
+            }
             
             if (!string.IsNullOrEmpty(matchingNode.NodeId))
             {
                 try
                 {
                     var nodeId = new NodeId(matchingNode.NodeId);
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching node by DisplayName/NodeId: {matchingNode.DisplayName} -> {nodeId}");
+                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching browsed node - DisplayName: '{matchingNode.DisplayName}', NodeId: '{matchingNode.NodeId}' -> {nodeId}");
                     return nodeId;
                 }
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching node but failed to parse NodeId '{matchingNode.NodeId}': {ex.Message}");
                 }
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: No matching browsed node found for identifier '{identifier}'. Searched {_allNodes.Count} nodes.");
             }
         }
 

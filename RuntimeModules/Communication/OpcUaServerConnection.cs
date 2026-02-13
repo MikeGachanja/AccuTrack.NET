@@ -100,7 +100,7 @@ public sealed class OpcUaServerConnection : IConnectionStub
         {
             _status.Connected = false;
             _status.Running = false;
-            _status.Status = $"OPC UA Error: {sre.Message} (StatusCode: 0x{sre.StatusCode:X8})";
+            _status.Status = $"OPC UA Error: {sre.Message} (StatusCode: 0x{(uint)sre.StatusCode:X8})";
             if (sre.InnerException != null)
             {
                 _status.Status += $" Inner: {sre.InnerException.Message}";
