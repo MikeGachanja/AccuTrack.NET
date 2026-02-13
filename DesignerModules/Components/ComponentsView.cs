@@ -106,6 +106,7 @@ public partial class ComponentsView : UserControl
                 ("Checkbox", "Checkbox"),
                 ("Radio Button", "RadioButton"),
                 ("Text Input", "TextInput"),
+                ("Numeric Viewer", "Numeric"),
                 ("Slider", "Slider"),
                 ("Spinner", "Spinner"),
                 ("Toggle Switch", "ToggleSwitch")

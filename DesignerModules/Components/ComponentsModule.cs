@@ -24,6 +24,7 @@ public class ComponentsModule
         RegisterComponent("Button", typeof(ButtonComponent));
         RegisterComponent("TextLabel", typeof(TextLabelComponent));
         RegisterComponent("TextInput", typeof(TextInputComponent));
+        RegisterComponent("Numeric", typeof(NumericComponent));
         RegisterComponent("Checkbox", typeof(CheckboxComponent));
         RegisterComponent("RadioButton", typeof(RadioButtonComponent));
         RegisterComponent("ProgressBar", typeof(ProgressBarComponent));
