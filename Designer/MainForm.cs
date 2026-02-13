@@ -34,6 +34,8 @@ namespace Designer
         private PropertyEditor? _propertyEditor;
         private ComponentsModule? _componentsModule;
         private SimulatorModule? _simulatorModule;
+        private string? _activeScadaProjectName;
+        private ToolStripStatusLabel? _activeProjectLabel;
 
         public MainForm()
         {
@@ -51,6 +53,158 @@ namespace Designer
             InitializeComponentsView();
             InitializePropertyEditor();
             InitializeTabClosing();
+            InitializeActiveProjectDisplay();
+        }
+        
+        private void InitializeActiveProjectDisplay()
+        {
+            _activeProjectLabel = new ToolStripStatusLabel
+            {
+                Text = "Active Project: None",
+                Spring = true,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+            statusStrip.Items.Add(_activeProjectLabel);
+            UpdateActiveProjectDisplay();
+        }
+        
+        private void UpdateActiveProjectDisplay()
+        {
+            if (_activeProjectLabel != null)
+            {
+                if (string.IsNullOrEmpty(_activeScadaProjectName))
+                {
+                    _activeProjectLabel.Text = "Active Project: None";
+                    _activeProjectLabel.ForeColor = SystemColors.GrayText;
+                }
+                else
+                {
+                    _activeProjectLabel.Text = $"Active Project: {_activeScadaProjectName}";
+                    _activeProjectLabel.ForeColor = SystemColors.ControlText;
+                }
+            }
+        }
+        
+        private void SetActiveScadaProject(string? projectName)
+        {
+            _activeScadaProjectName = projectName;
+            if (_projectManager != null && !string.IsNullOrEmpty(projectName))
+            {
+                var scadaProject = _projectManager.FindScadaProject(projectName);
+                _projectManager.SetCurrentScadaProject(scadaProject);
+            }
+            else
+            {
+                _projectManager?.SetCurrentScadaProject(null);
+            }
+            UpdateActiveProjectDisplay();
+        }
+        
+        private string? GetActiveScadaProjectName()
+        {
+            // If no active project is set, try to get from ProjectManager
+            if (string.IsNullOrEmpty(_activeScadaProjectName))
+            {
+                _activeScadaProjectName = _projectManager?.GetCurrentScadaName();
+            }
+            return _activeScadaProjectName;
+        }
+        
+        private string? SelectScadaProject(string title, string message)
+        {
+            if (_projectManager == null)
+                return null;
+                
+            var scadaProjects = _projectManager.GetScadaProjects();
+            if (scadaProjects.Count == 0)
+            {
+                MessageBox.Show("No SCADA projects found in the current project.", title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return null;
+            }
+            
+            if (scadaProjects.Count == 1)
+            {
+                // Only one project, use it automatically
+                return scadaProjects[0].Name;
+            }
+            
+            // Show dialog to select SCADA project
+            using var dialog = new Form
+            {
+                Text = title,
+                Size = new Size(400, 200),
+                StartPosition = FormStartPosition.CenterParent
+            };
+            
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 4,
+                Padding = new Padding(10)
+            };
+            
+            layout.Controls.Add(new Label { Text = message, Dock = DockStyle.Fill, AutoSize = true }, 0, 0);
+            
+            var comboBox = new ComboBox
+            {
+                Dock = DockStyle.Fill,
+                DropDownStyle = ComboBoxStyle.DropDownList
+            };
+            comboBox.Items.AddRange(scadaProjects.Select(s => s.Name).ToArray());
+            
+            // Pre-select active project if set
+            if (!string.IsNullOrEmpty(_activeScadaProjectName))
+            {
+                var activeIndex = comboBox.Items.IndexOf(_activeScadaProjectName);
+                if (activeIndex >= 0)
+                    comboBox.SelectedIndex = activeIndex;
+                else
+                    comboBox.SelectedIndex = 0;
+            }
+            else
+            {
+                comboBox.SelectedIndex = 0;
+            }
+            
+            layout.Controls.Add(comboBox, 0, 1);
+            
+            var setActiveCheckBox = new CheckBox
+            {
+                Text = "Set as active project for future operations",
+                Dock = DockStyle.Fill,
+                AutoSize = true,
+                Checked = true
+            };
+            layout.Controls.Add(setActiveCheckBox, 0, 2);
+            
+            var buttonPanel = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                FlowDirection = FlowDirection.RightToLeft
+            };
+            var okButton = new Button { Text = "OK", DialogResult = DialogResult.OK, Size = new Size(75, 25) };
+            var cancelButton = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Size = new Size(75, 25) };
+            buttonPanel.Controls.Add(okButton);
+            buttonPanel.Controls.Add(cancelButton);
+            layout.Controls.Add(buttonPanel, 0, 3);
+            
+            dialog.Controls.Add(layout);
+            dialog.AcceptButton = okButton;
+            dialog.CancelButton = cancelButton;
+            
+            if (dialog.ShowDialog() != DialogResult.OK || comboBox.SelectedItem == null)
+                return null;
+            
+            string selectedScadaName = comboBox.SelectedItem.ToString() ?? string.Empty;
+            
+            // Set as active project if checkbox is checked
+            if (setActiveCheckBox.Checked)
+            {
+                SetActiveScadaProject(selectedScadaName);
+            }
+            
+            return selectedScadaName;
         }
 
         private void InitializeTabClosing()
@@ -228,6 +382,7 @@ namespace Designer
             actionBuildProject.Click += (s, e) => BuildProject();
             actionRebuildProject.Click += (s, e) => RebuildProject();
             actionCleanProject.Click += (s, e) => CleanProject();
+            actionSelectActiveProject.Click += (s, e) => SelectActiveProject();
             actionBuildSettings.Click += (s, e) => ShowBuildSettings();
 
             // Download menu
@@ -283,6 +438,7 @@ namespace Designer
             if (_projectManager == null) return;
             CloseAllEditorTabs();
             _projectManager.CloseProject();
+            SetActiveScadaProject(null); // Clear active project when closing
             _projectView?.RefreshView();
             UpdateWindowTitle();
         }
@@ -591,10 +747,35 @@ namespace Designer
             }
         }
 
+        private void SelectActiveProject()
+        {
+            var selected = SelectScadaProject("Select Active Project", "Choose SCADA project to set as active:");
+            if (!string.IsNullOrEmpty(selected))
+            {
+                SetActiveScadaProject(selected);
+                MessageBox.Show($"Active project set to: {selected}\n\nThis project will be used automatically for Build, Rebuild, Clean, and Deploy operations.",
+                    "Active Project Set", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+        }
+        
         private void RebuildProject()
         {
-            CleanProject();
-            BuildProject();
+            // Use active project if set, otherwise ask once
+            string? selectedScadaName = GetActiveScadaProjectName();
+            
+            if (string.IsNullOrEmpty(selectedScadaName))
+            {
+                selectedScadaName = SelectScadaProject("Rebuild Project", "Choose SCADA project to rebuild:");
+                if (string.IsNullOrEmpty(selectedScadaName))
+                    return;
+            }
+            
+            // Perform clean and build without asking again
+            if (PerformClean(selectedScadaName) && PerformBuild(selectedScadaName))
+            {
+                MessageBox.Show($"SCADA project '{selectedScadaName}' rebuilt successfully.",
+                    "Rebuild Project", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
         }
 
         private void ShowBuildSettings()
@@ -687,71 +868,32 @@ namespace Designer
 
         private void BuildProject()
         {
+            // Use active project if set, otherwise ask
+            string? selectedScadaName = GetActiveScadaProjectName();
+            
+            if (string.IsNullOrEmpty(selectedScadaName))
+            {
+                selectedScadaName = SelectScadaProject("Build Project", "Choose SCADA project to build:");
+                if (string.IsNullOrEmpty(selectedScadaName))
+                    return;
+            }
+            
+            PerformBuild(selectedScadaName);
+        }
+        
+        private bool PerformBuild(string selectedScadaName)
+        {
             if (_projectManager?.GetCurrentProject() == null)
             {
                 MessageBox.Show("No project is currently open.", "Build Project", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                return false;
             }
 
-            // Get list of SCADA projects
-            var scadaProjects = _projectManager.GetScadaProjects();
-            if (scadaProjects.Count == 0)
-            {
-                MessageBox.Show("No SCADA projects found in the current project.", "Build Project", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            // Show dialog to select SCADA project
-            using var dialog = new Form
-            {
-                Text = "Select SCADA Project",
-                Size = new Size(300, 150),
-                StartPosition = FormStartPosition.CenterParent
-            };
-
-            var layout = new TableLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                ColumnCount = 1,
-                RowCount = 3,
-                Padding = new Padding(10)
-            };
-
-            layout.Controls.Add(new Label { Text = "Choose SCADA project to build:", Dock = DockStyle.Fill }, 0, 0);
-
-            var comboBox = new ComboBox
-            {
-                Dock = DockStyle.Fill,
-                DropDownStyle = ComboBoxStyle.DropDownList
-            };
-            comboBox.Items.AddRange(scadaProjects.Select(s => s.Name).ToArray());
-            comboBox.SelectedIndex = 0;
-            layout.Controls.Add(comboBox, 0, 1);
-
-            var buttonPanel = new FlowLayoutPanel
-            {
-                Dock = DockStyle.Fill,
-                FlowDirection = FlowDirection.RightToLeft
-            };
-            var okButton = new Button { Text = "OK", DialogResult = DialogResult.OK, Size = new Size(75, 25) };
-            var cancelButton = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Size = new Size(75, 25) };
-            buttonPanel.Controls.Add(okButton);
-            buttonPanel.Controls.Add(cancelButton);
-            layout.Controls.Add(buttonPanel, 0, 2);
-
-            dialog.Controls.Add(layout);
-            dialog.AcceptButton = okButton;
-            dialog.CancelButton = cancelButton;
-
-            if (dialog.ShowDialog() != DialogResult.OK || comboBox.SelectedItem == null)
-                return;
-
-            string selectedScadaName = comboBox.SelectedItem.ToString() ?? string.Empty;
             var scadaProject = _projectManager.FindScadaProject(selectedScadaName);
             if (scadaProject == null)
             {
-                MessageBox.Show("Failed to get selected SCADA project.", "Build Project", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                return;
+                MessageBox.Show($"SCADA project '{selectedScadaName}' not found.", "Build Project", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
             }
 
             // Save project before building
@@ -774,72 +916,56 @@ namespace Designer
                 _projectView?.RefreshView();
                 MessageBox.Show($"SCADA project '{scadaProject!.Name}' built successfully.\nOutput file: {scadaProject.Name}.iscr",
                     "Build Project", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return true;
             }
             else
             {
                 MessageBox.Show($"Failed to build SCADA project '{scadaProject!.Name}'.", "Build Project", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
             }
         }
 
         private void CleanProject()
         {
+            // Use active project if set, otherwise ask
+            string? selectedScadaName = GetActiveScadaProjectName();
+            
+            if (string.IsNullOrEmpty(selectedScadaName))
+            {
+                selectedScadaName = SelectScadaProject("Clean Project", "Choose SCADA project to clean:");
+                if (string.IsNullOrEmpty(selectedScadaName))
+                    return;
+            }
+            
+            PerformClean(selectedScadaName);
+        }
+        
+        private bool PerformClean(string selectedScadaName)
+        {
             if (_projectManager?.GetCurrentProject() == null)
             {
                 MessageBox.Show("No project is currently open.", "Clean Project", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
+                return false;
             }
 
-            var scadaProjects = _projectManager.GetScadaProjects();
-            if (scadaProjects.Count == 0)
-            {
-                MessageBox.Show("No SCADA projects found in the current project.", "Clean Project", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-                return;
-            }
-
-            // Show dialog to select SCADA project (similar to BuildProject)
-            using var dialog = new Form
-            {
-                Text = "Select SCADA Project",
-                Size = new Size(300, 150),
-                StartPosition = FormStartPosition.CenterParent
-            };
-
-            var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3, Padding = new Padding(10) };
-            layout.Controls.Add(new Label { Text = "Choose SCADA project to clean:", Dock = DockStyle.Fill }, 0, 0);
-
-            var comboBox = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-            comboBox.Items.AddRange(scadaProjects.Select(s => s.Name).ToArray());
-            comboBox.SelectedIndex = 0;
-            layout.Controls.Add(comboBox, 0, 1);
-
-            var buttonPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft };
-            var okButton = new Button { Text = "OK", DialogResult = DialogResult.OK, Size = new Size(75, 25) };
-            var cancelButton = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Size = new Size(75, 25) };
-            buttonPanel.Controls.Add(okButton);
-            buttonPanel.Controls.Add(cancelButton);
-            layout.Controls.Add(buttonPanel, 0, 2);
-
-            dialog.Controls.Add(layout);
-            dialog.AcceptButton = okButton;
-            dialog.CancelButton = cancelButton;
-
-            if (dialog.ShowDialog() != DialogResult.OK || comboBox.SelectedItem == null)
-                return;
-
-            string selectedScadaName = comboBox.SelectedItem.ToString() ?? string.Empty;
             var scadaProject = _projectManager.FindScadaProject(selectedScadaName);
             if (scadaProject == null)
-                return;
+            {
+                MessageBox.Show($"SCADA project '{selectedScadaName}' not found.", "Clean Project", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
+            }
 
             bottomTabWidget.SelectedIndex = 0;
             _compilerModule?.SetProject(scadaProject);
             if (_compilerModule?.CleanProject() == true)
             {
                 MessageBox.Show($"SCADA project '{scadaProject.Name}' cleaned successfully.", "Clean Project", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return true;
             }
             else
             {
                 MessageBox.Show($"Failed to clean SCADA project '{scadaProject.Name}'.", "Clean Project", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return false;
             }
         }
 
@@ -851,9 +977,16 @@ namespace Designer
                 return;
             }
 
-            using (var dialog = new DeployDialog(_projectManager, _compilerModule))
+            // Pass active project name to DeployDialog
+            string? activeProjectName = GetActiveScadaProjectName();
+            using (var dialog = new DeployDialog(_projectManager, _compilerModule, activeProjectName))
             {
                 dialog.ShowDialog();
+                // Update active project if user selected one in the dialog
+                if (!string.IsNullOrEmpty(dialog.SelectedScadaProjectName))
+                {
+                    SetActiveScadaProject(dialog.SelectedScadaProjectName);
+                }
             }
         }
 
@@ -1695,6 +1828,12 @@ namespace Designer
 
         private void OnScreenOpen(object screen, string scadaName)
         {
+            // Set active project when a screen is opened
+            if (!string.IsNullOrEmpty(scadaName))
+            {
+                SetActiveScadaProject(scadaName);
+            }
+            
             // Use dynamic to handle ScreenTemplate without direct dependency
             if (screen == null)
                 return;

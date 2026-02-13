@@ -72,6 +72,8 @@ namespace Designer
         private ToolStripMenuItem actionRebuildProject;
         private ToolStripMenuItem actionCleanProject;
         private ToolStripSeparator separator9;
+        private ToolStripMenuItem actionSelectActiveProject;
+        private ToolStripSeparator separator12;
         private ToolStripMenuItem actionBuildSettings;
 
         // Download menu items
@@ -415,6 +417,8 @@ namespace Designer
             actionRebuildProject = new ToolStripMenuItem("Rebuild Project", null, null, Keys.Control | Keys.F7);
             actionCleanProject = new ToolStripMenuItem("Clean Project");
             separator9 = new ToolStripSeparator();
+            actionSelectActiveProject = new ToolStripMenuItem("Select Active Project...");
+            separator12 = new ToolStripSeparator();
             actionBuildSettings = new ToolStripMenuItem("Build Settings...");
 
             menuBuild.DropDownItems.AddRange(new ToolStripItem[] {
@@ -422,6 +426,8 @@ namespace Designer
                 actionRebuildProject,
                 actionCleanProject,
                 separator9,
+                actionSelectActiveProject,
+                separator12,
                 actionBuildSettings
             });
 

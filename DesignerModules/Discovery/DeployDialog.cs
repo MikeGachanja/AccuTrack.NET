@@ -28,11 +28,15 @@ public partial class DeployDialog : Form
     private CompilerModule? _compilerModule;
     private DeviceDiscoveryClient? _discoveryClient;
     private Dictionary<string, DiscoveredDevice> _devices = new();
+    private string? _activeProjectName;
 
-    public DeployDialog(ProjectManager? projectManager, CompilerModule? compilerModule)
+    public string? SelectedScadaProjectName { get; private set; }
+
+    public DeployDialog(ProjectManager? projectManager, CompilerModule? compilerModule, string? activeProjectName = null)
     {
         _projectManager = projectManager;
         _compilerModule = compilerModule;
+        _activeProjectName = activeProjectName;
         InitializeComponent();
         LoadScadaProjects();
         InitializeDiscovery();
@@ -338,8 +342,23 @@ public partial class DeployDialog : Form
             var projects = _projectManager.GetScadaProjects();
             foreach (var project in projects)
                 _scadaProjectCombo.Items.Add(project.Name);
+            
             if (_scadaProjectCombo.Items.Count > 0)
-                _scadaProjectCombo.SelectedIndex = 0;
+            {
+                // Pre-select active project if provided
+                if (!string.IsNullOrEmpty(_activeProjectName))
+                {
+                    var activeIndex = _scadaProjectCombo.Items.IndexOf(_activeProjectName);
+                    if (activeIndex >= 0)
+                        _scadaProjectCombo.SelectedIndex = activeIndex;
+                    else
+                        _scadaProjectCombo.SelectedIndex = 0;
+                }
+                else
+                {
+                    _scadaProjectCombo.SelectedIndex = 0;
+                }
+            }
         }
     }
 
@@ -369,6 +388,8 @@ public partial class DeployDialog : Form
         }
 
         string projectName = _scadaProjectCombo.SelectedItem.ToString() ?? "";
+        SelectedScadaProjectName = projectName; // Store selected project name
+        
         var scada = _projectManager?.FindScadaProject(projectName);
         if (scada == null)
         {
