@@ -11,6 +11,7 @@ namespace Designer.Modules.Project;
 public partial class ScadaProjectPropertiesDialog : Form
 {
     private ScadaProject _scadaProject;
+    private ProjectManager? _projectManager;
     private TextBox _nameTextBox;
     private ComboBox _typeComboBox;
     private ComboBox _resolutionComboBox;
@@ -18,11 +19,13 @@ public partial class ScadaProjectPropertiesDialog : Form
     private NumericUpDown _heightNumeric;
     private TextBox _versionTextBox;
     private Label _pathLabel;
+    private ComboBox _startupScreenComboBox;
     private bool _customResolution = false;
 
-    public ScadaProjectPropertiesDialog(ScadaProject scadaProject)
+    public ScadaProjectPropertiesDialog(ScadaProject scadaProject, ProjectManager? projectManager = null)
     {
         _scadaProject = scadaProject ?? throw new ArgumentNullException(nameof(scadaProject));
+        _projectManager = projectManager;
         InitializeComponent();
         LoadProperties();
     }
@@ -30,7 +33,7 @@ public partial class ScadaProjectPropertiesDialog : Form
     private void InitializeComponent()
     {
         Text = $"SCADA Project Properties - {_scadaProject.Name}";
-        Size = new Size(500, 350);
+        Size = new Size(500, 400);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
@@ -40,7 +43,7 @@ public partial class ScadaProjectPropertiesDialog : Form
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 8,
+            RowCount = 9,
             Padding = new Padding(10)
         };
 
@@ -95,6 +98,14 @@ public partial class ScadaProjectPropertiesDialog : Form
         mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
+        // Startup Screen
+        mainLayout.Controls.Add(new Label { Text = "Startup Screen:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
+        _startupScreenComboBox = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+        LoadStartupScreenOptions();
+        mainLayout.Controls.Add(_startupScreenComboBox, 1, row);
+        mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
         // Spacer
         mainLayout.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, row);
         mainLayout.SetColumnSpan(mainLayout.Controls[mainLayout.Controls.Count - 1], 2);
@@ -129,6 +140,65 @@ public partial class ScadaProjectPropertiesDialog : Form
         _versionTextBox.Text = _scadaProject.Version;
         _pathLabel.Text = _scadaProject.Path;
         UpdateResolutionComboBox();
+        UpdateStartupScreenSelection();
+    }
+    
+    private void LoadStartupScreenOptions()
+    {
+        _startupScreenComboBox.Items.Clear();
+        _startupScreenComboBox.Items.Add("(None - Use first screen)");
+        
+        if (_projectManager != null)
+        {
+            var screens = _projectManager.GetScreens(_scadaProject.Name);
+            foreach (var screen in screens)
+            {
+                try
+                {
+                    dynamic screenObj = screen;
+                    string screenName = screenObj.Name?.ToString() ?? "Unknown";
+                    string screenId = screenObj.Id?.ToString() ?? screenName;
+                    _startupScreenComboBox.Items.Add($"{screenName} ({screenId})");
+                }
+                catch { /* Skip invalid screens */ }
+            }
+        }
+        
+        if (_startupScreenComboBox.Items.Count > 0)
+            _startupScreenComboBox.SelectedIndex = 0;
+    }
+    
+    private void UpdateStartupScreenSelection()
+    {
+        if (string.IsNullOrEmpty(_scadaProject.StartupScreen))
+        {
+            _startupScreenComboBox.SelectedIndex = 0; // "(None - Use first screen)"
+            return;
+        }
+        
+        // Find the matching screen in the combo box
+        for (int i = 1; i < _startupScreenComboBox.Items.Count; i++)
+        {
+            string itemText = _startupScreenComboBox.Items[i].ToString() ?? "";
+            // Extract screen ID from item text (format: "Name (Id)")
+            if (itemText.Contains("(") && itemText.Contains(")"))
+            {
+                int startIdx = itemText.LastIndexOf("(") + 1;
+                int endIdx = itemText.LastIndexOf(")");
+                if (startIdx > 0 && endIdx > startIdx)
+                {
+                    string screenId = itemText.Substring(startIdx, endIdx - startIdx);
+                    if (screenId == _scadaProject.StartupScreen)
+                    {
+                        _startupScreenComboBox.SelectedIndex = i;
+                        return;
+                    }
+                }
+            }
+        }
+        
+        // If not found, select "(None)"
+        _startupScreenComboBox.SelectedIndex = 0;
     }
 
     private void UpdateResolutionComboBox()
@@ -205,6 +275,26 @@ public partial class ScadaProjectPropertiesDialog : Form
             _scadaProject.Type = (ScadaType)_typeComboBox.SelectedIndex;
             _scadaProject.Resolution = new Size((int)_widthNumeric.Value, (int)_heightNumeric.Value);
             _scadaProject.Version = _versionTextBox.Text.Trim();
+            
+            // Update startup screen
+            if (_startupScreenComboBox.SelectedIndex == 0)
+            {
+                _scadaProject.StartupScreen = null; // No startup screen set
+            }
+            else
+            {
+                string selectedItem = _startupScreenComboBox.Items[_startupScreenComboBox.SelectedIndex].ToString() ?? "";
+                // Extract screen ID from item text (format: "Name (Id)")
+                if (selectedItem.Contains("(") && selectedItem.Contains(")"))
+                {
+                    int startIdx = selectedItem.LastIndexOf("(") + 1;
+                    int endIdx = selectedItem.LastIndexOf(")");
+                    if (startIdx > 0 && endIdx > startIdx)
+                    {
+                        _scadaProject.StartupScreen = selectedItem.Substring(startIdx, endIdx - startIdx);
+                    }
+                }
+            }
         }
         base.OnFormClosing(e);
     }

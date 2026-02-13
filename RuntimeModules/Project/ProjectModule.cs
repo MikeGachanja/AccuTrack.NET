@@ -10,6 +10,7 @@ public sealed class ProjectModule : IProject
 {
     private readonly ProjectData _project = new();
     private string _projectDir = "";
+    private string? _startupScreenId;
 
     public int ResolutionWidth => _project.ResolutionWidth;
     public int ResolutionHeight => _project.ResolutionHeight;
@@ -45,6 +46,27 @@ public sealed class ProjectModule : IProject
     {
         var screens = _project.Screen;
         if (screens.Count == 0) return "";
+        
+        // If startup screen is set, try to find it
+        if (!string.IsNullOrEmpty(_startupScreenId))
+        {
+            foreach (var screen in screens)
+            {
+                // Match by screen ID (preferred) or by filename
+                if (screen.Id == _startupScreenId)
+                {
+                    return screen.Address;
+                }
+                // Fallback: check filename if ID not set
+                var screenFileName = Path.GetFileNameWithoutExtension(screen.Address);
+                if (screenFileName == _startupScreenId)
+                {
+                    return screen.Address;
+                }
+            }
+        }
+        
+        // Fall back to first screen if startup screen not found or not set
         return screens[0].Address;
     }
 
@@ -99,6 +121,9 @@ public sealed class ProjectModule : IProject
                 _project.ResolutionWidth = res.TryGetProperty("width", out var w) ? w.GetInt32() : 1024;
                 _project.ResolutionHeight = res.TryGetProperty("height", out var h) ? h.GetInt32() : 768;
             }
+            
+            // Load startup screen ID if set
+            _startupScreenId = root.TryGetProperty("startupScreen", out var ss) ? ss.GetString() : null;
             if (root.TryGetProperty("configFiles", out var cf))
             {
                 _project.ConfigPaths.Alarms = cf.TryGetProperty("alarms", out var a) ? a.GetString() ?? "" : "";
@@ -181,7 +206,7 @@ public sealed class ProjectModule : IProject
                 if (string.IsNullOrWhiteSpace(id)) id = name;
                 var jsonFile = Path.Combine(screensDir, id + ".json");
                 var address = File.Exists(jsonFile) ? Path.GetFullPath(jsonFile) : jsonFile;
-                _project.Screen.Add(new ScreenInfo { Name = name, Type = "screen", Address = address });
+                _project.Screen.Add(new ScreenInfo { Name = name, Type = "screen", Address = address, Id = id });
                 screenCount++;
                 System.Diagnostics.Debug.WriteLine($"[ProjectModule] Loaded screen: {name} (id: {id}) -> {address} (exists: {File.Exists(jsonFile)})");
             }

@@ -885,7 +885,7 @@ public partial class ProjectView : UserControl
     {
         if (nodeData.Data is ScadaProject scadaProject)
         {
-            using (var dialog = new ScadaProjectPropertiesDialog(scadaProject))
+            using (var dialog = new ScadaProjectPropertiesDialog(scadaProject, _projectManager))
             {
                 if (dialog.ShowDialog() == DialogResult.OK)
                 {

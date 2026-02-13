@@ -23,6 +23,7 @@ public sealed class ScreenInfo
     public string Name { get; set; } = "";
     public string Type { get; set; } = "screen";
     public string Address { get; set; } = "";  // Path or URL to screen
+    public string Id { get; set; } = "";  // Screen ID for matching startup screen
 }
 
 public sealed class ScriptInfo

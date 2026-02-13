@@ -395,6 +395,12 @@ public class CompilerModule
                 ["events"] = "json/events.json"
             }
         };
+        
+        // Add startup screen if set
+        if (!string.IsNullOrEmpty(_currentProject.StartupScreen))
+        {
+            root["startupScreen"] = _currentProject.StartupScreen;
+        }
 
         string metadataPath = Path.Combine(buildPath, "metadata.iscr");
         File.WriteAllText(metadataPath, root.ToString());

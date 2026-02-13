@@ -16,6 +16,7 @@ public class ScadaProject
     public ScadaPaths Paths { get; set; } = new();
     public Size Resolution { get; set; } = new Size(1920, 1080);
     public string Version { get; set; } = "1.0.0";
+    public string? StartupScreen { get; set; } // Screen ID or name to load on startup
     
     // These will be loaded from their respective modules
     public List<object> Screens { get; set; } = new();
@@ -33,7 +34,7 @@ public class ScadaProject
     /// </summary>
     public JObject ToJson()
     {
-        return new JObject
+        var json = new JObject
         {
             ["name"] = Name,
             ["path"] = Path,
@@ -45,6 +46,13 @@ public class ScadaProject
             },
             ["version"] = Version
         };
+        
+        if (!string.IsNullOrEmpty(StartupScreen))
+        {
+            json["startupScreen"] = StartupScreen;
+        }
+        
+        return json;
     }
 
     /// <summary>
@@ -57,7 +65,8 @@ public class ScadaProject
             Name = json["name"]?.ToString() ?? string.Empty,
             Path = json["path"]?.ToString() ?? string.Empty,
             Type = (ScadaType)(json["type"]?.ToObject<int>() ?? 0),
-            Version = json["version"]?.ToString() ?? "1.0.0"
+            Version = json["version"]?.ToString() ?? "1.0.0",
+            StartupScreen = json["startupScreen"]?.ToString()
         };
 
         var resolutionObj = json["resolution"] as JObject;
