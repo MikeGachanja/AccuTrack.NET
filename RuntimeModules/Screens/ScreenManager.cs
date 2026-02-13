@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Concurrent;
 using System.IO;
 
@@ -68,14 +69,27 @@ public sealed class ScreenManager
     {
         if (string.IsNullOrEmpty(_projectPath) || string.IsNullOrWhiteSpace(svgPath)) return null;
         
+        var trimmedPath = svgPath.Trim();
+        
         // If it's already an absolute path, check if it exists
-        if (Path.IsPathRooted(svgPath))
+        if (Path.IsPathRooted(trimmedPath))
         {
-            return File.Exists(svgPath) ? Path.GetFullPath(svgPath) : null;
+            return File.Exists(trimmedPath) ? Path.GetFullPath(trimmedPath) : null;
         }
         
-        // Otherwise, resolve relative to project's svg/ directory
-        var path = Path.Combine(_projectPath, "svg", svgPath.Trim());
-        return File.Exists(path) ? Path.GetFullPath(path) : null;
+        // Normalize path separators - replace backslashes with the current platform's separator
+        // This handles paths like "Containers\\file.svg" from JSON
+        var normalizedPath = trimmedPath.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+        
+        // Remove leading directory separators to ensure it's relative
+        normalizedPath = normalizedPath.TrimStart(Path.DirectorySeparatorChar);
+        
+        // Combine with project path and svg directory
+        var fullPath = Path.Combine(_projectPath, "svg", normalizedPath);
+        
+        // Normalize the final path (resolves .., ., etc.)
+        fullPath = Path.GetFullPath(fullPath);
+        
+        return File.Exists(fullPath) ? fullPath : null;
     }
 }

@@ -33,12 +33,8 @@ public partial class RuntimeSVGView : UserControl
         IsVisible = d.Visible;
         IsEnabled = d.Enabled;
         
-        // Get SVG path from properties
-        string? svgPath = GetProperty(d, "svgPath", "");
-        if (!string.IsNullOrEmpty(svgPath))
-        {
-            SetSvgPath(svgPath);
-        }
+        // Note: SVG path loading is handled by CreateSVGView after path resolution
+        // Don't load SVG here as the path needs to be resolved first
         
         // Apply border properties if available
         string? borderColor = GetProperty(d, "borderColor", "");
@@ -63,12 +59,22 @@ public partial class RuntimeSVGView : UserControl
     {
         _currentSvgPath = svgPath;
         
-        if (string.IsNullOrEmpty(svgPath) || !File.Exists(svgPath))
+        if (string.IsNullOrEmpty(svgPath))
         {
             SvgImage.Source = null;
             PlaceholderText.IsVisible = true;
             return;
         }
+        
+        if (!File.Exists(svgPath))
+        {
+            System.Diagnostics.Debug.WriteLine($"[RuntimeSVGView] SVG file not found: '{svgPath}'");
+            SvgImage.Source = null;
+            PlaceholderText.IsVisible = true;
+            return;
+        }
+        
+        System.Diagnostics.Debug.WriteLine($"[RuntimeSVGView] Loading SVG from: '{svgPath}'");
 
         try
         {
@@ -81,9 +87,12 @@ public partial class RuntimeSVGView : UserControl
                 return;
             }
 
-            // Get component bounds (use actual control size if available, otherwise use SVG default size)
-            int renderWidth = (int)Math.Max(1, Width > 0 ? Width : (svgDoc.Width.Value > 0 ? svgDoc.Width.Value : 100));
-            int renderHeight = (int)Math.Max(1, Height > 0 ? Height : (svgDoc.Height.Value > 0 ? svgDoc.Height.Value : 100));
+            // Get component bounds (use actual control size if available, otherwise use descriptor size or SVG default size)
+            // Note: Width/Height might be 0 initially, so use Bounds or descriptor size
+            var controlWidth = Width > 0 ? Width : (Bounds.Width > 0 ? Bounds.Width : 0);
+            var controlHeight = Height > 0 ? Height : (Bounds.Height > 0 ? Bounds.Height : 0);
+            int renderWidth = (int)Math.Max(1, controlWidth > 0 ? controlWidth : (svgDoc.Width.Value > 0 ? svgDoc.Width.Value : 100));
+            int renderHeight = (int)Math.Max(1, controlHeight > 0 ? controlHeight : (svgDoc.Height.Value > 0 ? svgDoc.Height.Value : 100));
 
             // Get original SVG bounds
             var originalBounds = svgDoc.Bounds;

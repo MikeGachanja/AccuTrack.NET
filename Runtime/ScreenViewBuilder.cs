@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
@@ -489,18 +491,37 @@ public static class ScreenViewBuilder
         
         // Get SVG path from properties and resolve it
         var svgPath = GetPropString(d, "svgPath", "");
-        if (resolveSvgPath != null && !string.IsNullOrEmpty(svgPath))
+        if (!string.IsNullOrEmpty(svgPath))
         {
-            var resolvedPath = resolveSvgPath(svgPath);
+            string? resolvedPath = null;
+            if (resolveSvgPath != null)
+            {
+                resolvedPath = resolveSvgPath(svgPath);
+                if (resolvedPath != null)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ScreenViewBuilder] Resolved SVG path '{svgPath}' to '{resolvedPath}'");
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine($"[ScreenViewBuilder] Failed to resolve SVG path '{svgPath}'");
+                }
+            }
+            
             if (!string.IsNullOrEmpty(resolvedPath))
             {
+                // Store the resolved path - it will be loaded when control size is set
                 s.SetSvgPath(resolvedPath);
             }
-        }
-        else if (!string.IsNullOrEmpty(svgPath))
-        {
-            // Try direct path if resolver not available
-            s.SetSvgPath(svgPath);
+            else if (File.Exists(svgPath))
+            {
+                // Try direct path if resolver not available or returned null
+                System.Diagnostics.Debug.WriteLine($"[ScreenViewBuilder] Using direct SVG path '{svgPath}'");
+                s.SetSvgPath(svgPath);
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[ScreenViewBuilder] SVG path not found: '{svgPath}'");
+            }
         }
         
         return s;
