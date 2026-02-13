@@ -77,9 +77,11 @@ public static class ScreenRenderer
                 comp.Width = sz.TryGetProperty("width", out var w) ? w.GetInt32() : 100;
                 comp.Height = sz.TryGetProperty("height", out var h) ? h.GetInt32() : 30;
             }
+            var dict = new Dictionary<string, object?>();
+            
+            // Load properties from properties object
             if (item.TryGetProperty("properties", out var props) && props.ValueKind == JsonValueKind.Object)
             {
-                var dict = new Dictionary<string, object?>();
                 foreach (var prop in props.EnumerateObject())
                 {
                     object? val = prop.Value.ValueKind switch
@@ -92,8 +94,28 @@ public static class ScreenRenderer
                     };
                     dict[prop.Name] = val;
                 }
-                comp.Properties = dict;
             }
+            
+            // Also check root level for backward compatibility (e.g., "text" property for buttons)
+            // Only add if not already in properties dict
+            var rootLevelProperties = new[] { "text", "backColor", "foreColor", "borderColor", "borderWidth", "font", "fontSize", "fontStyle", "action" };
+            foreach (var propName in rootLevelProperties)
+            {
+                if (!dict.ContainsKey(propName) && item.TryGetProperty(propName, out var rootProp))
+                {
+                    object? val = rootProp.ValueKind switch
+                    {
+                        JsonValueKind.String => rootProp.GetString(),
+                        JsonValueKind.Number => rootProp.TryGetInt32(out var i) ? i : rootProp.GetDouble(),
+                        JsonValueKind.True => true,
+                        JsonValueKind.False => false,
+                        _ => rootProp.ToString()
+                    };
+                    dict[propName] = val;
+                }
+            }
+            
+            comp.Properties = dict;
             return comp;
         }
         catch

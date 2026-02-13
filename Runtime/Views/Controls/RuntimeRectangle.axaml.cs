@@ -21,9 +21,19 @@ public partial class RuntimeRectangle : UserControl
         if (GetProperty(d, "borderColor", "") is { Length: > 0 } bc)
         {
             TheBorder.BorderBrush = ParseBrush(bc);
-            TheBorder.BorderThickness = new Avalonia.Thickness(1);
+            var borderWidth = GetPropertyInt(d, "borderWidth", 1);
+            TheBorder.BorderThickness = new Avalonia.Thickness(borderWidth);
         }
         IsVisible = d.Visible;
+    }
+    
+    private static int GetPropertyInt(ComponentDescriptor d, string key, int fallback)
+    {
+        if (!d.Properties.TryGetValue(key, out var v)) return fallback;
+        if (v is int i) return i;
+        if (v is double dbl) return (int)dbl;
+        if (v is float f) return (int)f;
+        return int.TryParse(v?.ToString(), out var parsed) ? parsed : fallback;
     }
 
     private static string GetProperty(ComponentDescriptor d, string key, string fallback)
