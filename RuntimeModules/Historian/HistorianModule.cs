@@ -32,15 +32,15 @@ public sealed class HistorianModule : ModuleBase, IHistorian
         
         if (!string.IsNullOrEmpty(projectPath))
         {
-            // Create data subdirectory in project path for historian database
-            var dataPath = Path.Combine(projectPath, "data");
-            if (!Directory.Exists(dataPath))
+            // Create database subdirectory in project path for historian database
+            var databasePath = Path.Combine(projectPath, "database");
+            if (!Directory.Exists(databasePath))
             {
-                Directory.CreateDirectory(dataPath);
+                Directory.CreateDirectory(databasePath);
             }
             
-            // Set database path to historian.db in the data folder
-            var dbPath = Path.Combine(dataPath, "historian.db");
+            // Set database path to historian.db in the database folder (ensuring it's named "historian")
+            var dbPath = Path.Combine(databasePath, "historian.db");
             
             // Update config with database path if not already set
             if (config == null)
@@ -50,18 +50,19 @@ public sealed class HistorianModule : ModuleBase, IHistorian
             
             var databaseType = config["databaseType"]?.GetValue<string>() ?? "SQLite";
             
-            // For SQLite, set the database path automatically
+            // For SQLite, always set the database path to ensure it's in the database folder
             if (databaseType == "SQLite")
             {
-                if (string.IsNullOrEmpty(config["storagePath"]?.GetValue<string>()))
-                {
-                    config["storagePath"] = dbPath;
-                }
+                // Always use the project-specific database folder path
+                config["storagePath"] = dbPath;
             }
             // For PostgreSQL, the connection will be handled separately
         }
 
         _historianManager.Initialize(config);
+        
+        // Load tag configurations from database (in case they were saved previously)
+        _historianManager.LoadTagConfigurations();
         
         TagsModule? tagManager = null;
         try
@@ -76,10 +77,30 @@ public sealed class HistorianModule : ModuleBase, IHistorian
         {
             _historianManager.SetTagManager(tagManager.TagManager);
             
-            // Subscribe only to tags configured in historian
-            if (config != null && config["tags"] is JsonArray tagsArray)
+            // Subscribe to tags based on loaded configurations (from database)
+            // This ensures we use the persisted configurations
+            _subscribedTags.Clear();
+            
+            // Get enabled tags from HistorianManager (loaded from database)
+            var enabledTags = _historianManager.GetEnabledTags();
+            
+            if (enabledTags.Count > 0)
             {
-                _subscribedTags.Clear();
+                // Subscribe only to enabled tags
+                var allTags = tagManager.TagManager.GetTagNames();
+                foreach (var tagName in enabledTags)
+                {
+                    if (allTags.Contains(tagName) && !_subscribedTags.Contains(tagName))
+                    {
+                        tagManager.TagManager.Subscribe(tagName, (n, v, q) =>
+                            _historianManager.RecordTagValue(n, v, (int)q));
+                        _subscribedTags.Add(tagName);
+                    }
+                }
+            }
+            else if (config != null && config["tags"] is JsonArray tagsArray && tagsArray.Count > 0)
+            {
+                // Fallback to JSON config if database is empty
                 foreach (var tagNode in tagsArray)
                 {
                     if (tagNode is JsonObject tagObj)
@@ -89,7 +110,6 @@ public sealed class HistorianModule : ModuleBase, IHistorian
                         
                         if (!string.IsNullOrEmpty(tagName) && enabled)
                         {
-                            // Check if tag exists in TagManager
                             var allTags = tagManager.TagManager.GetTagNames();
                             if (allTags.Contains(tagName) && !_subscribedTags.Contains(tagName))
                             {
