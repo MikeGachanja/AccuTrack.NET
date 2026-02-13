@@ -1,5 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Runtime.Views.Controls.RuntimeButton">
-  <Button x:Name="TheButton" Content="Button" />
+  <Button x:Name="TheButton">
+    <TextBlock x:Name="ButtonText" Text="Button" />
+  </Button>
 </UserControl>

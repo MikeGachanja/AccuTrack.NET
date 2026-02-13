@@ -96,9 +96,13 @@ public static class ScreenRenderer
                 }
             }
             
-            // Also check root level for backward compatibility (e.g., "text" property for buttons)
+            // Also check root level for backward compatibility (e.g., "text" property for buttons, gauge properties, etc.)
             // Only add if not already in properties dict
-            var rootLevelProperties = new[] { "text", "backColor", "foreColor", "borderColor", "borderWidth", "font", "fontSize", "fontStyle", "action" };
+            var rootLevelProperties = new[] { 
+                "text", "backColor", "foreColor", "borderColor", "borderWidth", "font", "fontSize", "fontStyle", "action",
+                "value", "minimum", "maximum", "needleColor", "textColor", "showValue", "showMinMax", "unit",
+                "level", "tankColor", "fillColor", "lowLevelColor", "highLevelColor", "lowLevelThreshold", "highLevelThreshold", "label", "showLevel"
+            };
             foreach (var propName in rootLevelProperties)
             {
                 if (!dict.ContainsKey(propName) && item.TryGetProperty(propName, out var rootProp))

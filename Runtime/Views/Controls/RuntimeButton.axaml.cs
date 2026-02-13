@@ -18,7 +18,8 @@ public partial class RuntimeButton : UserControl
         if (d == null) return;
         
         // Text content
-        TheButton.Content = GetProperty(d, "text", d.Name);
+        var text = GetProperty(d, "text", d.Name);
+        ButtonText.Text = text;
         
         // Colors
         var backColor = GetProperty(d, "backColor", "#F0F0F0");
@@ -26,6 +27,7 @@ public partial class RuntimeButton : UserControl
         
         var foreColor = GetProperty(d, "foreColor", "#000000");
         TheButton.Foreground = ParseBrush(foreColor);
+        ButtonText.Foreground = ParseBrush(foreColor); // Explicitly set text color
         
         var borderColor = GetProperty(d, "borderColor", "#808080");
         TheButton.BorderBrush = ParseBrush(borderColor);
@@ -51,6 +53,12 @@ public partial class RuntimeButton : UserControl
         TheButton.FontSize = fontSize;
         TheButton.FontWeight = fontWeight;
         TheButton.FontStyle = fontStyle;
+        
+        // Also apply to TextBlock
+        ButtonText.FontFamily = new FontFamily(fontName);
+        ButtonText.FontSize = fontSize;
+        ButtonText.FontWeight = fontWeight;
+        ButtonText.FontStyle = fontStyle;
         
         // Enabled and Visible
         TheButton.IsEnabled = d.Enabled;
