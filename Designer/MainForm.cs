@@ -1651,6 +1651,13 @@ namespace Designer
             {
                 editor.SetScadaProject(scadaProject);
             }
+            
+            // Set SCADA name and ProjectManager for tag table access
+            editor.SetScadaName(scadaName);
+            if (_projectManager != null)
+            {
+                editor.SetProjectManager(_projectManager);
+            }
 
             var tabPage = new TabPage(tabName);
             tabPage.Controls.Add(editor);

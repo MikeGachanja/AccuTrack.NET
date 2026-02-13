@@ -17,6 +17,8 @@ public partial class HistorianEditor : UserControl
     private DataGridView _tagsGrid;
     private Historian? _historian;
     private ScadaProject? _scadaProject;
+    private string? _scadaName;
+    private ProjectManager? _projectManager;
     private List<Tag> _availableTags = new List<Tag>();
     private bool _isModified = false;
 
@@ -238,6 +240,22 @@ public partial class HistorianEditor : UserControl
     }
 
     /// <summary>
+    /// Sets the SCADA name for loading tag tables.
+    /// </summary>
+    public void SetScadaName(string scadaName)
+    {
+        _scadaName = scadaName;
+    }
+
+    /// <summary>
+    /// Sets the project manager for accessing tag tables.
+    /// </summary>
+    public void SetProjectManager(ProjectManager projectManager)
+    {
+        _projectManager = projectManager;
+    }
+
+    /// <summary>
     /// Updates the list of available tags.
     /// </summary>
     public void SetAvailableTags(List<Tag> tags)
@@ -362,9 +380,18 @@ public partial class HistorianEditor : UserControl
         if (row.Tag is not HistorianTag historianTag)
             return;
 
-        // Get tag tables from the project
+        // Get tag tables from ProjectManager if available, otherwise from scadaProject
         var tagTables = new List<TagTable>();
-        if (_scadaProject != null)
+        
+        // Try to get tag tables via ProjectManager (most reliable)
+        if (_projectManager != null && !string.IsNullOrEmpty(_scadaName))
+        {
+            var tables = _projectManager.GetTagTables(_scadaName);
+            tagTables = tables.OfType<TagTable>().ToList();
+        }
+        
+        // Fallback to scadaProject if tagTables is still empty
+        if (tagTables.Count == 0 && _scadaProject != null)
         {
             tagTables = _scadaProject.TagTables.OfType<TagTable>().ToList();
         }
