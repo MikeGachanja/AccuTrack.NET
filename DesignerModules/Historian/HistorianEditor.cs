@@ -75,7 +75,7 @@ public partial class HistorianEditor : UserControl
         // Storage Type
         settingsLayout.Controls.Add(new Label { Text = "Storage Type:", AutoSize = true }, 0, 1);
         _storageTypeCombo = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-        _storageTypeCombo.Items.AddRange(new[] { "File", "Database", "Cloud" });
+        _storageTypeCombo.Items.AddRange(new[] { "Database", "File", "Cloud" });
         _storageTypeCombo.SelectedIndex = 0;
         _storageTypeCombo.SelectedIndexChanged += (s, e) => _isModified = true;
         settingsLayout.Controls.Add(_storageTypeCombo, 1, 1);
@@ -179,7 +179,10 @@ public partial class HistorianEditor : UserControl
         {
             Name = "TagName",
             HeaderText = "Tag Name",
-            DataPropertyName = "TagName"
+            DataPropertyName = "TagName",
+            DisplayStyle = DataGridViewComboBoxDisplayStyle.DropDownButton,
+            DisplayStyleForCurrentCellOnly = false,
+            FlatStyle = FlatStyle.Flat
         };
         tagColumn.Items.AddRange(_availableTags.Select(t => t.Name).ToArray());
         _tagsGrid.Columns.Remove("TagName");
@@ -242,10 +245,55 @@ public partial class HistorianEditor : UserControl
         _availableTags = tags ?? new List<Tag>();
         
         // Update the combo box column
-        if (_tagsGrid.Columns["TagName"] is DataGridViewComboBoxColumn tagColumn)
+        var tagColumn = _tagsGrid.Columns["TagName"] as DataGridViewComboBoxColumn;
+        if (tagColumn != null)
         {
+            var currentValues = new List<string>();
+            // Find TagName column index
+            int tagNameIndex = -1;
+            for (int i = 0; i < _tagsGrid.Columns.Count; i++)
+            {
+                if (_tagsGrid.Columns[i].Name == "TagName")
+                {
+                    tagNameIndex = i;
+                    break;
+                }
+            }
+            
+            // Save current values from rows
+            if (tagNameIndex >= 0)
+            {
+                foreach (DataGridViewRow row in _tagsGrid.Rows)
+                {
+                    if (tagNameIndex < row.Cells.Count && row.Cells[tagNameIndex].Value != null)
+                    {
+                        var val = row.Cells[tagNameIndex].Value.ToString();
+                        if (!string.IsNullOrEmpty(val))
+                            currentValues.Add(val);
+                    }
+                }
+            }
+            
             tagColumn.Items.Clear();
             tagColumn.Items.AddRange(_availableTags.Select(t => t.Name).ToArray());
+            
+            // Restore values if they still exist in the new list
+            if (tagNameIndex >= 0)
+            {
+                int rowIndex = 0;
+                foreach (DataGridViewRow row in _tagsGrid.Rows)
+                {
+                    if (rowIndex < currentValues.Count && tagNameIndex < row.Cells.Count)
+                    {
+                        var savedValue = currentValues[rowIndex];
+                        if (tagColumn.Items.Contains(savedValue))
+                        {
+                            row.Cells[tagNameIndex].Value = savedValue;
+                        }
+                    }
+                    rowIndex++;
+                }
+            }
         }
     }
 
@@ -267,15 +315,64 @@ public partial class HistorianEditor : UserControl
 
         // Load tags
         _tagsGrid.Rows.Clear();
+        
+        // Ensure columns are properly initialized
+        if (_tagsGrid.Columns.Count == 0)
+            return;
+        
+        // Find column indices safely
+        int tagNameIndex = -1, tagTableIndex = -1, intervalIndex = -1, enabledIndex = -1, descIndex = -1;
+        for (int i = 0; i < _tagsGrid.Columns.Count; i++)
+        {
+            var col = _tagsGrid.Columns[i];
+            switch (col.Name)
+            {
+                case "TagName": tagNameIndex = i; break;
+                case "TagTableName": tagTableIndex = i; break;
+                case "LoggingIntervalSeconds": intervalIndex = i; break;
+                case "Enabled": enabledIndex = i; break;
+                case "Description": descIndex = i; break;
+            }
+        }
+        
         foreach (var tag in _historian.Tags)
         {
             var row = new DataGridViewRow();
             row.CreateCells(_tagsGrid);
-            row.Cells[0].Value = tag.TagName;
-            row.Cells[1].Value = tag.TagTableName;
-            row.Cells[2].Value = tag.LoggingIntervalSeconds;
-            row.Cells[3].Value = tag.Enabled;
-            row.Cells[4].Value = tag.Description;
+            
+            // Set values using column indices (safer than names)
+            if (tagNameIndex >= 0 && tagNameIndex < row.Cells.Count)
+            {
+                var tagNameCell = row.Cells[tagNameIndex];
+                // For combo box, ensure the value exists in the items list
+                if (tagNameCell is DataGridViewComboBoxCell comboCell)
+                {
+                    var tagName = tag.TagName ?? string.Empty;
+                    // Add the tag name to items if it doesn't exist (for backward compatibility)
+                    if (!string.IsNullOrEmpty(tagName) && !comboCell.Items.Contains(tagName))
+                    {
+                        comboCell.Items.Add(tagName);
+                    }
+                    comboCell.Value = tagName;
+                }
+                else if (tagNameCell != null)
+                {
+                    tagNameCell.Value = tag.TagName ?? string.Empty;
+                }
+            }
+            
+            if (tagTableIndex >= 0 && tagTableIndex < row.Cells.Count && row.Cells[tagTableIndex] != null)
+                row.Cells[tagTableIndex].Value = tag.TagTableName ?? string.Empty;
+            
+            if (intervalIndex >= 0 && intervalIndex < row.Cells.Count && row.Cells[intervalIndex] != null)
+                row.Cells[intervalIndex].Value = tag.LoggingIntervalSeconds;
+            
+            if (enabledIndex >= 0 && enabledIndex < row.Cells.Count && row.Cells[enabledIndex] != null)
+                row.Cells[enabledIndex].Value = tag.Enabled;
+            
+            if (descIndex >= 0 && descIndex < row.Cells.Count && row.Cells[descIndex] != null)
+                row.Cells[descIndex].Value = tag.Description ?? string.Empty;
+            
             row.Tag = tag;
             _tagsGrid.Rows.Add(row);
         }
@@ -314,15 +411,22 @@ public partial class HistorianEditor : UserControl
 
     private void OnCellValueChanged(object? sender, DataGridViewCellEventArgs e)
     {
-        if (e.RowIndex < 0 || e.ColumnIndex < 0)
+        if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.RowIndex >= _tagsGrid.Rows.Count)
             return;
 
         var row = _tagsGrid.Rows[e.RowIndex];
         if (row.Tag is not HistorianTag tag)
             return;
 
+        if (e.ColumnIndex >= _tagsGrid.Columns.Count)
+            return;
+
         var column = _tagsGrid.Columns[e.ColumnIndex];
-        var value = row.Cells[e.ColumnIndex].Value;
+        if (e.ColumnIndex >= row.Cells.Count)
+            return;
+
+        var cell = row.Cells[e.ColumnIndex];
+        var value = cell.Value;
 
         switch (column.Name)
         {
@@ -357,7 +461,7 @@ public partial class HistorianEditor : UserControl
 
         // Update settings from controls
         _historian.LoggingIntervalSeconds = (int)_loggingIntervalNumeric.Value;
-        _historian.StorageType = _storageTypeCombo.SelectedItem?.ToString() ?? "File";
+        _historian.StorageType = _storageTypeCombo.SelectedItem?.ToString() ?? "Database";
         _historian.StoragePath = _storagePathTextBox.Text;
         _historian.MaxStorageSizeMB = (int)_maxStorageSizeNumeric.Value;
         _historian.RetentionPolicy = _retentionPolicyCombo.SelectedItem?.ToString() ?? "Days";

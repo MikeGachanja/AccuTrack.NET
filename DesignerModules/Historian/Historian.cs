@@ -11,7 +11,7 @@ public class Historian
 {
     public List<HistorianTag> Tags { get; set; } = new List<HistorianTag>();
     public int LoggingIntervalSeconds { get; set; } = 60; // Default 1 minute
-    public string StorageType { get; set; } = "File"; // File, Database, Cloud
+    public string StorageType { get; set; } = "Database"; // Database (SQLite), File, Cloud
     public string StoragePath { get; set; } = string.Empty;
     public int MaxStorageSizeMB { get; set; } = 1000; // Maximum storage size in MB
     public string RetentionPolicy { get; set; } = "Days"; // Days, Size, Both
@@ -51,7 +51,7 @@ public class Historian
         var historian = new Historian
         {
             LoggingIntervalSeconds = json["loggingIntervalSeconds"]?.ToObject<int>() ?? 60,
-            StorageType = json["storageType"]?.ToString() ?? "File",
+            StorageType = json["storageType"]?.ToString() ?? "Database",
             StoragePath = json["storagePath"]?.ToString() ?? string.Empty,
             MaxStorageSizeMB = json["maxStorageSizeMB"]?.ToObject<int>() ?? 1000,
             RetentionPolicy = json["retentionPolicy"]?.ToString() ?? "Days",
