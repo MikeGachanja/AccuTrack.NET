@@ -2,7 +2,11 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Runtime.Views.Controls.RuntimePump">
   <StackPanel>
-    <Ellipse x:Name="TheEllipse" Width="28" Height="28" Fill="Gray" />
+    <Grid>
+      <Ellipse x:Name="TheEllipse" Width="28" Height="28" Fill="Gray" />
+      <TextBlock x:Name="PumpText" Text="P" Foreground="White" FontSize="14" FontWeight="Bold" 
+                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+    </Grid>
     <TextBlock x:Name="LabelText" Text="Pump" Foreground="#333333" FontSize="10" HorizontalAlignment="Center" />
   </StackPanel>
 </UserControl>

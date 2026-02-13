@@ -2,7 +2,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Runtime.Views.Controls.RuntimeMotor">
   <StackPanel>
-    <Ellipse x:Name="TheEllipse" Width="28" Height="28" Fill="Gray" />
+    <Grid>
+      <Ellipse x:Name="TheEllipse" Width="28" Height="28" Fill="Gray" />
+      <TextBlock x:Name="MotorText" Text="M" Foreground="White" FontSize="14" FontWeight="Bold" 
+                 HorizontalAlignment="Center" VerticalAlignment="Center" />
+      <Ellipse x:Name="IndicatorEllipse" Width="8" Height="8" Fill="Gray" 
+               HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,2,2,0" />
+    </Grid>
     <TextBlock x:Name="LabelText" Text="Motor" Foreground="#333333" FontSize="10" HorizontalAlignment="Center" />
   </StackPanel>
 </UserControl>

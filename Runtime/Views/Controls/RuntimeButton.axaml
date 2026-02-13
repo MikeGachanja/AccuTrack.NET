@@ -1,7 +1,8 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Runtime.Views.Controls.RuntimeButton">
-  <Button x:Name="TheButton">
+  <Button x:Name="TheButton" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+          HorizontalContentAlignment="Center" VerticalContentAlignment="Center">
     <TextBlock x:Name="ButtonText" Text="Button" />
   </Button>
 </UserControl>

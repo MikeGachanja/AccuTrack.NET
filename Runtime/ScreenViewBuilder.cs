@@ -44,10 +44,20 @@ public static class ScreenViewBuilder
         {
             var control = CreateControl(comp, tagManager, eventManager, tagIOHandler, resolveImagePath, resolveSvgPath, subs);
             if (control == null) continue;
+            
+            // Set size constraints BEFORE adding to canvas to ensure they're respected
+            // Use explicit Width/Height, MinWidth/MinHeight, and MaxWidth/MaxHeight to ensure controls maintain their exact size
+            var width = Math.Max(1, comp.Width);
+            var height = Math.Max(1, comp.Height);
+            control.Width = width;
+            control.Height = height;
+            control.MinWidth = width;
+            control.MinHeight = height;
+            control.MaxWidth = width;
+            control.MaxHeight = height;
+            
             Canvas.SetLeft(control, comp.X);
             Canvas.SetTop(control, comp.Y);
-            control.Width = Math.Max(1, comp.Width);
-            control.Height = Math.Max(1, comp.Height);
             canvas.Children.Add(control);
             if (animationManager != null && !string.IsNullOrEmpty(screenId) && !string.IsNullOrEmpty(comp.Id))
             {

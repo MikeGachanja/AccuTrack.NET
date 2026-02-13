@@ -101,7 +101,8 @@ public static class ScreenRenderer
             var rootLevelProperties = new[] { 
                 "text", "backColor", "foreColor", "borderColor", "borderWidth", "font", "fontSize", "fontStyle", "action",
                 "value", "minimum", "maximum", "needleColor", "textColor", "showValue", "showMinMax", "unit",
-                "level", "tankColor", "fillColor", "lowLevelColor", "highLevelColor", "lowLevelThreshold", "highLevelThreshold", "label", "showLevel"
+                "level", "tankColor", "fillColor", "lowLevelColor", "highLevelColor", "lowLevelThreshold", "highLevelThreshold", "label", "showLevel",
+                "onColor", "offColor", "faultColor", "color", "backgroundColor", "running", "faulted", "state", "direction"
             };
             foreach (var propName in rootLevelProperties)
             {
