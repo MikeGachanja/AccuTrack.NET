@@ -1720,11 +1720,12 @@ namespace Designer
             var editor = new ScreenEditor();
             editor.SetScadaProjectName(scadaName);
             
-            // Get SCADA project to retrieve resolution
+            // Get SCADA project to retrieve resolution and set for event creation
             var scadaProject = _projectManager?.FindScadaProject(scadaName);
             if (scadaProject != null)
             {
                 editor.SetScadaResolution(scadaProject.Resolution);
+                editor.SetScadaProject(scadaProject); // Set project for event creation
             }
             
             // SetTemplate now accepts object

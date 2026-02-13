@@ -41,6 +41,7 @@ public partial class PropertyEditor : UserControl
     private ComboBox _eventActionCombo;
     private ComboBox _eventTriggerCombo;
     private Panel _eventParamsPanel;
+    private EventHandler? _paramsPanelResizeHandler;
     private ScadaEvent? _currentEditingEvent;
     
     // Event parameter controls (stored for access)
@@ -320,6 +321,28 @@ public partial class PropertyEditor : UserControl
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
+        // Action (for legacy/navigation buttons)
+        layout.Controls.Add(new Label { Text = "Action:", AutoSize = true }, 0, row);
+        var actionTextBox = new TextBox { Text = button.Action ?? string.Empty, Dock = DockStyle.Fill };
+        actionTextBox.TextChanged += (s, e) =>
+        {
+            button.Action = actionTextBox.Text;
+            TriggerAutoSave();
+        };
+        var actionHelpLabel = new Label 
+        { 
+            Text = "Format: NavigateScreen:ScreenName or action type", 
+            AutoSize = true, 
+            ForeColor = Color.Gray,
+            Font = new Font("Arial", 7)
+        };
+        var actionLayout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, AutoSize = true };
+        actionLayout.Controls.Add(actionTextBox);
+        actionLayout.Controls.Add(actionHelpLabel);
+        layout.Controls.Add(actionLayout, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
         // BackColor
         layout.Controls.Add(new Label { Text = "Back Color:", AutoSize = true }, 0, row);
         var backColorButton = new Button { Text = "", Width = 50, Height = 25 };
@@ -357,6 +380,38 @@ public partial class PropertyEditor : UserControl
             }
         };
         layout.Controls.Add(foreColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // BorderColor
+        layout.Controls.Add(new Label { Text = "Border Color:", AutoSize = true }, 0, row);
+        var borderColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(borderColorButton, button.BorderColor);
+        borderColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = button.BorderColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    button.BorderColor = colorDialog.Color;
+                    UpdateColorButton(borderColorButton, button.BorderColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(borderColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // BorderWidth
+        layout.Controls.Add(new Label { Text = "Border Width:", AutoSize = true }, 0, row);
+        var borderWidthNumeric = new NumericUpDown { Minimum = 0, Maximum = 10, Value = button.BorderWidth, Width = 100 };
+        borderWidthNumeric.ValueChanged += (s, e) =>
+        {
+            button.BorderWidth = (int)borderWidthNumeric.Value;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(borderWidthNumeric, 1, row);
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
     }
@@ -410,9 +465,10 @@ public partial class PropertyEditor : UserControl
         layout.Controls.Add(buttonPanel, 0, 2);
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 35F));
 
-        // Event configuration
+        // Event configuration - wrapped in scrollable panel
         var configGroup = new GroupBox { Text = "Event Configuration", Dock = DockStyle.Fill };
-        var configLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(5) };
+        var configScrollPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        var configLayout = new TableLayoutPanel { ColumnCount = 2, Padding = new Padding(5), AutoSize = true };
         configLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         configLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
 
@@ -464,13 +520,25 @@ public partial class PropertyEditor : UserControl
         configLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         configRow++;
 
-        // Parameters panel (will be populated based on category)
-        _eventParamsPanel = new Panel { Dock = DockStyle.Fill, Height = 200 };
+        // Parameters panel (will be populated based on category) - scrollable
+        _eventParamsPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true, MinimumSize = new Size(0, 150) };
         configLayout.Controls.Add(_eventParamsPanel, 0, configRow);
         configLayout.SetColumnSpan(_eventParamsPanel, 2);
-        configLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        configLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize, 200F));
 
-        configGroup.Controls.Add(configLayout);
+        // Add configLayout to scroll panel
+        configScrollPanel.Controls.Add(configLayout);
+        configLayout.Location = new Point(0, 0);
+        configLayout.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        configLayout.Width = configScrollPanel.ClientSize.Width - SystemInformation.VerticalScrollBarWidth;
+        
+        // Handle resize to update configLayout width
+        configScrollPanel.Resize += (s, e) =>
+        {
+            configLayout.Width = configScrollPanel.ClientSize.Width - (configScrollPanel.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0);
+        };
+
+        configGroup.Controls.Add(configScrollPanel);
         layout.Controls.Add(configGroup, 0, 3);
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 60F));
 
@@ -525,7 +593,8 @@ public partial class PropertyEditor : UserControl
             return;
 
         int categoryIndex = _eventCategoryCombo.SelectedIndex;
-        var paramsLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(5) };
+        // Use AutoSize instead of Dock to allow scrolling
+        var paramsLayout = new TableLayoutPanel { ColumnCount = 2, Padding = new Padding(5), AutoSize = true };
         paramsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         paramsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
 
@@ -607,7 +676,29 @@ public partial class PropertyEditor : UserControl
                 break;
         }
 
+        // Add paramsLayout to scrollable panel
         _eventParamsPanel.Controls.Add(paramsLayout);
+        paramsLayout.Location = new Point(0, 0);
+        paramsLayout.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        
+        // Remove previous resize handler if exists
+        if (_paramsPanelResizeHandler != null)
+        {
+            _eventParamsPanel.Resize -= _paramsPanelResizeHandler;
+        }
+        
+        // Update width when panel is resized
+        _paramsPanelResizeHandler = (sender, e) =>
+        {
+            if (paramsLayout != null && paramsLayout.Parent == _eventParamsPanel)
+            {
+                int scrollBarWidth = _eventParamsPanel.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
+                paramsLayout.Width = Math.Max(100, _eventParamsPanel.ClientSize.Width - scrollBarWidth);
+            }
+        };
+        
+        _eventParamsPanel.Resize += _paramsPanelResizeHandler;
+        _paramsPanelResizeHandler(null, EventArgs.Empty);
     }
 
     private void UpdateEventsTab()
@@ -639,7 +730,22 @@ public partial class PropertyEditor : UserControl
         {
             _eventsList.Items.Clear();
             var componentId = _selectedComponent.Id.ToString();
-            var events = _eventsModule.GetEventsForComponent(componentId);
+            
+            // Debug output
+            System.Diagnostics.Debug.WriteLine($"[PropertyEditor] Loading events for component ID: {componentId}");
+            System.Diagnostics.Debug.WriteLine($"[PropertyEditor] EventsModule initialized: {_eventsModule != null}");
+            if (_eventsModule != null)
+            {
+                var eventsPath = _eventsModule.GetEventsJsonPath();
+                System.Diagnostics.Debug.WriteLine($"[PropertyEditor] Events JSON path: {eventsPath ?? "null"}");
+                if (!string.IsNullOrEmpty(eventsPath))
+                {
+                    System.Diagnostics.Debug.WriteLine($"[PropertyEditor] Events JSON exists: {System.IO.File.Exists(eventsPath)}");
+                }
+            }
+            
+            var events = _eventsModule?.GetEventsForComponent(componentId) ?? new List<ScadaEvent>();
+            System.Diagnostics.Debug.WriteLine($"[PropertyEditor] Found {events.Count} event(s) for component {componentId}");
             
             foreach (var evt in events)
             {
@@ -843,6 +949,8 @@ public partial class PropertyEditor : UserControl
     
     private void UpdateAnimationTab()
     {
+        System.Diagnostics.Debug.WriteLine($"[PropertyEditor] UpdateAnimationTab called, component: {_selectedComponent?.Name ?? "null"}");
+        
         if (_selectedComponent == null)
         {
             if (_animationsList != null)
@@ -856,16 +964,22 @@ public partial class PropertyEditor : UserControl
         if (_animationsList != null)
             _animationsList.Items.Clear();
 
+        System.Diagnostics.Debug.WriteLine($"[PropertyEditor] Component has {_selectedComponent.Properties.Count} properties");
+        System.Diagnostics.Debug.WriteLine($"[PropertyEditor] Properties keys: {string.Join(", ", _selectedComponent.Properties.Keys)}");
+
         if (_selectedComponent.Properties.ContainsKey("animations"))
         {
             try
             {
                 var animationsObj = _selectedComponent.Properties["animations"];
+                System.Diagnostics.Debug.WriteLine($"[PropertyEditor] Found animations property, type: {animationsObj?.GetType().Name}");
+                
                 if (animationsObj is JObject animationsJson)
                 {
                     var animationsArray = animationsJson["animations"] as Newtonsoft.Json.Linq.JArray;
                     if (animationsArray != null && _animationsList != null)
                     {
+                        System.Diagnostics.Debug.WriteLine($"[PropertyEditor] Found {animationsArray.Count} animation(s) in JSON object");
                         foreach (var item in animationsArray)
                         {
                             if (item is JObject animObj)
@@ -880,6 +994,7 @@ public partial class PropertyEditor : UserControl
                 else if (animationsObj is Newtonsoft.Json.Linq.JArray directArray && _animationsList != null)
                 {
                     // Handle case where animations is stored directly as an array
+                    System.Diagnostics.Debug.WriteLine($"[PropertyEditor] Found {directArray.Count} animation(s) in direct array");
                     foreach (var item in directArray)
                     {
                         if (item is JObject animObj)
@@ -894,9 +1009,16 @@ public partial class PropertyEditor : UserControl
             catch (Exception ex)
             {
                 // Failed to load animations, start fresh
-                System.Diagnostics.Debug.WriteLine($"Failed to load animations: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[PropertyEditor] Failed to load animations: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"[PropertyEditor] Stack trace: {ex.StackTrace}");
             }
         }
+        else
+        {
+            System.Diagnostics.Debug.WriteLine($"[PropertyEditor] No animations property found on component");
+        }
+        
+        System.Diagnostics.Debug.WriteLine($"[PropertyEditor] Loaded {_componentAnimations.Count} animation(s) total");
     }
     
     private void OnAddAnimation(object? sender, EventArgs e)

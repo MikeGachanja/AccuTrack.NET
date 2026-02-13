@@ -347,15 +347,17 @@ public partial class ProjectView : UserControl
             {
                 try
                 {
-                    // Get screen name
+                    // Get screen name and ID
                     dynamic screenObj = nodeData.Data;
                     string screenName = screenObj.Name?.ToString() ?? node.Text;
+                    string screenId = screenObj.Id?.ToString() ?? "";
                     string scadaName = nodeData.ScadaName ?? "";
                     
                     // Create drag data with screen information
                     var dragData = new Dictionary<string, object>
                     {
                         ["screenName"] = screenName,
+                        ["screenId"] = screenId,
                         ["scadaName"] = scadaName,
                         ["screenObject"] = nodeData.Data
                     };

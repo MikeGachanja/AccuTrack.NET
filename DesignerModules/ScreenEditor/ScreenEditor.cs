@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using Designer.Modules.Components;
+using Designer.Modules.Events;
 using Newtonsoft.Json.Linq;
 
 namespace Designer.Modules.ScreenEditor;
@@ -18,6 +19,8 @@ public partial class ScreenEditor : UserControl
     private Panel _canvasContainer; // Container with margins for centering
     private object? _template; // Changed to object to avoid circular dependency
     private string? _scadaProjectName; // Store name instead of object to avoid circular dependency
+    private object? _scadaProject; // Store ScadaProject object for event creation
+    private Designer.Modules.Events.EventsModule? _eventsModule; // Events module for creating events
     private Size _scadaResolution = new Size(1920, 1080); // Default SCADA resolution
     private bool _modified;
     private float _zoomFactor = 1.0f;
@@ -212,6 +215,44 @@ public partial class ScreenEditor : UserControl
     public void SetScadaProjectName(string scadaName)
     {
         _scadaProjectName = scadaName;
+    }
+
+    /// <summary>
+    /// Sets the SCADA project object for event creation.
+    /// </summary>
+    public void SetScadaProject(object? scadaProject)
+    {
+        _scadaProject = scadaProject;
+        
+        // Initialize events module if not already initialized
+        if (_eventsModule == null && scadaProject != null)
+        {
+            _eventsModule = new Designer.Modules.Events.EventsModule();
+            _eventsModule.SetScadaProject(scadaProject);
+            
+            // Ensure events.json path is set correctly
+            var eventsPath = _eventsModule.GetEventsJsonPath();
+            if (string.IsNullOrEmpty(eventsPath))
+            {
+                try
+                {
+                    dynamic projectObj = scadaProject;
+                    var paths = projectObj.Paths;
+                    if (paths != null)
+                    {
+                        var rootPath = paths.RootPath?.ToString();
+                        if (!string.IsNullOrEmpty(rootPath))
+                        {
+                            _eventsModule.SetEventsJsonPath(System.IO.Path.Combine(rootPath, "json", "events.json"));
+                        }
+                    }
+                }
+                catch
+                {
+                    // Fallback handled by EventsModule
+                }
+            }
+        }
     }
 
     /// <summary>
@@ -635,6 +676,7 @@ public partial class ScreenEditor : UserControl
             try
             {
                 string screenName = screenData.TryGetValue("screenName", out var name) ? name?.ToString() ?? "" : "";
+                string screenId = screenData.TryGetValue("screenId", out var id) ? id?.ToString() ?? "" : "";
                 
                 if (!string.IsNullOrEmpty(screenName))
                 {
@@ -665,6 +707,10 @@ public partial class ScreenEditor : UserControl
                     if (IsWithinScreenBounds(location, buttonSize))
                     {
                         _components.Add(button);
+                        
+                        // Create navigation event automatically
+                        CreateNavigationEvent(button, screenName, screenId);
+                        
                         SetSelectedComponent(button);
                         SetModified(true);
                         _canvas.Invalidate();
@@ -674,6 +720,7 @@ public partial class ScreenEditor : UserControl
             catch (Exception ex)
             {
                 System.Diagnostics.Debug.WriteLine($"Error creating navigation button: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"Stack trace: {ex.StackTrace}");
             }
         }
         // Handle SVG drag-drop - create SVG view component
@@ -1473,6 +1520,64 @@ public partial class ScreenEditor : UserControl
     /// Checks if there are components in the clipboard.
     /// </summary>
     public bool HasClipboardComponents() => _clipboardComponents != null && _clipboardComponents.Count > 0;
+
+    /// <summary>
+    /// Creates a navigation event for a button component.
+    /// </summary>
+    private void CreateNavigationEvent(ButtonComponent button, string targetScreenName, string targetScreenId)
+    {
+        if (_eventsModule == null)
+        {
+            System.Diagnostics.Debug.WriteLine("[ScreenEditor] EventsModule not initialized, cannot create navigation event");
+            return;
+        }
+
+        try
+        {
+            // Create event trigger
+            var trigger = new EventTrigger
+            {
+                ComponentId = button.Id.ToString(),
+                Type = "OnClick"
+            };
+
+            // Create navigation action
+            var action = new EventAction
+            {
+                Type = "NavigateScreen",
+                ScreenId = !string.IsNullOrEmpty(targetScreenId) ? targetScreenId : targetScreenName
+            };
+
+            // Create event
+            var evt = new ScadaEvent
+            {
+                Id = Guid.NewGuid().ToString(),
+                Name = $"Navigate to {targetScreenName}",
+                Description = $"Navigation event for button '{button.Name}' to screen '{targetScreenName}'",
+                Trigger = trigger
+            };
+            evt.Actions.Add(action);
+            evt.Metadata.CreatedBy = "System";
+            evt.Metadata.CreatedAt = DateTime.Now.ToString("O");
+
+            // Add event to EventsModule
+            if (_eventsModule.AddEvent(evt))
+            {
+                // Link event to button via EventIds
+                button.EventIds.Add(evt.Id);
+                System.Diagnostics.Debug.WriteLine($"[ScreenEditor] Created navigation event '{evt.Id}' for button '{button.Name}' to screen '{targetScreenName}'");
+            }
+            else
+            {
+                System.Diagnostics.Debug.WriteLine($"[ScreenEditor] Failed to add navigation event for button '{button.Name}'");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ScreenEditor] Error creating navigation event: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[ScreenEditor] Stack trace: {ex.StackTrace}");
+        }
+    }
 
     /// <summary>
     /// Constrains a size to ensure the component stays within screen bounds.
