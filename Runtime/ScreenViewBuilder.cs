@@ -14,12 +14,13 @@ namespace Runtime;
 public static class ScreenViewBuilder
 {
     public static Control? Build(ScreenRenderer.ScreenDescriptor? screen)
-        => Build(screen, null, null, null, null, null);
+        => Build(screen, null, null, null, null, null, null);
 
     /// <summary>Builds view and wires tag bindings and button events when services are provided.</summary>
     /// <param name="resolveImagePath">Optional resolver for image names (e.g. ScreenManager.ResolveImagePath).</param>
+    /// <param name="resolveSvgPath">Optional resolver for SVG paths (e.g. ScreenManager.ResolveSvgPath). If null, uses resolveImagePath.</param>
     /// <param name="animationManager">Optional; when set, subscribes each control with an Id to animation state (visibility, opacity, color).</param>
-    public static Control? Build(ScreenRenderer.ScreenDescriptor? screen, Runtime.Modules.TagsEngine.TagManager? tagManager, EventManager? eventManager, TagIOHandler? tagIOHandler = null, Func<string, string?>? resolveImagePath = null, AnimationManager? animationManager = null)
+    public static Control? Build(ScreenRenderer.ScreenDescriptor? screen, Runtime.Modules.TagsEngine.TagManager? tagManager, EventManager? eventManager, TagIOHandler? tagIOHandler = null, Func<string, string?>? resolveImagePath = null, Func<string, string?>? resolveSvgPath = null, AnimationManager? animationManager = null)
     {
         if (screen == null) return null;
         var subs = new List<IDisposable>();
@@ -41,7 +42,7 @@ public static class ScreenViewBuilder
         sorted.Sort((a, b) => a.ZOrder.CompareTo(b.ZOrder));
         foreach (var comp in sorted)
         {
-            var control = CreateControl(comp, tagManager, eventManager, tagIOHandler, resolveImagePath, subs);
+            var control = CreateControl(comp, tagManager, eventManager, tagIOHandler, resolveImagePath, resolveSvgPath, subs);
             if (control == null) continue;
             Canvas.SetLeft(control, comp.X);
             Canvas.SetTop(control, comp.Y);
@@ -66,7 +67,7 @@ public static class ScreenViewBuilder
         return scroll;
     }
 
-    private static Control? CreateControl(ComponentDescriptor d, Runtime.Modules.TagsEngine.TagManager? tagManager, EventManager? eventManager, TagIOHandler? tagIOHandler, Func<string, string?>? resolveImagePath, List<IDisposable> subs)
+    private static Control? CreateControl(ComponentDescriptor d, Runtime.Modules.TagsEngine.TagManager? tagManager, EventManager? eventManager, TagIOHandler? tagIOHandler, Func<string, string?>? resolveImagePath, Func<string, string?>? resolveSvgPath, List<IDisposable> subs)
     {
         if (!d.Visible) return null;
         var type = d.ComponentType ?? "";
@@ -99,7 +100,7 @@ public static class ScreenViewBuilder
             "ComboBox" => CreateComboBox(d, tagManager, tagIOHandler, subs),
             "Tab" => CreateTab(d),
             "Conveyor" => CreateConveyor(d, tagManager, subs),
-            "SVGView" => CreateSVGView(d),
+            "SVGView" => CreateSVGView(d, resolveSvgPath ?? resolveImagePath), // Use resolveSvgPath if available, fallback to resolveImagePath
             "TableView" => CreateTableView(d),
             "Popup" => CreatePopup(d),
             _ => CreatePlaceholder(d)
@@ -471,10 +472,27 @@ public static class ScreenViewBuilder
         return c;
     }
 
-    private static RuntimeSVGView CreateSVGView(ComponentDescriptor d)
+    private static RuntimeSVGView CreateSVGView(ComponentDescriptor d, Func<string, string?>? resolveSvgPath)
     {
         var s = new RuntimeSVGView();
         s.ApplyDescriptor(d);
+        
+        // Get SVG path from properties and resolve it
+        var svgPath = GetPropString(d, "svgPath", "");
+        if (resolveSvgPath != null && !string.IsNullOrEmpty(svgPath))
+        {
+            var resolvedPath = resolveSvgPath(svgPath);
+            if (!string.IsNullOrEmpty(resolvedPath))
+            {
+                s.SetSvgPath(resolvedPath);
+            }
+        }
+        else if (!string.IsNullOrEmpty(svgPath))
+        {
+            // Try direct path if resolver not available
+            s.SetSvgPath(svgPath);
+        }
+        
         return s;
     }
 

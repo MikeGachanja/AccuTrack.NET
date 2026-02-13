@@ -62,4 +62,20 @@ public sealed class ScreenManager
         var path = Path.Combine(_projectPath, "images", imageName.Trim());
         return File.Exists(path) ? Path.GetFullPath(path) : null;
     }
+
+    /// <summary>Resolve SVG path (relative to svg/ directory) to full path under project (e.g. projectPath/svg/svgPath). Returns null if not found or no project.</summary>
+    public string? ResolveSvgPath(string svgPath)
+    {
+        if (string.IsNullOrEmpty(_projectPath) || string.IsNullOrWhiteSpace(svgPath)) return null;
+        
+        // If it's already an absolute path, check if it exists
+        if (Path.IsPathRooted(svgPath))
+        {
+            return File.Exists(svgPath) ? Path.GetFullPath(svgPath) : null;
+        }
+        
+        // Otherwise, resolve relative to project's svg/ directory
+        var path = Path.Combine(_projectPath, "svg", svgPath.Trim());
+        return File.Exists(path) ? Path.GetFullPath(path) : null;
+    }
 }

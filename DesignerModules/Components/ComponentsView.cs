@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using Designer.Modules.Components;
+using Svg;
 
 namespace Designer.Modules.Components;
 
@@ -300,42 +301,78 @@ public partial class ComponentsView : UserControl
     }
 
     /// <summary>
-    /// Loads an SVG file as an Image (simplified - for full SVG support, use a library like Svg.NET).
+    /// Loads an SVG file as an Image using Svg.NET library.
     /// </summary>
     private Image? LoadSvgAsImage(string svgPath, int width, int height)
     {
         try
         {
-            // For now, try to load as regular image (works for some SVG files)
-            // In production, you'd want to use a proper SVG library like Svg.NET
-            if (File.Exists(svgPath))
+            if (!File.Exists(svgPath))
+                return null;
+
+            // Load SVG document using Svg.NET
+            var svgDoc = SvgDocument.Open(svgPath);
+            if (svgDoc == null)
+                return null;
+
+            // Get original SVG bounds
+            var originalBounds = svgDoc.Bounds;
+            float originalWidth = originalBounds.Width > 0 ? originalBounds.Width : (svgDoc.Width.Value > 0 ? svgDoc.Width.Value : width);
+            float originalHeight = originalBounds.Height > 0 ? originalBounds.Height : (svgDoc.Height.Value > 0 ? svgDoc.Height.Value : height);
+
+            // If original dimensions are invalid, try to calculate from viewBox
+            if (originalWidth <= 0 || originalHeight <= 0)
             {
-                // Try loading directly (System.Drawing can handle some SVG files)
-                try
+                if (svgDoc.ViewBox.Width > 0 && svgDoc.ViewBox.Height > 0)
                 {
-                    using (var img = Image.FromFile(svgPath))
-                    {
-                        var bitmap = new Bitmap(width, height);
-                        using (var g = Graphics.FromImage(bitmap))
-                        {
-                            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
-                            g.DrawImage(img, 0, 0, width, height);
-                        }
-                        return bitmap;
-                    }
+                    originalWidth = svgDoc.ViewBox.Width;
+                    originalHeight = svgDoc.ViewBox.Height;
                 }
-                catch
+                else
                 {
-                    // SVG not supported directly, return null (would need Svg.NET library)
-                    return null;
+                    // Fallback: use target size
+                    originalWidth = width;
+                    originalHeight = height;
                 }
             }
+
+            // Set SVG document dimensions to fill the icon space
+            svgDoc.Width = new SvgUnit(SvgUnitType.Pixel, width);
+            svgDoc.Height = new SvgUnit(SvgUnitType.Pixel, height);
+
+            // Set ViewBox to original SVG bounds to ensure proper scaling
+            if (originalWidth > 0 && originalHeight > 0)
+            {
+                svgDoc.ViewBox = new SvgViewBox(0, 0, originalWidth, originalHeight);
+            }
+
+            // Set aspect ratio to none to allow stretching (fill mode)
+            svgDoc.AspectRatio = new SvgAspectRatio(SvgPreserveAspectRatio.none);
+
+            // Create bitmap to render into
+            var bitmap = new Bitmap(width, height);
+            using (var g = Graphics.FromImage(bitmap))
+            {
+                // Use high-quality rendering
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.PixelOffsetMode = System.Drawing.Drawing2D.PixelOffsetMode.HighQuality;
+
+                // Clear background to white (or transparent)
+                g.Clear(Color.Transparent);
+
+                // Render SVG to fill the bitmap
+                svgDoc.Draw(g);
+            }
+
+            return bitmap;
         }
-        catch
+        catch (Exception ex)
         {
+            // Log error for debugging
+            System.Diagnostics.Debug.WriteLine($"Failed to load SVG icon '{svgPath}': {ex.Message}");
             return null;
         }
-        return null;
     }
 
     /// <summary>
@@ -351,49 +388,51 @@ public partial class ComponentsView : UserControl
             return null;
 
         var tabPage = new TabPage("SVG Components");
+        // Use larger image size for better SVG preview (24x24)
+        var imageList = new ImageList { ImageSize = new Size(24, 24) };
         var treeView = new TreeView
         {
             Dock = DockStyle.Fill,
-            ImageList = new ImageList { ImageSize = new Size(16, 16) },
+            ImageList = imageList,
             ShowLines = true,
             ShowPlusMinus = true,
             ShowRootLines = true
         };
 
-        // Add folder and file icons to ImageList
-        // Create custom folder and file icons
-        var folderBmp = new Bitmap(16, 16);
+        // Add folder icon to ImageList
+        var folderBmp = new Bitmap(24, 24);
         using (var g = Graphics.FromImage(folderBmp))
         {
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             // Draw folder icon (simplified)
-            g.FillRectangle(new SolidBrush(Color.FromArgb(255, 240, 200)), 2, 4, 12, 10);
+            g.FillRectangle(new SolidBrush(Color.FromArgb(255, 240, 200)), 3, 6, 18, 15);
             g.FillPolygon(new SolidBrush(Color.FromArgb(255, 220, 180)), new Point[]
             {
-                new Point(2, 4),
-                new Point(6, 4),
-                new Point(7, 6),
-                new Point(14, 6),
-                new Point(14, 14),
-                new Point(2, 14)
+                new Point(3, 6),
+                new Point(9, 6),
+                new Point(10, 9),
+                new Point(21, 9),
+                new Point(21, 21),
+                new Point(3, 21)
             });
-            g.DrawRectangle(Pens.DarkGray, 2, 4, 12, 10);
-            g.DrawLine(Pens.DarkGray, 2, 4, 7, 4);
+            g.DrawRectangle(Pens.DarkGray, 3, 6, 18, 15);
+            g.DrawLine(Pens.DarkGray, 3, 6, 10, 6);
         }
-        treeView.ImageList.Images.Add("folder", folderBmp);
+        imageList.Images.Add("folder", folderBmp);
         
-        var fileBmp = new Bitmap(16, 16);
+        // Add default file icon (fallback for SVGs that fail to load)
+        var fileBmp = new Bitmap(24, 24);
         using (var g = Graphics.FromImage(fileBmp))
         {
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
             // Draw file icon (simplified document)
-            g.FillRectangle(Brushes.White, 3, 2, 10, 12);
-            g.DrawRectangle(Pens.Black, 3, 2, 10, 12);
+            g.FillRectangle(Brushes.White, 4, 3, 16, 18);
+            g.DrawRectangle(Pens.Black, 4, 3, 16, 18);
             // Draw corner fold
-            g.DrawLine(Pens.Black, 10, 2, 10, 5);
-            g.DrawLine(Pens.Black, 10, 5, 13, 5);
+            g.DrawLine(Pens.Black, 15, 3, 15, 8);
+            g.DrawLine(Pens.Black, 15, 8, 20, 8);
         }
-        treeView.ImageList.Images.Add("file", fileBmp);
+        imageList.Images.Add("file", fileBmp);
 
         // Build hierarchical tree structure
         var rootNode = new TreeNode("SVG Files")
@@ -451,13 +490,34 @@ public partial class ComponentsView : UserControl
                 currentNode = folderNode;
             }
             
-            // Add the file node
+            // Add the file node with rendered SVG icon
             string fileName = parts[parts.Length - 1];
             string fileNameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
+            
+            // Try to load and render the SVG as an icon
+            Image? svgIcon = LoadSvgAsImage(svgFile, 24, 24);
+            int iconIndex;
+            
+            if (svgIcon != null)
+            {
+                // Add rendered SVG icon to ImageList
+                string iconKey = $"svg_{relativePath.Replace(Path.DirectorySeparatorChar, '_').Replace(" ", "_")}";
+                if (!imageList.Images.ContainsKey(iconKey))
+                {
+                    imageList.Images.Add(iconKey, svgIcon);
+                }
+                iconIndex = imageList.Images.IndexOfKey(iconKey);
+            }
+            else
+            {
+                // Fallback to default file icon if SVG fails to load
+                iconIndex = imageList.Images.IndexOfKey("file");
+            }
+            
             var fileNode = new TreeNode(fileNameWithoutExt)
             {
-                ImageIndex = treeView.ImageList.Images.IndexOfKey("file"),
-                SelectedImageIndex = treeView.ImageList.Images.IndexOfKey("file"),
+                ImageIndex = iconIndex,
+                SelectedImageIndex = iconIndex,
                 Tag = relativePath // Store relative path for drag-drop
             };
             currentNode.Nodes.Add(fileNode);

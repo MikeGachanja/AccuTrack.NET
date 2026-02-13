@@ -1,7 +1,10 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Runtime.Views.Controls.RuntimeSVGView">
-  <Border Background="White" BorderBrush="#cccccc" BorderThickness="1" CornerRadius="4" Padding="8">
-    <TextBlock x:Name="PlaceholderText" Text="SVG (stub)" Foreground="#666666" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" />
+  <Border x:Name="ContainerBorder" Background="White" BorderBrush="#cccccc" BorderThickness="1" CornerRadius="4">
+    <Grid>
+      <Image x:Name="SvgImage" Stretch="Fill" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+      <TextBlock x:Name="PlaceholderText" Text="SVG" Foreground="#666666" FontSize="11" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="False" />
+    </Grid>
   </Border>
 </UserControl>

@@ -125,7 +125,10 @@ public partial class MainWindow : Window
             var tagManager = tagsModule?.TagManager;
             var tagIOHandler = tagsModule?.TagIOHandler;
             var eventManager = _screensModule?.EventManager;
-            var view = ScreenViewBuilder.Build(screenDesc, tagManager, eventManager, tagIOHandler, name => _screensModule?.ScreenManager.ResolveImagePath(name), _screensModule?.AnimationManager);
+            var view = ScreenViewBuilder.Build(screenDesc, tagManager, eventManager, tagIOHandler, 
+                name => _screensModule?.ScreenManager.ResolveImagePath(name), 
+                svgPath => _screensModule?.ScreenManager.ResolveSvgPath(svgPath), 
+                _screensModule?.AnimationManager);
             if (view != null)
             {
                 _screenContainer.Content = view;
