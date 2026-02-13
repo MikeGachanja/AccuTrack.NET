@@ -265,4 +265,12 @@ public partial class MachineLearningEditor : UserControl
 
         return _ml;
     }
+
+    /// <summary>
+    /// Resets the modified flag (called after successful save).
+    /// </summary>
+    public void ResetModified()
+    {
+        _isModified = false;
+    }
 }

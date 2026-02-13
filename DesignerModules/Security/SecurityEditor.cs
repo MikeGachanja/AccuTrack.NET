@@ -372,4 +372,12 @@ public partial class SecurityEditor : UserControl
 
         return _security;
     }
+
+    /// <summary>
+    /// Resets the modified flag (called after successful save).
+    /// </summary>
+    public void ResetModified()
+    {
+        _isModified = false;
+    }
 }

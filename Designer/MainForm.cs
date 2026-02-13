@@ -798,6 +798,16 @@ namespace Designer
                     SaveCommunicationModuleFromEditor(commEditor, tab);
                 else if (widget is Designer.Modules.TagEngine.TagTableEditor tagEditor && tagEditor.IsModified)
                     SaveTagTableFromEditor(tagEditor, tab);
+                else if (widget is Designer.Modules.Historian.HistorianEditor historianEditor && historianEditor.IsModified)
+                    SaveHistorianFromEditor(historianEditor, tab);
+                else if (widget is Designer.Modules.Alarms.AlarmsEditor alarmsEditor && alarmsEditor.IsModified)
+                    SaveAlarmsFromEditor(alarmsEditor, tab);
+                else if (widget is Designer.Modules.Scheduler.ScheduleEditor scheduleEditor && scheduleEditor.IsModified)
+                    SaveSchedulesFromEditor(scheduleEditor, tab);
+                else if (widget is Designer.Modules.Security.SecurityEditor securityEditor && securityEditor.IsModified)
+                    SaveSecurityFromEditor(securityEditor, tab);
+                else if (widget is Designer.Modules.MachineLearning.MachineLearningEditor mlEditor && mlEditor.IsModified)
+                    SaveMachineLearningFromEditor(mlEditor, tab);
             }
         }
 
@@ -808,6 +818,76 @@ namespace Designer
             var scadaName = tab.Text.Replace("Communication - ", "").Trim();
             if (!string.IsNullOrEmpty(scadaName))
                 _projectManager.UpdateCommunicationModules(scadaName, new List<object> { modules });
+        }
+
+        private void SaveHistorianFromEditor(Designer.Modules.Historian.HistorianEditor editor, TabPage tab)
+        {
+            var historian = editor.GetHistorian();
+            if (historian == null || _projectManager == null) return;
+            var scadaName = tab.Text.Replace("Historian - ", "").Trim();
+            if (!string.IsNullOrEmpty(scadaName))
+            {
+                if (_projectManager.SaveHistorian(scadaName, historian))
+                {
+                    editor.ResetModified();
+                }
+            }
+        }
+
+        private void SaveAlarmsFromEditor(Designer.Modules.Alarms.AlarmsEditor editor, TabPage tab)
+        {
+            var alarms = editor.GetAlarms();
+            if (alarms == null || _projectManager == null) return;
+            var scadaName = tab.Text.Replace("Alarms (", "").Replace(")", "").Trim();
+            if (!string.IsNullOrEmpty(scadaName))
+            {
+                if (_projectManager.SaveAlarms(scadaName, alarms))
+                {
+                    editor.ResetModified();
+                }
+            }
+        }
+
+        private void SaveSchedulesFromEditor(Designer.Modules.Scheduler.ScheduleEditor editor, TabPage tab)
+        {
+            var schedules = editor.GetSchedules();
+            if (schedules == null || _projectManager == null) return;
+            var scadaName = tab.Text.Replace("Schedules - ", "").Trim();
+            if (!string.IsNullOrEmpty(scadaName))
+            {
+                if (_projectManager.SaveSchedules(scadaName, schedules))
+                {
+                    editor.ResetModified();
+                }
+            }
+        }
+
+        private void SaveSecurityFromEditor(Designer.Modules.Security.SecurityEditor editor, TabPage tab)
+        {
+            var security = editor.GetSecurity();
+            if (security == null || _projectManager == null) return;
+            var scadaName = tab.Text.Replace("Security - ", "").Trim();
+            if (!string.IsNullOrEmpty(scadaName))
+            {
+                if (_projectManager.SaveSecurity(scadaName, security))
+                {
+                    editor.ResetModified();
+                }
+            }
+        }
+
+        private void SaveMachineLearningFromEditor(Designer.Modules.MachineLearning.MachineLearningEditor editor, TabPage tab)
+        {
+            var ml = editor.GetMachineLearning();
+            if (ml == null || _projectManager == null) return;
+            var scadaName = tab.Text.Replace("Machine Learning - ", "").Trim();
+            if (!string.IsNullOrEmpty(scadaName))
+            {
+                if (_projectManager.SaveMachineLearning(scadaName, ml))
+                {
+                    editor.ResetModified();
+                }
+            }
         }
 
         private void SaveTagTableFromEditor(Designer.Modules.TagEngine.TagTableEditor tagEditor, TabPage tab)
@@ -1631,7 +1711,16 @@ namespace Designer
             var scadaProject = _projectManager?.FindScadaProject(scadaName);
             if (historianObj == null && scadaProject != null)
             {
-                var historianFile = System.IO.Path.Combine(scadaProject.Paths.HistorianPath, "historian.json");
+                // Try json folder first (for runtime compatibility)
+                var jsonPath = System.IO.Path.Combine(scadaProject.Path, "json");
+                var historianFile = System.IO.Path.Combine(jsonPath, "historian.json");
+                
+                if (!System.IO.File.Exists(historianFile))
+                {
+                    // Fallback to historian folder (legacy)
+                    historianFile = System.IO.Path.Combine(scadaProject.Paths.HistorianPath, "historian.json");
+                }
+                
                 if (System.IO.File.Exists(historianFile))
                 {
                     try

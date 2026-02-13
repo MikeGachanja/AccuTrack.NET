@@ -48,11 +48,17 @@ public sealed class HistorianModule : ModuleBase, IHistorian
                 config = new JsonObject();
             }
             
-            var storageType = config["storageType"]?.GetValue<string>() ?? "Database";
-            if (storageType == "Database" || storageType == "File" || string.IsNullOrEmpty(config["storagePath"]?.GetValue<string>()))
+            var databaseType = config["databaseType"]?.GetValue<string>() ?? "SQLite";
+            
+            // For SQLite, set the database path automatically
+            if (databaseType == "SQLite")
             {
-                config["storagePath"] = dbPath;
+                if (string.IsNullOrEmpty(config["storagePath"]?.GetValue<string>()))
+                {
+                    config["storagePath"] = dbPath;
+                }
             }
+            // For PostgreSQL, the connection will be handled separately
         }
 
         _historianManager.Initialize(config);

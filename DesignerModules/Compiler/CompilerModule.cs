@@ -325,25 +325,118 @@ public class CompilerModule
     {
         if (_currentProject == null) return;
 
-        var alarmsPath = Path.Combine(jsonPath, "alarms.json");
-        if (!File.Exists(alarmsPath))
-            File.WriteAllText(alarmsPath, new JObject { ["alarms"] = new JArray() }.ToString());
-
-        var schedulesPath = Path.Combine(jsonPath, "schedules.json");
-        if (!File.Exists(schedulesPath))
-            File.WriteAllText(schedulesPath, new JObject { ["schedules"] = new JArray() }.ToString());
-
-        var historianPath = Path.Combine(jsonPath, "historian.json");
-        if (!File.Exists(historianPath))
-            File.WriteAllText(historianPath, new JObject { ["name"] = "", ["type"] = "" }.ToString());
-
-        var securityPath = Path.Combine(jsonPath, "security.json");
-        if (!File.Exists(securityPath))
-            File.WriteAllText(securityPath, new JObject { ["users"] = new JArray(), ["groups"] = new JArray(), ["roles"] = new JArray() }.ToString());
-
-        // Copy events.json from source project if it exists, otherwise create empty one
         // Construct source json path from RootPath
         var sourceJsonPath = Path.Combine(_currentProject.Paths.RootPath, "json");
+        
+        // Copy or create alarms.json
+        var sourceAlarmsPath = Path.Combine(sourceJsonPath, "alarms.json");
+        var buildAlarmsPath = Path.Combine(jsonPath, "alarms.json");
+        if (File.Exists(sourceAlarmsPath))
+        {
+            try
+            {
+                File.Copy(sourceAlarmsPath, buildAlarmsPath, true);
+                EmitMessage("Copied json/alarms.json from source project");
+            }
+            catch (Exception ex)
+            {
+                EmitWarning($"Failed to copy alarms.json: {ex.Message}");
+                File.WriteAllText(buildAlarmsPath, new JObject { ["alarms"] = new JArray() }.ToString());
+            }
+        }
+        else if (!File.Exists(buildAlarmsPath))
+        {
+            File.WriteAllText(buildAlarmsPath, new JObject { ["alarms"] = new JArray() }.ToString());
+        }
+
+        // Copy or create schedules.json
+        var sourceSchedulesPath = Path.Combine(sourceJsonPath, "schedules.json");
+        var buildSchedulesPath = Path.Combine(jsonPath, "schedules.json");
+        if (File.Exists(sourceSchedulesPath))
+        {
+            try
+            {
+                File.Copy(sourceSchedulesPath, buildSchedulesPath, true);
+                EmitMessage("Copied json/schedules.json from source project");
+            }
+            catch (Exception ex)
+            {
+                EmitWarning($"Failed to copy schedules.json: {ex.Message}");
+                File.WriteAllText(buildSchedulesPath, new JObject { ["schedules"] = new JArray() }.ToString());
+            }
+        }
+        else if (!File.Exists(buildSchedulesPath))
+        {
+            File.WriteAllText(buildSchedulesPath, new JObject { ["schedules"] = new JArray() }.ToString());
+        }
+
+        // Copy and transform historian.json
+        var sourceHistorianPath = Path.Combine(sourceJsonPath, "historian.json");
+        var buildHistorianPath = Path.Combine(jsonPath, "historian.json");
+        if (File.Exists(sourceHistorianPath))
+        {
+            try
+            {
+                // Read and transform historian config
+                var historianJson = JObject.Parse(File.ReadAllText(sourceHistorianPath));
+                var transformedHistorian = TransformHistorianConfig(historianJson);
+                
+                File.WriteAllText(buildHistorianPath, transformedHistorian.ToString(Newtonsoft.Json.Formatting.Indented));
+                EmitMessage("Processed json/historian.json from source project");
+            }
+            catch (Exception ex)
+            {
+                EmitWarning($"Failed to process historian.json: {ex.Message}");
+                // Create default historian.json as fallback
+                File.WriteAllText(buildHistorianPath, new JObject 
+                { 
+                    ["tags"] = new JArray(), 
+                    ["loggingIntervalSeconds"] = 60, 
+                    ["databaseType"] = "SQLite", 
+                    ["maxStorageSizeMB"] = 1000,
+                    ["retentionPolicy"] = "Days",
+                    ["retentionDays"] = 30,
+                    ["enabled"] = true 
+                }.ToString(Newtonsoft.Json.Formatting.Indented));
+            }
+        }
+        else if (!File.Exists(buildHistorianPath))
+        {
+            // Create empty historian.json with proper structure
+            File.WriteAllText(buildHistorianPath, new JObject 
+            { 
+                ["tags"] = new JArray(), 
+                ["loggingIntervalSeconds"] = 60, 
+                ["databaseType"] = "SQLite", 
+                ["maxStorageSizeMB"] = 1000,
+                ["retentionPolicy"] = "Days",
+                ["retentionDays"] = 30,
+                ["enabled"] = true 
+            }.ToString(Newtonsoft.Json.Formatting.Indented));
+        }
+
+        // Copy or create security.json
+        var sourceSecurityPath = Path.Combine(sourceJsonPath, "security.json");
+        var buildSecurityPath = Path.Combine(jsonPath, "security.json");
+        if (File.Exists(sourceSecurityPath))
+        {
+            try
+            {
+                File.Copy(sourceSecurityPath, buildSecurityPath, true);
+                EmitMessage("Copied json/security.json from source project");
+            }
+            catch (Exception ex)
+            {
+                EmitWarning($"Failed to copy security.json: {ex.Message}");
+                File.WriteAllText(buildSecurityPath, new JObject { ["users"] = new JArray(), ["groups"] = new JArray(), ["roles"] = new JArray() }.ToString());
+            }
+        }
+        else if (!File.Exists(buildSecurityPath))
+        {
+            File.WriteAllText(buildSecurityPath, new JObject { ["users"] = new JArray(), ["groups"] = new JArray(), ["roles"] = new JArray() }.ToString());
+        }
+
+        // Copy events.json from source project if it exists, otherwise create empty one
         var sourceEventsPath = Path.Combine(sourceJsonPath, "events.json");
         var buildEventsPath = Path.Combine(jsonPath, "events.json");
         
@@ -361,7 +454,7 @@ public class CompilerModule
                 File.WriteAllText(buildEventsPath, new JObject { ["events"] = new JArray() }.ToString());
             }
         }
-        else
+        else if (!File.Exists(buildEventsPath))
         {
             // Create empty events.json if source doesn't exist
             File.WriteAllText(buildEventsPath, new JObject { ["events"] = new JArray() }.ToString());
@@ -423,5 +516,79 @@ public class CompilerModule
     {
         Warning?.Invoke(this, warning);
         _consoleModule?.HandleCompilerWarning(warning);
+    }
+
+    /// <summary>
+    /// Transforms historian configuration to ensure runtime compatibility.
+    /// Migrates old format (storageType/storagePath) to new format (databaseType).
+    /// </summary>
+    private JObject TransformHistorianConfig(JObject source)
+    {
+        var result = new JObject();
+        
+        // Copy tags array
+        if (source["tags"] is JArray tags)
+        {
+            result["tags"] = tags;
+        }
+        else
+        {
+            result["tags"] = new JArray();
+        }
+        
+        // Copy logging interval
+        result["loggingIntervalSeconds"] = source["loggingIntervalSeconds"]?.ToObject<int>() ?? 60;
+        
+        // Handle database type migration
+        string databaseType = "SQLite";
+        if (source["databaseType"] != null)
+        {
+            databaseType = source["databaseType"].ToString();
+        }
+        else if (source["storageType"] != null)
+        {
+            // Migrate from old format
+            var oldStorageType = source["storageType"].ToString();
+            if (oldStorageType == "Database" || oldStorageType == "File")
+            {
+                databaseType = "SQLite";
+            }
+            // Note: Cloud storage type would need different handling
+        }
+        result["databaseType"] = databaseType;
+        
+        // Copy other settings
+        result["maxStorageSizeMB"] = source["maxStorageSizeMB"]?.ToObject<int>() ?? 1000;
+        result["retentionPolicy"] = source["retentionPolicy"]?.ToString() ?? "Days";
+        result["retentionDays"] = source["retentionDays"]?.ToObject<int>() ?? 30;
+        result["enabled"] = source["enabled"]?.ToObject<bool>() ?? true;
+        
+        // Handle PostgreSQL settings if databaseType is PostgreSQL
+        if (databaseType == "PostgreSQL")
+        {
+            if (source["postgresHost"] != null)
+                result["postgresHost"] = source["postgresHost"];
+            else
+                result["postgresHost"] = "localhost";
+                
+            result["postgresPort"] = source["postgresPort"]?.ToObject<int>() ?? 5432;
+            
+            if (source["postgresDatabase"] != null)
+                result["postgresDatabase"] = source["postgresDatabase"];
+            else
+                result["postgresDatabase"] = "historian";
+                
+            if (source["postgresUsername"] != null)
+                result["postgresUsername"] = source["postgresUsername"];
+                
+            if (source["postgresPassword"] != null)
+                result["postgresPassword"] = source["postgresPassword"];
+        }
+        
+        // Remove old fields that shouldn't be in runtime config
+        // (storagePath is set automatically by HistorianModule at runtime)
+        // We don't include storagePath in the build output since it's runtime-specific
+        
+        return result;
     }
 }

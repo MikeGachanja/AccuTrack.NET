@@ -11,12 +11,18 @@ public class Historian
 {
     public List<HistorianTag> Tags { get; set; } = new List<HistorianTag>();
     public int LoggingIntervalSeconds { get; set; } = 60; // Default 1 minute
-    public string StorageType { get; set; } = "Database"; // Database (SQLite), File, Cloud
-    public string StoragePath { get; set; } = string.Empty;
+    public string DatabaseType { get; set; } = "SQLite"; // SQLite (default) or PostgreSQL
     public int MaxStorageSizeMB { get; set; } = 1000; // Maximum storage size in MB
     public string RetentionPolicy { get; set; } = "Days"; // Days, Size, Both
     public int RetentionDays { get; set; } = 30; // Keep data for 30 days
     public bool Enabled { get; set; } = true;
+    
+    // PostgreSQL connection settings (only used when DatabaseType is PostgreSQL)
+    public string? PostgresHost { get; set; }
+    public int PostgresPort { get; set; } = 5432;
+    public string? PostgresDatabase { get; set; }
+    public string? PostgresUsername { get; set; }
+    public string? PostgresPassword { get; set; }
 
     /// <summary>
     /// Converts historian to JSON object.
@@ -33,12 +39,25 @@ public class Historian
 
         obj["tags"] = tagsArray;
         obj["loggingIntervalSeconds"] = LoggingIntervalSeconds;
-        obj["storageType"] = StorageType;
-        obj["storagePath"] = StoragePath;
+        obj["databaseType"] = DatabaseType;
         obj["maxStorageSizeMB"] = MaxStorageSizeMB;
         obj["retentionPolicy"] = RetentionPolicy;
         obj["retentionDays"] = RetentionDays;
         obj["enabled"] = Enabled;
+        
+        // Include PostgreSQL settings if DatabaseType is PostgreSQL
+        if (DatabaseType == "PostgreSQL")
+        {
+            if (!string.IsNullOrEmpty(PostgresHost))
+                obj["postgresHost"] = PostgresHost;
+            obj["postgresPort"] = PostgresPort;
+            if (!string.IsNullOrEmpty(PostgresDatabase))
+                obj["postgresDatabase"] = PostgresDatabase;
+            if (!string.IsNullOrEmpty(PostgresUsername))
+                obj["postgresUsername"] = PostgresUsername;
+            if (!string.IsNullOrEmpty(PostgresPassword))
+                obj["postgresPassword"] = PostgresPassword;
+        }
 
         return obj;
     }
@@ -51,13 +70,32 @@ public class Historian
         var historian = new Historian
         {
             LoggingIntervalSeconds = json["loggingIntervalSeconds"]?.ToObject<int>() ?? 60,
-            StorageType = json["storageType"]?.ToString() ?? "Database",
-            StoragePath = json["storagePath"]?.ToString() ?? string.Empty,
+            DatabaseType = json["databaseType"]?.ToString() ?? "SQLite",
             MaxStorageSizeMB = json["maxStorageSizeMB"]?.ToObject<int>() ?? 1000,
             RetentionPolicy = json["retentionPolicy"]?.ToString() ?? "Days",
             RetentionDays = json["retentionDays"]?.ToObject<int>() ?? 30,
             Enabled = json["enabled"]?.ToObject<bool>() ?? true
         };
+        
+        // Load PostgreSQL settings if DatabaseType is PostgreSQL
+        if (historian.DatabaseType == "PostgreSQL")
+        {
+            historian.PostgresHost = json["postgresHost"]?.ToString();
+            historian.PostgresPort = json["postgresPort"]?.ToObject<int>() ?? 5432;
+            historian.PostgresDatabase = json["postgresDatabase"]?.ToString();
+            historian.PostgresUsername = json["postgresUsername"]?.ToString();
+            historian.PostgresPassword = json["postgresPassword"]?.ToString();
+        }
+        
+        // Backward compatibility: if old storageType/storagePath exist, migrate
+        if (json["storageType"] != null)
+        {
+            var oldStorageType = json["storageType"]?.ToString() ?? "Database";
+            if (oldStorageType == "Database" || oldStorageType == "File")
+            {
+                historian.DatabaseType = "SQLite";
+            }
+        }
 
         var tagsArray = json["tags"] as JArray;
         if (tagsArray != null)

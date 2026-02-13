@@ -24,12 +24,19 @@ public partial class HistorianEditor : UserControl
 
     // Settings controls
     private NumericUpDown _loggingIntervalNumeric;
-    private ComboBox _storageTypeCombo;
-    private TextBox _storagePathTextBox;
+    private ComboBox _databaseTypeCombo;
     private NumericUpDown _maxStorageSizeNumeric;
     private ComboBox _retentionPolicyCombo;
     private NumericUpDown _retentionDaysNumeric;
     private CheckBox _enabledCheckBox;
+    
+    // PostgreSQL settings controls (shown only when PostgreSQL is selected)
+    private Panel _postgresSettingsPanel;
+    private TextBox _postgresHostTextBox;
+    private NumericUpDown _postgresPortNumeric;
+    private TextBox _postgresDatabaseTextBox;
+    private TextBox _postgresUsernameTextBox;
+    private TextBox _postgresPasswordTextBox;
 
     public bool IsModified => _isModified;
 
@@ -65,7 +72,7 @@ public partial class HistorianEditor : UserControl
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 8,
+            RowCount = 7,
             Padding = new Padding(5)
         };
 
@@ -75,59 +82,82 @@ public partial class HistorianEditor : UserControl
         _loggingIntervalNumeric.ValueChanged += (s, e) => _isModified = true;
         settingsLayout.Controls.Add(_loggingIntervalNumeric, 1, 0);
 
-        // Storage Type
-        settingsLayout.Controls.Add(new Label { Text = "Storage Type:", AutoSize = true }, 0, 1);
-        _storageTypeCombo = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-        _storageTypeCombo.Items.AddRange(new[] { "Database", "File", "Cloud" });
-        _storageTypeCombo.SelectedIndex = 0;
-        _storageTypeCombo.SelectedIndexChanged += (s, e) => _isModified = true;
-        settingsLayout.Controls.Add(_storageTypeCombo, 1, 1);
-
-        // Storage Path
-        settingsLayout.Controls.Add(new Label { Text = "Storage Path:", AutoSize = true }, 0, 2);
-        var pathLayout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
-        _storagePathTextBox = new TextBox { Dock = DockStyle.Fill, AutoSize = false };
-        _storagePathTextBox.TextChanged += (s, e) => _isModified = true;
-        var browseButton = new Button { Text = "Browse...", AutoSize = true };
-        browseButton.Click += (s, e) =>
+        // Database Type
+        settingsLayout.Controls.Add(new Label { Text = "Database Type:", AutoSize = true }, 0, 1);
+        _databaseTypeCombo = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+        _databaseTypeCombo.Items.AddRange(new[] { "SQLite", "PostgreSQL" });
+        _databaseTypeCombo.SelectedIndex = 0;
+        _databaseTypeCombo.SelectedIndexChanged += (s, e) => 
         {
-            using (var dialog = new FolderBrowserDialog())
-            {
-                if (dialog.ShowDialog() == DialogResult.OK)
-                {
-                    _storagePathTextBox.Text = dialog.SelectedPath;
-                }
-            }
+            _isModified = true;
+            UpdatePostgresSettingsVisibility();
         };
-        pathLayout.Controls.Add(_storagePathTextBox);
-        pathLayout.Controls.Add(browseButton);
-        settingsLayout.Controls.Add(pathLayout, 1, 2);
+        settingsLayout.Controls.Add(_databaseTypeCombo, 1, 1);
 
         // Max Storage Size
-        settingsLayout.Controls.Add(new Label { Text = "Max Storage Size (MB):", AutoSize = true }, 0, 3);
+        settingsLayout.Controls.Add(new Label { Text = "Max Storage Size (MB):", AutoSize = true }, 0, 2);
         _maxStorageSizeNumeric = new NumericUpDown { Minimum = 1, Maximum = 100000, Value = 1000, Dock = DockStyle.Fill };
         _maxStorageSizeNumeric.ValueChanged += (s, e) => _isModified = true;
-        settingsLayout.Controls.Add(_maxStorageSizeNumeric, 1, 3);
+        settingsLayout.Controls.Add(_maxStorageSizeNumeric, 1, 2);
 
         // Retention Policy
-        settingsLayout.Controls.Add(new Label { Text = "Retention Policy:", AutoSize = true }, 0, 4);
+        settingsLayout.Controls.Add(new Label { Text = "Retention Policy:", AutoSize = true }, 0, 3);
         _retentionPolicyCombo = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
         _retentionPolicyCombo.Items.AddRange(new[] { "Days", "Size", "Both" });
         _retentionPolicyCombo.SelectedIndex = 0;
         _retentionPolicyCombo.SelectedIndexChanged += (s, e) => _isModified = true;
-        settingsLayout.Controls.Add(_retentionPolicyCombo, 1, 4);
+        settingsLayout.Controls.Add(_retentionPolicyCombo, 1, 3);
 
         // Retention Days
-        settingsLayout.Controls.Add(new Label { Text = "Retention Days:", AutoSize = true }, 0, 5);
+        settingsLayout.Controls.Add(new Label { Text = "Retention Days:", AutoSize = true }, 0, 4);
         _retentionDaysNumeric = new NumericUpDown { Minimum = 1, Maximum = 3650, Value = 30, Dock = DockStyle.Fill };
         _retentionDaysNumeric.ValueChanged += (s, e) => _isModified = true;
-        settingsLayout.Controls.Add(_retentionDaysNumeric, 1, 5);
+        settingsLayout.Controls.Add(_retentionDaysNumeric, 1, 4);
 
         // Enabled
         _enabledCheckBox = new CheckBox { Text = "Enabled", AutoSize = true };
         _enabledCheckBox.CheckedChanged += (s, e) => _isModified = true;
-        settingsLayout.Controls.Add(_enabledCheckBox, 0, 6);
+        settingsLayout.Controls.Add(_enabledCheckBox, 0, 5);
         settingsLayout.SetColumnSpan(_enabledCheckBox, 2);
+        
+        // PostgreSQL Settings Panel (initially hidden)
+        _postgresSettingsPanel = new Panel { Dock = DockStyle.Fill, Visible = false };
+        var postgresLayout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            ColumnCount = 2,
+            RowCount = 5,
+            Padding = new Padding(5)
+        };
+        
+        postgresLayout.Controls.Add(new Label { Text = "Host:", AutoSize = true }, 0, 0);
+        _postgresHostTextBox = new TextBox { Dock = DockStyle.Fill, Text = "localhost" };
+        _postgresHostTextBox.TextChanged += (s, e) => _isModified = true;
+        postgresLayout.Controls.Add(_postgresHostTextBox, 1, 0);
+        
+        postgresLayout.Controls.Add(new Label { Text = "Port:", AutoSize = true }, 0, 1);
+        _postgresPortNumeric = new NumericUpDown { Minimum = 1, Maximum = 65535, Value = 5432, Dock = DockStyle.Fill };
+        _postgresPortNumeric.ValueChanged += (s, e) => _isModified = true;
+        postgresLayout.Controls.Add(_postgresPortNumeric, 1, 1);
+        
+        postgresLayout.Controls.Add(new Label { Text = "Database:", AutoSize = true }, 0, 2);
+        _postgresDatabaseTextBox = new TextBox { Dock = DockStyle.Fill, Text = "historian" };
+        _postgresDatabaseTextBox.TextChanged += (s, e) => _isModified = true;
+        postgresLayout.Controls.Add(_postgresDatabaseTextBox, 1, 2);
+        
+        postgresLayout.Controls.Add(new Label { Text = "Username:", AutoSize = true }, 0, 3);
+        _postgresUsernameTextBox = new TextBox { Dock = DockStyle.Fill };
+        _postgresUsernameTextBox.TextChanged += (s, e) => _isModified = true;
+        postgresLayout.Controls.Add(_postgresUsernameTextBox, 1, 3);
+        
+        postgresLayout.Controls.Add(new Label { Text = "Password:", AutoSize = true }, 0, 4);
+        _postgresPasswordTextBox = new TextBox { Dock = DockStyle.Fill, UseSystemPasswordChar = true };
+        _postgresPasswordTextBox.TextChanged += (s, e) => _isModified = true;
+        postgresLayout.Controls.Add(_postgresPasswordTextBox, 1, 4);
+        
+        _postgresSettingsPanel.Controls.Add(postgresLayout);
+        settingsLayout.Controls.Add(_postgresSettingsPanel, 0, 6);
+        settingsLayout.SetColumnSpan(_postgresSettingsPanel, 2);
 
         settingsPanel.Controls.Add(settingsLayout);
 
@@ -232,6 +262,14 @@ public partial class HistorianEditor : UserControl
     }
 
     /// <summary>
+    /// Resets the modified flag (called after successful save).
+    /// </summary>
+    public void ResetModified()
+    {
+        _isModified = false;
+    }
+
+    /// <summary>
     /// Sets the SCADA project context.
     /// </summary>
     public void SetScadaProject(ScadaProject project)
@@ -273,12 +311,23 @@ public partial class HistorianEditor : UserControl
 
         // Load settings
         _loggingIntervalNumeric.Value = _historian.LoggingIntervalSeconds;
-        _storageTypeCombo.SelectedItem = _historian.StorageType;
-        _storagePathTextBox.Text = _historian.StoragePath;
+        _databaseTypeCombo.SelectedItem = _historian.DatabaseType ?? "SQLite";
         _maxStorageSizeNumeric.Value = _historian.MaxStorageSizeMB;
         _retentionPolicyCombo.SelectedItem = _historian.RetentionPolicy;
         _retentionDaysNumeric.Value = _historian.RetentionDays;
         _enabledCheckBox.Checked = _historian.Enabled;
+        
+        // Load PostgreSQL settings if applicable
+        if (_historian.DatabaseType == "PostgreSQL")
+        {
+            _postgresHostTextBox.Text = _historian.PostgresHost ?? "localhost";
+            _postgresPortNumeric.Value = _historian.PostgresPort > 0 ? _historian.PostgresPort : 5432;
+            _postgresDatabaseTextBox.Text = _historian.PostgresDatabase ?? "historian";
+            _postgresUsernameTextBox.Text = _historian.PostgresUsername ?? "";
+            _postgresPasswordTextBox.Text = _historian.PostgresPassword ?? "";
+        }
+        
+        UpdatePostgresSettingsVisibility();
 
         // Load tags
         _tagsGrid.Rows.Clear();
@@ -507,13 +556,40 @@ public partial class HistorianEditor : UserControl
 
         // Update settings from controls
         _historian.LoggingIntervalSeconds = (int)_loggingIntervalNumeric.Value;
-        _historian.StorageType = _storageTypeCombo.SelectedItem?.ToString() ?? "Database";
-        _historian.StoragePath = _storagePathTextBox.Text;
+        _historian.DatabaseType = _databaseTypeCombo.SelectedItem?.ToString() ?? "SQLite";
         _historian.MaxStorageSizeMB = (int)_maxStorageSizeNumeric.Value;
         _historian.RetentionPolicy = _retentionPolicyCombo.SelectedItem?.ToString() ?? "Days";
         _historian.RetentionDays = (int)_retentionDaysNumeric.Value;
         _historian.Enabled = _enabledCheckBox.Checked;
+        
+        // Update PostgreSQL settings if applicable
+        if (_historian.DatabaseType == "PostgreSQL")
+        {
+            _historian.PostgresHost = _postgresHostTextBox.Text;
+            _historian.PostgresPort = (int)_postgresPortNumeric.Value;
+            _historian.PostgresDatabase = _postgresDatabaseTextBox.Text;
+            _historian.PostgresUsername = _postgresUsernameTextBox.Text;
+            _historian.PostgresPassword = _postgresPasswordTextBox.Text;
+        }
+        else
+        {
+            // Clear PostgreSQL settings when not using PostgreSQL
+            _historian.PostgresHost = null;
+            _historian.PostgresPort = 5432;
+            _historian.PostgresDatabase = null;
+            _historian.PostgresUsername = null;
+            _historian.PostgresPassword = null;
+        }
 
         return _historian;
+    }
+
+    /// <summary>
+    /// Updates the visibility of PostgreSQL settings panel based on selected database type.
+    /// </summary>
+    private void UpdatePostgresSettingsVisibility()
+    {
+        bool showPostgres = _databaseTypeCombo.SelectedItem?.ToString() == "PostgreSQL";
+        _postgresSettingsPanel.Visible = showPostgres;
     }
 }

@@ -27,23 +27,20 @@ public sealed class HistorianManager
     public bool Initialize(object? config)
     {
         if (config is JsonObject obj)
-        {
-            // Get database path from config or use default
-            var storagePath = obj["storagePath"]?.GetValue<string>() ?? "";
-            var storageType = obj["storageType"]?.GetValue<string>() ?? "Database";
+            {
+            // Get database type from config
+            var databaseType = obj["databaseType"]?.GetValue<string>() ?? "SQLite";
             _loggingIntervalSeconds = obj["loggingIntervalSeconds"]?.GetValue<int>() ?? 60;
             
-            // If storage type is Database and we have a project path, use it
-            if (storageType == "Database" || storageType == "File")
-            {
-                // The database path should be set by HistorianModule based on project path
-                // For now, we'll use the storagePath if provided, otherwise default to "historian.db"
-                _databasePath = storagePath;
-            }
-            else
+            // Database path is set by HistorianModule based on project path
+            // For SQLite, it will be set to data/historian.db
+            // For PostgreSQL, connection string will be built from config
+            var storagePath = obj["storagePath"]?.GetValue<string>() ?? "";
+            if (!string.IsNullOrEmpty(storagePath))
             {
                 _databasePath = storagePath;
             }
+            // If no storagePath in config, HistorianModule will set it automatically
 
             // Load enabled tags from config
             if (obj["tags"] is JsonArray tagsArray)

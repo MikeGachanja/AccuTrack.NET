@@ -21,6 +21,9 @@ public partial class AlarmsEditor : UserControl
     private Alarms? _alarms;
     private ScadaProject? _scadaProject;
     private List<Tag> _availableTags = new List<Tag>();
+    private bool _isModified = false;
+
+    public bool IsModified => _isModified;
 
     public AlarmsEditor()
     {
@@ -163,6 +166,90 @@ public partial class AlarmsEditor : UserControl
     {
         _alarms = alarms;
         LoadAlarms();
+        _isModified = false;
+    }
+
+    /// <summary>
+    /// Gets the current alarms configuration.
+    /// </summary>
+    public Alarms? GetAlarms()
+    {
+        if (_alarms == null)
+            return null;
+
+        // Rebuild alarms from grids
+        _alarms.AlarmDefinitions.Clear();
+        
+        CollectAlarmsFromGrid(_hmiDigitalGrid, "HMI", "Digital");
+        CollectAlarmsFromGrid(_hmiAnalogGrid, "HMI", "Analog");
+        CollectAlarmsFromGrid(_controllerDigitalGrid, "Controller", "Digital");
+        CollectAlarmsFromGrid(_controllerAnalogGrid, "Controller", "Analog");
+
+        return _alarms;
+    }
+
+    /// <summary>
+    /// Collects alarms from a grid and adds them to the alarms list.
+    /// </summary>
+    private void CollectAlarmsFromGrid(DataGridView grid, string type, string source)
+    {
+        foreach (DataGridViewRow row in grid.Rows)
+        {
+            if (row.IsNewRow) continue;
+            
+            if (row.Tag is AlarmDefinition alarm)
+            {
+                // Update alarm from grid cells
+                if (row.Cells["Name"].Value != null)
+                    alarm.Name = row.Cells["Name"].Value.ToString() ?? string.Empty;
+                if (row.Cells["TagName"].Value != null)
+                    alarm.TagName = row.Cells["TagName"].Value.ToString() ?? string.Empty;
+                if (row.Cells["Condition"].Value != null)
+                    alarm.Condition = row.Cells["Condition"].Value.ToString() ?? "GreaterThan";
+                if (row.Cells["Threshold"].Value != null && double.TryParse(row.Cells["Threshold"].Value.ToString(), out double threshold))
+                    alarm.Threshold = threshold;
+                if (row.Cells["Priority"].Value != null)
+                    alarm.Priority = row.Cells["Priority"].Value.ToString() ?? "Medium";
+                if (row.Cells["Message"].Value != null)
+                    alarm.Message = row.Cells["Message"].Value.ToString() ?? string.Empty;
+                if (row.Cells["Enabled"].Value is bool enabled)
+                    alarm.Enabled = enabled;
+                
+                alarm.Type = type;
+                alarm.Source = source;
+                
+                if (!_alarms!.AlarmDefinitions.Contains(alarm))
+                {
+                    _alarms.AlarmDefinitions.Add(alarm);
+                }
+            }
+            else
+            {
+                // Create new alarm from row
+                var newAlarm = new AlarmDefinition
+                {
+                    Name = row.Cells["Name"].Value?.ToString() ?? "New Alarm",
+                    TagName = row.Cells["TagName"].Value?.ToString() ?? string.Empty,
+                    Condition = row.Cells["Condition"].Value?.ToString() ?? "GreaterThan",
+                    Threshold = double.TryParse(row.Cells["Threshold"].Value?.ToString(), out double t) ? t : 0,
+                    Priority = row.Cells["Priority"].Value?.ToString() ?? "Medium",
+                    Message = row.Cells["Message"].Value?.ToString() ?? string.Empty,
+                    Enabled = row.Cells["Enabled"].Value is bool e ? e : true,
+                    Type = type,
+                    Source = source
+                };
+                _alarms!.AlarmDefinitions.Add(newAlarm);
+                row.Tag = newAlarm;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Resets the modified flag (called after successful save).
+    /// </summary>
+    public void ResetModified()
+    {
+        _isModified = false;
     }
 
     /// <summary>
@@ -240,6 +327,7 @@ public partial class AlarmsEditor : UserControl
 
         _alarms.AlarmDefinitions.Add(alarm);
         LoadAlarms();
+        _isModified = true;
     }
 
     /// <summary>
@@ -256,6 +344,7 @@ public partial class AlarmsEditor : UserControl
         {
             _alarms.AlarmDefinitions.Remove(alarm);
             LoadAlarms();
+            _isModified = true;
         }
     }
 
@@ -306,6 +395,7 @@ public partial class AlarmsEditor : UserControl
             // Ensure alarm type and source match the grid
             alarm.Type = type;
             alarm.Source = source;
+            _isModified = true;
         }
     }
 }

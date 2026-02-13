@@ -306,4 +306,12 @@ public partial class ScheduleEditor : UserControl
     {
         return _schedules;
     }
+
+    /// <summary>
+    /// Resets the modified flag (called after successful save).
+    /// </summary>
+    public void ResetModified()
+    {
+        _isModified = false;
+    }
 }

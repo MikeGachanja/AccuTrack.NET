@@ -639,6 +639,36 @@ public class ProjectManager
     public object? GetAlarms(string scadaName) => null;
     
     /// <summary>
+    /// Saves alarms for a SCADA project.
+    /// </summary>
+    public bool SaveAlarms(string scadaName, object? alarms)
+    {
+        var scada = FindScadaProject(scadaName);
+        if (scada == null || alarms == null) return false;
+
+        try
+        {
+            // Save to json folder for runtime compatibility
+            var jsonPath = Path.Combine(scada.Path, "json");
+            if (!Directory.Exists(jsonPath))
+            {
+                Directory.CreateDirectory(jsonPath);
+            }
+
+            dynamic alarmsObj = alarms;
+            var json = alarmsObj.ToJson();
+            var alarmsFile = Path.Combine(jsonPath, "alarms.json");
+            File.WriteAllText(alarmsFile, json.ToString(Newtonsoft.Json.Formatting.Indented));
+            return true;
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ProjectManager] Failed to save alarms: {ex.Message}");
+            return false;
+        }
+    }
+    
+    /// <summary>
     /// Gets schedules for a SCADA project.
     /// Returns null if schedules file doesn't exist or can't be loaded.
     /// Caller should create a new Schedules instance if null is returned.
@@ -701,7 +731,16 @@ public class ProjectManager
 
         try
         {
-            var historianFile = Path.Combine(scada.Paths.HistorianPath, "historian.json");
+            // Try json folder first (for runtime compatibility)
+            var jsonPath = Path.Combine(scada.Path, "json");
+            var historianFile = Path.Combine(jsonPath, "historian.json");
+            
+            if (!File.Exists(historianFile))
+            {
+                // Fallback to historian folder (legacy)
+                historianFile = Path.Combine(scada.Paths.HistorianPath, "historian.json");
+            }
+            
             if (File.Exists(historianFile))
             {
                 return File.ReadAllText(historianFile);
@@ -722,20 +761,26 @@ public class ProjectManager
 
         try
         {
-            if (!Directory.Exists(scada.Paths.HistorianPath))
+            // Save to json folder for runtime compatibility
+            var jsonPath = Path.Combine(scada.Path, "json");
+            if (!Directory.Exists(jsonPath))
             {
-                Directory.CreateDirectory(scada.Paths.HistorianPath);
+                Directory.CreateDirectory(jsonPath);
             }
 
             // Use dynamic to call ToJson() without direct type reference
             dynamic historianObj = historian;
             var json = historianObj.ToJson();
-            var historianFile = Path.Combine(scada.Paths.HistorianPath, "historian.json");
-            File.WriteAllText(historianFile, json.ToString());
+            var historianFile = Path.Combine(jsonPath, "historian.json");
+            
+            // Format JSON properly with indentation
+            File.WriteAllText(historianFile, json.ToString(Newtonsoft.Json.Formatting.Indented));
+            
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[ProjectManager] Failed to save historian: {ex.Message}");
             return false;
         }
     }
