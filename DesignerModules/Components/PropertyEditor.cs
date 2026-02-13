@@ -227,58 +227,89 @@ public partial class PropertyEditor : UserControl
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
-        // Location
+        // Location - store current values to avoid null reference during ValueChanged
+        var currentLocation = _selectedComponent?.Location ?? new Point(0, 0);
+        var currentX = currentLocation.X;
+        var currentY = currentLocation.Y;
+        
         layout.Controls.Add(new Label { Text = "Location X:", AutoSize = true }, 0, row);
-        var xNumeric = new NumericUpDown { Minimum = int.MinValue, Maximum = int.MaxValue, Value = _selectedComponent.Location.X, Width = 100 };
+        var xNumeric = new NumericUpDown { Minimum = int.MinValue, Maximum = int.MaxValue, Value = currentX, Width = 100 };
         xNumeric.ValueChanged += (s, e) =>
         {
-            _selectedComponent.Location = new Point((int)xNumeric.Value, _selectedComponent.Location.Y);
-            TriggerAutoSave();
+            if (_selectedComponent != null)
+            {
+                // Store current Y before updating
+                var y = _selectedComponent.Location.Y;
+                _selectedComponent.Location = new Point((int)xNumeric.Value, y);
+                TriggerAutoSave();
+            }
         };
         layout.Controls.Add(xNumeric, 1, row);
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
         layout.Controls.Add(new Label { Text = "Location Y:", AutoSize = true }, 0, row);
-        var yNumeric = new NumericUpDown { Minimum = int.MinValue, Maximum = int.MaxValue, Value = _selectedComponent.Location.Y, Width = 100 };
+        var yNumeric = new NumericUpDown { Minimum = int.MinValue, Maximum = int.MaxValue, Value = currentY, Width = 100 };
         yNumeric.ValueChanged += (s, e) =>
         {
-            _selectedComponent.Location = new Point(_selectedComponent.Location.X, (int)yNumeric.Value);
-            TriggerAutoSave();
+            if (_selectedComponent != null)
+            {
+                // Store current X before updating
+                var x = _selectedComponent.Location.X;
+                _selectedComponent.Location = new Point(x, (int)yNumeric.Value);
+                TriggerAutoSave();
+            }
         };
         layout.Controls.Add(yNumeric, 1, row);
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
-        // Size
+        // Size - store current values to avoid null reference during ValueChanged
+        var currentSize = _selectedComponent?.Size ?? new Size(100, 100);
+        var currentWidth = currentSize.Width;
+        var currentHeight = currentSize.Height;
+        
         layout.Controls.Add(new Label { Text = "Width:", AutoSize = true }, 0, row);
-        var widthNumeric = new NumericUpDown { Minimum = 1, Maximum = int.MaxValue, Value = _selectedComponent.Size.Width, Width = 100 };
+        var widthNumeric = new NumericUpDown { Minimum = 1, Maximum = int.MaxValue, Value = currentWidth, Width = 100 };
         widthNumeric.ValueChanged += (s, e) =>
         {
-            _selectedComponent.Size = new Size((int)widthNumeric.Value, _selectedComponent.Size.Height);
-            TriggerAutoSave();
+            if (_selectedComponent != null)
+            {
+                // Store current height before updating
+                var height = _selectedComponent.Size.Height;
+                _selectedComponent.Size = new Size((int)widthNumeric.Value, height);
+                TriggerAutoSave();
+            }
         };
         layout.Controls.Add(widthNumeric, 1, row);
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
         layout.Controls.Add(new Label { Text = "Height:", AutoSize = true }, 0, row);
-        var heightNumeric = new NumericUpDown { Minimum = 1, Maximum = int.MaxValue, Value = _selectedComponent.Size.Height, Width = 100 };
+        var heightNumeric = new NumericUpDown { Minimum = 1, Maximum = int.MaxValue, Value = currentHeight, Width = 100 };
         heightNumeric.ValueChanged += (s, e) =>
         {
-            _selectedComponent.Size = new Size(_selectedComponent.Size.Width, (int)heightNumeric.Value);
-            TriggerAutoSave();
+            if (_selectedComponent != null)
+            {
+                // Store current width before updating
+                var width = _selectedComponent.Size.Width;
+                _selectedComponent.Size = new Size(width, (int)heightNumeric.Value);
+                TriggerAutoSave();
+            }
         };
         layout.Controls.Add(heightNumeric, 1, row);
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
         // Visibility
-        var visibleCheckBox = new CheckBox { Text = "Visible", Checked = _selectedComponent.Visible };
+        var visibleCheckBox = new CheckBox { Text = "Visible", Checked = _selectedComponent?.Visible ?? true };
         visibleCheckBox.CheckedChanged += (s, e) =>
         {
-            _selectedComponent.Visible = visibleCheckBox.Checked;
-            TriggerAutoSave();
+            if (_selectedComponent != null)
+            {
+                _selectedComponent.Visible = visibleCheckBox.Checked;
+                TriggerAutoSave();
+            }
         };
         layout.Controls.Add(visibleCheckBox, 0, row);
         layout.SetColumnSpan(visibleCheckBox, 2);
