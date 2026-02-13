@@ -204,14 +204,32 @@ public partial class PropertyEditor : UserControl
         if (_selectedComponent == null)
             return;
 
-        var layout = new TableLayoutPanel
+        // Create a scrollable container for the layout
+        var scrollPanel = new Panel
         {
             Dock = DockStyle.Fill,
+            AutoScroll = true
+        };
+
+        var layout = new TableLayoutPanel
+        {
+            AutoSize = true,
             ColumnCount = 2,
             Padding = new Padding(5)
         };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+        // Set layout to anchor top-left and adjust width on resize
+        layout.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
+        layout.Location = new Point(0, 0);
+        
+        // Handle resize to update layout width
+        scrollPanel.Resize += (s, e) =>
+        {
+            int scrollBarWidth = scrollPanel.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
+            layout.Width = Math.Max(100, scrollPanel.ClientSize.Width - scrollBarWidth);
+        };
 
         int row = 0;
 
@@ -333,9 +351,50 @@ public partial class PropertyEditor : UserControl
         {
             UpdateButtonProperties(layout, button, ref row);
         }
+        else if (_selectedComponent is NumericComponent numeric)
+        {
+            UpdateNumericProperties(layout, numeric, ref row);
+        }
+        else if (_selectedComponent is TextLabelComponent textLabel)
+        {
+            UpdateTextLabelProperties(layout, textLabel, ref row);
+        }
+        else if (_selectedComponent is DateTimeComponent dateTime)
+        {
+            UpdateDateTimeProperties(layout, dateTime, ref row);
+        }
+        else if (_selectedComponent is IndicatorComponent indicator)
+        {
+            UpdateIndicatorProperties(layout, indicator, ref row);
+        }
+        else if (_selectedComponent is MotorComponent motor)
+        {
+            UpdateMotorProperties(layout, motor, ref row);
+        }
+        else if (_selectedComponent is PumpComponent pump)
+        {
+            UpdatePumpProperties(layout, pump, ref row);
+        }
+        else if (_selectedComponent is TankComponent tank)
+        {
+            UpdateTankProperties(layout, tank, ref row);
+        }
+        else if (_selectedComponent is ConveyorComponent conveyor)
+        {
+            UpdateConveyorProperties(layout, conveyor, ref row);
+        }
+        else if (_selectedComponent is ToggleSwitchComponent toggleSwitch)
+        {
+            UpdateToggleSwitchProperties(layout, toggleSwitch, ref row);
+        }
         // Add other component types as needed
 
-        _generalTab.Controls.Add(layout);
+        scrollPanel.Controls.Add(layout);
+        _generalTab.Controls.Add(scrollPanel);
+        
+        // Trigger initial width calculation
+        int initialScrollBarWidth = scrollPanel.VerticalScroll.Visible ? SystemInformation.VerticalScrollBarWidth : 0;
+        layout.Width = Math.Max(100, scrollPanel.ClientSize.Width - initialScrollBarWidth);
     }
 
     private void UpdateButtonProperties(TableLayoutPanel layout, ButtonComponent button, ref int row)
@@ -443,6 +502,261 @@ public partial class PropertyEditor : UserControl
             TriggerAutoSave();
         };
         layout.Controls.Add(borderWidthNumeric, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
+    private void UpdateNumericProperties(TableLayoutPanel layout, NumericComponent numeric, ref int row)
+    {
+        // Label
+        layout.Controls.Add(new Label { Text = "Label:", AutoSize = true }, 0, row);
+        var labelTextBox = new TextBox { Text = numeric.Label, Dock = DockStyle.Fill };
+        labelTextBox.TextChanged += (s, e) =>
+        {
+            numeric.Label = labelTextBox.Text;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(labelTextBox, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Decimal Places
+        layout.Controls.Add(new Label { Text = "Decimal Places:", AutoSize = true }, 0, row);
+        var decimalPlacesNumeric = new NumericUpDown { Minimum = 0, Maximum = 10, Value = numeric.DecimalPlaces, Width = 100 };
+        decimalPlacesNumeric.ValueChanged += (s, e) =>
+        {
+            numeric.DecimalPlaces = (int)decimalPlacesNumeric.Value;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(decimalPlacesNumeric, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Suffix
+        layout.Controls.Add(new Label { Text = "Suffix:", AutoSize = true }, 0, row);
+        var suffixTextBox = new TextBox { Text = numeric.Suffix, Dock = DockStyle.Fill };
+        suffixTextBox.TextChanged += (s, e) =>
+        {
+            numeric.Suffix = suffixTextBox.Text;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(suffixTextBox, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Label Color
+        layout.Controls.Add(new Label { Text = "Label Color:", AutoSize = true }, 0, row);
+        var labelColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(labelColorButton, numeric.LabelColor);
+        labelColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = numeric.LabelColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    numeric.LabelColor = colorDialog.Color;
+                    UpdateColorButton(labelColorButton, numeric.LabelColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(labelColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Value Color
+        layout.Controls.Add(new Label { Text = "Value Color:", AutoSize = true }, 0, row);
+        var valueColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(valueColorButton, numeric.ValueColor);
+        valueColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = numeric.ValueColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    numeric.ValueColor = colorDialog.Color;
+                    UpdateColorButton(valueColorButton, numeric.ValueColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(valueColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
+    private void UpdateTextLabelProperties(TableLayoutPanel layout, TextLabelComponent textLabel, ref int row)
+    {
+        // Text (this is the label text for TextLabelComponent)
+        layout.Controls.Add(new Label { Text = "Text:", AutoSize = true }, 0, row);
+        var textTextBox = new TextBox { Text = textLabel.Text, Dock = DockStyle.Fill };
+        textTextBox.TextChanged += (s, e) =>
+        {
+            textLabel.Text = textTextBox.Text;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(textTextBox, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // ForeColor
+        layout.Controls.Add(new Label { Text = "Fore Color:", AutoSize = true }, 0, row);
+        var foreColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(foreColorButton, textLabel.ForeColor);
+        foreColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = textLabel.ForeColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    textLabel.ForeColor = colorDialog.Color;
+                    UpdateColorButton(foreColorButton, textLabel.ForeColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(foreColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
+    private void UpdateDateTimeProperties(TableLayoutPanel layout, DateTimeComponent dateTime, ref int row)
+    {
+        // Show Label
+        var showLabelCheckBox = new CheckBox { Text = "Show Label", Checked = dateTime.ShowLabel };
+        showLabelCheckBox.CheckedChanged += (s, e) =>
+        {
+            dateTime.ShowLabel = showLabelCheckBox.Checked;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(showLabelCheckBox, 0, row);
+        layout.SetColumnSpan(showLabelCheckBox, 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Label
+        layout.Controls.Add(new Label { Text = "Label:", AutoSize = true }, 0, row);
+        var labelTextBox = new TextBox { Text = dateTime.Label, Dock = DockStyle.Fill };
+        labelTextBox.TextChanged += (s, e) =>
+        {
+            dateTime.Label = labelTextBox.Text;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(labelTextBox, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
+    private void UpdateIndicatorProperties(TableLayoutPanel layout, IndicatorComponent indicator, ref int row)
+    {
+        // Label
+        layout.Controls.Add(new Label { Text = "Label:", AutoSize = true }, 0, row);
+        var labelTextBox = new TextBox { Text = indicator.Label, Dock = DockStyle.Fill };
+        labelTextBox.TextChanged += (s, e) =>
+        {
+            indicator.Label = labelTextBox.Text;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(labelTextBox, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
+    private void UpdateMotorProperties(TableLayoutPanel layout, MotorComponent motor, ref int row)
+    {
+        // Label
+        layout.Controls.Add(new Label { Text = "Label:", AutoSize = true }, 0, row);
+        var labelTextBox = new TextBox { Text = motor.Label, Dock = DockStyle.Fill };
+        labelTextBox.TextChanged += (s, e) =>
+        {
+            motor.Label = labelTextBox.Text;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(labelTextBox, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
+    private void UpdatePumpProperties(TableLayoutPanel layout, PumpComponent pump, ref int row)
+    {
+        // Label
+        layout.Controls.Add(new Label { Text = "Label:", AutoSize = true }, 0, row);
+        var labelTextBox = new TextBox { Text = pump.Label, Dock = DockStyle.Fill };
+        labelTextBox.TextChanged += (s, e) =>
+        {
+            pump.Label = labelTextBox.Text;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(labelTextBox, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
+    private void UpdateTankProperties(TableLayoutPanel layout, TankComponent tank, ref int row)
+    {
+        // Label
+        layout.Controls.Add(new Label { Text = "Label:", AutoSize = true }, 0, row);
+        var labelTextBox = new TextBox { Text = tank.Label, Dock = DockStyle.Fill };
+        labelTextBox.TextChanged += (s, e) =>
+        {
+            tank.Label = labelTextBox.Text;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(labelTextBox, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
+    private void UpdateConveyorProperties(TableLayoutPanel layout, ConveyorComponent conveyor, ref int row)
+    {
+        // Label
+        layout.Controls.Add(new Label { Text = "Label:", AutoSize = true }, 0, row);
+        var labelTextBox = new TextBox { Text = conveyor.Label, Dock = DockStyle.Fill };
+        labelTextBox.TextChanged += (s, e) =>
+        {
+            conveyor.Label = labelTextBox.Text;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(labelTextBox, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
+    private void UpdateToggleSwitchProperties(TableLayoutPanel layout, ToggleSwitchComponent toggleSwitch, ref int row)
+    {
+        // On Label
+        layout.Controls.Add(new Label { Text = "On Label:", AutoSize = true }, 0, row);
+        var onLabelTextBox = new TextBox { Text = toggleSwitch.OnLabel, Dock = DockStyle.Fill };
+        onLabelTextBox.TextChanged += (s, e) =>
+        {
+            toggleSwitch.OnLabel = onLabelTextBox.Text;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(onLabelTextBox, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Off Label
+        layout.Controls.Add(new Label { Text = "Off Label:", AutoSize = true }, 0, row);
+        var offLabelTextBox = new TextBox { Text = toggleSwitch.OffLabel, Dock = DockStyle.Fill };
+        offLabelTextBox.TextChanged += (s, e) =>
+        {
+            toggleSwitch.OffLabel = offLabelTextBox.Text;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(offLabelTextBox, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Show Labels
+        var showLabelsCheckBox = new CheckBox { Text = "Show Labels", Checked = toggleSwitch.ShowLabels };
+        showLabelsCheckBox.CheckedChanged += (s, e) =>
+        {
+            toggleSwitch.ShowLabels = showLabelsCheckBox.Checked;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(showLabelsCheckBox, 0, row);
+        layout.SetColumnSpan(showLabelsCheckBox, 2);
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
     }
