@@ -100,6 +100,8 @@ public class CompilerModule
 
             GenerateMinimalConfigs(jsonPath);
 
+            CopyMachineLearningConfig(jsonPath, buildPath);
+
             // Copy SVG files used in screens to runtime build output
             CopySvgFiles(buildPath);
 
@@ -579,6 +581,87 @@ public class CompilerModule
         }
     }
 
+    private void CopyMachineLearningConfig(string jsonPath, string buildPath)
+    {
+        if (_currentProject == null) return;
+
+        var mlConfigPath = Path.Combine(_currentProject.Paths.MachineLearningPath, "machine_learning.json");
+        var buildMlJsonPath = Path.Combine(jsonPath, "machine_learning.json");
+        var mlDataBuildPath = Path.Combine(buildPath, "ml_data");
+
+        if (!File.Exists(mlConfigPath))
+        {
+            var minimal = new JObject { ["enabled"] = false, ["models"] = new JArray() };
+            if (!string.IsNullOrEmpty(_currentProject.Paths.MachineLearningPath))
+                minimal["trainingDataPath"] = string.Empty;
+            try
+            {
+                File.WriteAllText(buildMlJsonPath, minimal.ToString());
+                EmitMessage("Generated json/machine_learning.json (minimal, no source)");
+            }
+            catch (Exception ex)
+            {
+                EmitWarning($"Could not write machine_learning.json: {ex.Message}");
+            }
+            return;
+        }
+
+        try
+        {
+            var json = JObject.Parse(File.ReadAllText(mlConfigPath));
+            var modelsArray = json["models"] as JArray;
+            if (modelsArray != null && modelsArray.Count > 0)
+            {
+                if (!Directory.Exists(mlDataBuildPath))
+                    Directory.CreateDirectory(mlDataBuildPath);
+
+                var rootPath = _currentProject.Paths.RootPath;
+                for (int i = 0; i < modelsArray.Count; i++)
+                {
+                    var modelObj = modelsArray[i] as JObject;
+                    if (modelObj == null) continue;
+
+                    var trainedDataPath = modelObj["trainedDataPath"]?.ToString();
+                    if (string.IsNullOrWhiteSpace(trainedDataPath)) continue;
+
+                    var fullPath = Path.Combine(rootPath, trainedDataPath.Replace('/', Path.DirectorySeparatorChar));
+                    if (!File.Exists(fullPath))
+                    {
+                        EmitWarning($"ML model trained data not found: {trainedDataPath}");
+                        continue;
+                    }
+
+                    var modelId = modelObj["id"]?.ToString();
+                    var ext = Path.GetExtension(fullPath);
+                    if (string.IsNullOrEmpty(ext)) ext = ".zip";
+                    var stableName = !string.IsNullOrEmpty(modelId)
+                        ? $"{modelId}{ext}"
+                        : $"model_{i}{ext}";
+                    var destPath = Path.Combine(mlDataBuildPath, stableName);
+                    File.Copy(fullPath, destPath, true);
+                    modelObj["trainedDataPath"] = $"ml_data/{stableName}";
+                }
+                EmitMessage("Copied ML config and trained data to build");
+            }
+            else
+            {
+                EmitMessage("Copied json/machine_learning.json");
+            }
+
+            File.WriteAllText(buildMlJsonPath, json.ToString());
+        }
+        catch (Exception ex)
+        {
+            EmitWarning($"Failed to copy machine learning config: {ex.Message}");
+            try
+            {
+                var fallback = new JObject { ["enabled"] = false, ["models"] = new JArray() };
+                File.WriteAllText(buildMlJsonPath, fallback.ToString());
+            }
+            catch { }
+        }
+    }
+
     private bool GenerateProjectMetadata(string buildPath)
     {
         if (_currentProject == null) return false;
@@ -603,7 +686,8 @@ public class CompilerModule
                 ["scripts"] = "json/scripts.json",
                 ["security"] = "json/security.json",
                 ["tags"] = "json/tag_tables.json",
-                ["events"] = "json/events.json"
+                ["events"] = "json/events.json",
+                ["machine_learning"] = "json/machine_learning.json"
             }
         };
         

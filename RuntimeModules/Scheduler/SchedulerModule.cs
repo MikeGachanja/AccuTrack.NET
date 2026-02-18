@@ -17,6 +17,10 @@ public sealed class SchedulerModule : ModuleBase, IScheduler
 
     /// <summary>Set script engine for schedule execution. Called by host.</summary>
     public void SetScriptEngine(IScriptingEngine? engine) => _scheduleManager.SetScriptEngine(engine);
+    /// <summary>Set callback to run an ML model by id. Called by host.</summary>
+    public void SetMLRunAction(Action<string>? runModelById) => _scheduleManager.SetMLRunAction(runModelById);
+    /// <summary>Resolve script name to full path. Called by host.</summary>
+    public void SetScriptPathResolver(Func<string, string?>? resolver) => _scheduleManager.SetScriptPathResolver(resolver);
 
     public override bool Initialize(JsonObject? config = null)
     {

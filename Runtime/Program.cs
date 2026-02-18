@@ -75,7 +75,6 @@ internal static class Program
         System.Diagnostics.Trace.Listeners.Add(consoleListener);
 
         engine.ModuleManager.RegisterModule(new SecurityModule());
-        engine.ModuleManager.RegisterModule(new MLEngineModule());
 
         var commModule = new CommunicationModule();
         engine.ModuleManager.RegisterModule(commModule);
@@ -83,6 +82,7 @@ internal static class Program
 
         var tagsModule = new TagsModule();
         engine.ModuleManager.RegisterModule(tagsModule);
+        engine.ModuleManager.RegisterModule(new MLEngineModule());
         tagsModule.SetCommunicationModule(commModule);
         
         // Set up tag update callback that handles both tag name and address resolution
@@ -149,11 +149,21 @@ internal static class Program
         var schedulerModule = new SchedulerModule();
         engine.ModuleManager.RegisterModule(schedulerModule);
         schedulerModule.SetScriptEngine(scriptingEngine);
+        if (engine.ModuleManager.GetModule("MLEngine") is IMLEngine mlEngine)
+            schedulerModule.SetMLRunAction(mlEngine.RunModelOnce);
 
         engine.ModuleManager.RegisterModule(new HistorianModule());
 
         var project = new ProjectModule();
         Services.Register<IProject>(project);
+        schedulerModule.SetScriptPathResolver(scriptName =>
+        {
+            var p = Services.Get<IProject>();
+            var script = p?.CurrentProject?.Script?.FirstOrDefault(s => string.Equals(s.Name, scriptName, StringComparison.Ordinal));
+            if (script == null || string.IsNullOrEmpty(script.Path)) return null;
+            var projectPath = ExecutionEngine.Instance.ProjectPath;
+            return string.IsNullOrEmpty(projectPath) ? script.Path : Path.Combine(projectPath, script.Path);
+        });
 
         var screensModule = new ScreensModule();
         screensModule.Initialize();

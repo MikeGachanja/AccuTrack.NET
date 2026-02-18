@@ -1788,6 +1788,18 @@ namespace Designer
             if (scadaProject != null)
             {
                 editor.SetScadaProject(scadaProject);
+                var mlPath = System.IO.Path.Combine(scadaProject.Paths.MachineLearningPath, "machine_learning.json");
+                if (System.IO.File.Exists(mlPath))
+                {
+                    try
+                    {
+                        var mlJson = Newtonsoft.Json.Linq.JObject.Parse(System.IO.File.ReadAllText(mlPath));
+                        var mlConfig = Designer.Modules.MachineLearning.MachineLearning.FromJson(mlJson);
+                        var mlModels = mlConfig.Models.Select(m => (m.Id.ToString(), m.Name)).ToList();
+                        editor.SetAvailableMLModels(mlModels);
+                    }
+                    catch { /* ignore */ }
+                }
             }
 
             var tabPage = new TabPage(tabName);
@@ -1968,16 +1980,29 @@ namespace Designer
                 }
             }
 
-            // Get available tags
+            // Get available tags and historian-configured tags (ML models use historian tags)
             var tagTables = _projectManager?.GetTagTables(scadaName).OfType<TagTable>().ToList() ?? new List<TagTable>();
             var tagNames = new List<string>();
             foreach (var table in tagTables)
             {
                 tagNames.AddRange(table.GetTags().Select(t => t.Name));
             }
+            var historianTagNames = new List<string>();
+            var historianRaw = _projectManager?.GetHistorian(scadaName);
+            if (historianRaw is string historianJson && !string.IsNullOrEmpty(historianJson))
+            {
+                try
+                {
+                    var historianObj = Historian.FromJson(JObject.Parse(historianJson));
+                    historianTagNames = historianObj.Tags.Select(t => t.TagName).Where(n => !string.IsNullOrEmpty(n)).ToList();
+                }
+                catch { /* use empty list */ }
+            }
 
             var editor = new MachineLearningEditor(tagNames);
-            
+            editor.SetTagTables(tagTables);
+            editor.SetHistorianTagNames(historianTagNames);
+
             MachineLearning? mlObj = null;
             if (ml is MachineLearning mlInst)
             {

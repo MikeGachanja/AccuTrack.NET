@@ -17,6 +17,8 @@ public sealed class ScheduleManager
     public bool IsRunning => _running;
 
     public void SetScriptEngine(IScriptingEngine? engine) => _executor.SetScriptEngine(engine);
+    public void SetMLRunAction(Action<string>? runModelById) => _executor.SetMLRunAction(runModelById);
+    public void SetScriptPathResolver(Func<string, string?>? resolver) => _executor.SetScriptPathResolver(resolver);
 
     public bool LoadFromJsonFile(string filePath)
     {

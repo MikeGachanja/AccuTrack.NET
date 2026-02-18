@@ -1,9 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
+using Designer.Modules.Components;
 using Designer.Modules.MachineLearning;
 using Designer.Modules.Project;
+using Designer.Modules.TagEngine;
 
 namespace Designer.Modules.MachineLearning;
 
@@ -16,11 +19,20 @@ public partial class MachineLearningEditor : UserControl
     private MachineLearning? _ml;
     private ScadaProject? _scadaProject;
     private List<string> _availableTags = new List<string>();
+    private List<TagTable> _tagTables = new List<TagTable>();
+    private List<string> _historianTagNames = new List<string>();
     private bool _isModified = false;
 
     private CheckBox _enabledCheckBox;
     private TextBox _trainingDataPathTextBox;
     private NumericUpDown _trainingIntervalNumeric;
+
+    private const int ColName = 0;
+    private const int ColModelKind = 1;
+    private const int ColTrainedData = 2;
+    private const int ColInputTags = 3;
+    private const int ColOutputTag = 4;
+    private const int ColEnabled = 5;
 
     public bool IsModified => _isModified;
 
@@ -98,7 +110,19 @@ public partial class MachineLearningEditor : UserControl
         toolbar.Items.Add(addButton);
         var removeButton = new ToolStripButton("Remove Model");
         removeButton.Click += (s, e) => RemoveSelectedModel();
-        toolbar.Items.Add(removeButton);
+        toolbar.Items.Add(new ToolStripSeparator());
+        var setTrainedDataButton = new ToolStripButton("Set trained data...");
+        setTrainedDataButton.Click += (s, e) => SetTrainedDataForSelectedModel();
+        toolbar.Items.Add(setTrainedDataButton);
+        toolbar.Items.Add(new ToolStripSeparator());
+        var selectInputTagButton = new ToolStripButton("Select input tag...");
+        selectInputTagButton.ToolTipText = "Add a historian-configured tag as input for the selected model";
+        selectInputTagButton.Click += (s, e) => SelectInputTagForSelectedModel();
+        toolbar.Items.Add(selectInputTagButton);
+        var selectOutputTagButton = new ToolStripButton("Select output tag...");
+        selectOutputTagButton.ToolTipText = "Set the historian-configured tag for the selected model output";
+        selectOutputTagButton.Click += (s, e) => SelectOutputTagForSelectedModel();
+        toolbar.Items.Add(selectOutputTagButton);
 
         // Models grid
         _modelsGrid = new DataGridView
@@ -110,28 +134,26 @@ public partial class MachineLearningEditor : UserControl
         };
 
         _modelsGrid.Columns.Add("Name", "Name");
-        _modelsGrid.Columns.Add("ModelType", "Type");
+        var modelKindColumn = new DataGridViewComboBoxColumn
+        {
+            Name = "ModelKind",
+            HeaderText = "Model kind",
+            DataPropertyName = "ModelKindId"
+        };
+        foreach (var kind in ModelKindCatalog.GetAllKinds())
+        {
+            modelKindColumn.Items.Add(kind.DisplayName);
+        }
+        _modelsGrid.Columns.Add(modelKindColumn);
+        _modelsGrid.Columns.Add("TrainedDataPath", "Trained data");
         _modelsGrid.Columns.Add("InputTags", "Input Tags");
         _modelsGrid.Columns.Add("OutputTag", "Output Tag");
-        _modelsGrid.Columns.Add("Enabled", "Enabled");
-
-        var typeColumn = new DataGridViewComboBoxColumn
-        {
-            Name = "ModelType",
-            HeaderText = "Type",
-            DataPropertyName = "ModelType"
-        };
-        typeColumn.Items.AddRange(new[] { "Regression", "Classification", "AnomalyDetection" });
-        _modelsGrid.Columns.Remove("ModelType");
-        _modelsGrid.Columns.Insert(1, typeColumn);
-
         var enabledColumn = new DataGridViewCheckBoxColumn
         {
             Name = "Enabled",
             HeaderText = "Enabled",
             DataPropertyName = "Enabled"
         };
-        _modelsGrid.Columns.Remove("Enabled");
         _modelsGrid.Columns.Add(enabledColumn);
 
         _modelsGrid.CellValueChanged += OnCellValueChanged;
@@ -163,6 +185,18 @@ public partial class MachineLearningEditor : UserControl
         _availableTags = tags ?? new List<string>();
     }
 
+    /// <summary>Sets tag tables for the tag selector (used with historian tags for ML input/output).</summary>
+    public void SetTagTables(List<TagTable> tagTables)
+    {
+        _tagTables = tagTables ?? new List<TagTable>();
+    }
+
+    /// <summary>When set, the tag selector shows only these tags (e.g. tags configured for Historian).</summary>
+    public void SetHistorianTagNames(List<string> historianTagNames)
+    {
+        _historianTagNames = historianTagNames ?? new List<string>();
+    }
+
     private void LoadML()
     {
         if (_ml == null)
@@ -175,16 +209,45 @@ public partial class MachineLearningEditor : UserControl
         _modelsGrid.Rows.Clear();
         foreach (var model in _ml.Models)
         {
+            if (string.IsNullOrEmpty(model.ModelKindId) && model.ModelType == "Regression")
+                model.ModelKindId = ModelKindCatalog.FastForestRegressionId;
             var row = new DataGridViewRow();
             row.CreateCells(_modelsGrid);
-            row.Cells[0].Value = model.Name;
-            row.Cells[1].Value = model.ModelType;
-            row.Cells[2].Value = string.Join(", ", model.InputTags);
-            row.Cells[3].Value = model.OutputTag;
-            row.Cells[4].Value = model.Enabled;
+            row.Cells[ColName].Value = model.Name;
+            row.Cells[ColModelKind].Value = GetDisplayNameForModel(model);
+            row.Cells[ColTrainedData].Value = model.TrainedDataPath;
+            row.Cells[ColInputTags].Value = string.Join(", ", model.InputTags);
+            row.Cells[ColOutputTag].Value = model.OutputTag;
+            row.Cells[ColEnabled].Value = model.Enabled;
             row.Tag = model;
             _modelsGrid.Rows.Add(row);
         }
+    }
+
+    private static string GetDisplayNameForModel(MLModel model)
+    {
+        if (!string.IsNullOrEmpty(model.ModelKindId))
+        {
+            var kind = ModelKindCatalog.GetById(model.ModelKindId);
+            return kind?.DisplayName ?? model.ModelKindId;
+        }
+        return model.ModelType switch
+        {
+            "Classification" => "Classification",
+            "AnomalyDetection" => "Anomaly Detection",
+            _ => "Fast Forest (Regression)"
+        };
+    }
+
+    private static string GetModelKindIdFromDisplayName(string? displayName)
+    {
+        if (string.IsNullOrEmpty(displayName)) return ModelKindCatalog.FastForestRegressionId;
+        foreach (var k in ModelKindCatalog.GetAllKinds())
+        {
+            if (string.Equals(k.DisplayName, displayName, StringComparison.Ordinal))
+                return k.Id;
+        }
+        return displayName;
     }
 
     private void AddModel()
@@ -195,6 +258,7 @@ public partial class MachineLearningEditor : UserControl
         var newModel = new MLModel
         {
             Name = $"Model{_ml.Models.Count + 1}",
+            ModelKindId = ModelKindCatalog.FastForestRegressionId,
             ModelType = "Regression",
             Enabled = true
         };
@@ -202,6 +266,90 @@ public partial class MachineLearningEditor : UserControl
         _ml.Models.Add(newModel);
         LoadML();
         _isModified = true;
+    }
+
+    private void SetTrainedDataForSelectedModel()
+    {
+        if (_modelsGrid.SelectedRows.Count == 0 || _scadaProject == null || _ml == null)
+        {
+            if (_scadaProject == null)
+                MessageBox.Show("No project set.", "ML Editor", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            else if (_modelsGrid.SelectedRows.Count == 0)
+                MessageBox.Show("Select a model row first.", "ML Editor", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        var selectedRow = _modelsGrid.SelectedRows[0];
+        if (selectedRow.Tag is not MLModel model)
+            return;
+
+        using var dialog = new TrainingDataSelectionDialog();
+        dialog.SetSystemFolder(ModelKindCatalog.SystemTrainedModelsFolder);
+        dialog.SetProjectMachineLearningPath(_scadaProject.Paths.MachineLearningPath);
+        dialog.SetSelectedPath(model.TrainedDataPath);
+        if (dialog.ShowDialog(this) != DialogResult.OK || string.IsNullOrEmpty(dialog.SelectedProjectRelativePath))
+            return;
+
+        model.TrainedDataPath = dialog.SelectedProjectRelativePath;
+        if (selectedRow.Index >= 0 && selectedRow.Index < _modelsGrid.Rows.Count)
+            _modelsGrid.Rows[selectedRow.Index].Cells[ColTrainedData].Value = model.TrainedDataPath;
+        _isModified = true;
+    }
+
+    private void SelectInputTagForSelectedModel()
+    {
+        if (_modelsGrid.SelectedRows.Count == 0 || _modelsGrid.SelectedRows[0].Tag is not MLModel model)
+        {
+            MessageBox.Show("Select a model row first.", "ML Editor", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (_tagTables.Count == 0)
+        {
+            MessageBox.Show("No tag tables available. Configure tags in the project first.", "ML Editor", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        using var dialog = new TagSelectorDialog();
+        dialog.SetTagTables(_tagTables);
+        if (_historianTagNames.Count > 0)
+            dialog.SetAllowedTagNames(_historianTagNames);
+        if (dialog.ShowDialog(this) == DialogResult.OK && !string.IsNullOrEmpty(dialog.SelectedTagName))
+        {
+            if (!model.InputTags.Contains(dialog.SelectedTagName, StringComparer.OrdinalIgnoreCase))
+            {
+                model.InputTags.Add(dialog.SelectedTagName);
+                var idx = _modelsGrid.SelectedRows[0].Index;
+                if (idx >= 0 && idx < _modelsGrid.Rows.Count)
+                    _modelsGrid.Rows[idx].Cells[ColInputTags].Value = string.Join(", ", model.InputTags);
+                _isModified = true;
+            }
+        }
+    }
+
+    private void SelectOutputTagForSelectedModel()
+    {
+        if (_modelsGrid.SelectedRows.Count == 0 || _modelsGrid.SelectedRows[0].Tag is not MLModel model)
+        {
+            MessageBox.Show("Select a model row first.", "ML Editor", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        if (_tagTables.Count == 0)
+        {
+            MessageBox.Show("No tag tables available. Configure tags in the project first.", "ML Editor", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        using var dialog = new TagSelectorDialog();
+        dialog.SetTagTables(_tagTables);
+        if (_historianTagNames.Count > 0)
+            dialog.SetAllowedTagNames(_historianTagNames);
+        dialog.SetSelectedTagName(model.OutputTag);
+        if (dialog.ShowDialog(this) == DialogResult.OK && !string.IsNullOrEmpty(dialog.SelectedTagName))
+        {
+            model.OutputTag = dialog.SelectedTagName;
+            var idx = _modelsGrid.SelectedRows[0].Index;
+            if (idx >= 0 && idx < _modelsGrid.Rows.Count)
+                _modelsGrid.Rows[idx].Cells[ColOutputTag].Value = model.OutputTag;
+            _isModified = true;
+        }
     }
 
     private void RemoveSelectedModel()
@@ -235,8 +383,11 @@ public partial class MachineLearningEditor : UserControl
             case "Name":
                 model.Name = value?.ToString() ?? string.Empty;
                 break;
-            case "ModelType":
-                model.ModelType = value?.ToString() ?? "Regression";
+            case "ModelKind":
+                model.ModelKindId = GetModelKindIdFromDisplayName(value?.ToString());
+                break;
+            case "TrainedDataPath":
+                model.TrainedDataPath = value?.ToString() ?? string.Empty;
                 break;
             case "InputTags":
                 var tagsStr = value?.ToString() ?? string.Empty;

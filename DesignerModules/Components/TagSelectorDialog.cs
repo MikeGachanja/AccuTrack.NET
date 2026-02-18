@@ -9,6 +9,7 @@ namespace Designer.Modules.Components;
 /// <summary>
 /// Dialog for selecting tags with search, filtering, and tag table navigation.
 /// Can be used throughout the project for tag selection in historian, scripts, schedules, alarms, ML, etc.
+/// When SetAllowedTagNames is used (e.g. historian tags), only those tags are shown for ML input/output.
 /// </summary>
 public partial class TagSelectorDialog : Form
 {
@@ -17,6 +18,7 @@ public partial class TagSelectorDialog : Form
     private TextBox _searchBox;
     private ComboBox _dataTypeFilter;
     private Label _selectedTagInfo;
+    private Label? _filterInfoLabel;
     private Button _okButton;
     private Button _cancelButton;
     private List<TagTable> _tagTables = new List<TagTable>();
@@ -24,6 +26,7 @@ public partial class TagSelectorDialog : Form
     private Tag? _selectedTag;
     private string? _requiredDataType; // For filtering incompatible tags
     private bool _allowMultiProject = false; // Future: multi-project support
+    private HashSet<string>? _allowedTagNames; // When set (e.g. historian tags), only these tags are shown
 
     /// <summary>
     /// Gets the selected tag.
@@ -62,6 +65,27 @@ public partial class TagSelectorDialog : Form
         _requiredDataType = dataType;
         UpdateDataTypeFilter();
         FilterTags();
+    }
+
+    /// <summary>
+    /// When set, only tags whose names are in this list are shown (e.g. tags configured for Historian).
+    /// Use for ML editor so models are fed from historian-configured tags only.
+    /// Pass null or empty to show all tags.
+    /// </summary>
+    public void SetAllowedTagNames(IReadOnlyList<string>? tagNames)
+    {
+        _allowedTagNames = tagNames != null && tagNames.Count > 0
+            ? new HashSet<string>(tagNames, StringComparer.OrdinalIgnoreCase)
+            : null;
+        if (_filterInfoLabel != null)
+        {
+            _filterInfoLabel.Visible = _allowedTagNames != null;
+            _filterInfoLabel.Text = _allowedTagNames != null
+                ? "Showing tags configured for Historian (ML)"
+                : "";
+        }
+        if (_tagTablesTree.SelectedNode?.Tag is TagTable table)
+            PopulateTagsList(table);
     }
 
     /// <summary>
@@ -144,6 +168,14 @@ public partial class TagSelectorDialog : Form
         mainLayout.Controls.Add(_searchBox, 0, 0);
         mainLayout.SetColumnSpan(_searchBox, 2);
 
+        _filterInfoLabel = new Label
+        {
+            Text = "",
+            AutoSize = true,
+            ForeColor = System.Drawing.Color.DarkSlateGray,
+            Visible = false
+        };
+
         // Data type filter (spans both columns)
         var filterLayout = new FlowLayoutPanel
         {
@@ -158,6 +190,8 @@ public partial class TagSelectorDialog : Form
         };
         _dataTypeFilter.SelectedIndexChanged += (s, e) => FilterTags();
         filterLayout.Controls.Add(_dataTypeFilter);
+        if (_filterInfoLabel != null)
+            filterLayout.Controls.Add(_filterInfoLabel);
         mainLayout.Controls.Add(filterLayout, 0, 1);
         mainLayout.SetColumnSpan(filterLayout, 2);
 
@@ -311,9 +345,9 @@ public partial class TagSelectorDialog : Form
         foreach (var tag in tags)
         {
             if (tag == null) continue;
-            
+            if (_allowedTagNames != null && !_allowedTagNames.Contains(tag.Name))
+                continue;
             _allTags.Add(tag);
-            
             var item = new ListViewItem(tag.Name)
             {
                 Tag = tag,

@@ -137,7 +137,7 @@ public sealed class ExecutionEngine
             "CommunicationModule" => "communications.json",
             "TagsEngine" or "TagsModule" => "tags.json", // Changed from tag_tables.json to tags.json
             "AlarmsModule" or "Alarms" => "alarms.json",
-            "SchedulesModule" or "Scheduler" => "schedules.json",
+            "SchedulerModule" or "SchedulesModule" or "Scheduler" => "schedules.json",
             "HistorianModule" or "Historian" => "historian.json",
             "MLEngine" or "MachineLearningModule" => "machine_learning.json",
             "SecurityModule" or "Security" => "security.json",

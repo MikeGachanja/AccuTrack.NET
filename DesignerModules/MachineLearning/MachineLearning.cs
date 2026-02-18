@@ -64,7 +64,12 @@ public class MLModel
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Name { get; set; } = string.Empty;
-    public string ModelType { get; set; } = "Regression"; // Regression, Classification, AnomalyDetection
+    /// <summary>Standard model kind id from catalog (e.g. FastForestRegression). Preferred over ModelType.</summary>
+    public string ModelKindId { get; set; } = string.Empty;
+    /// <summary>Project-relative path to trained model file (e.g. machine_learning/data/QA_Model.zip).</summary>
+    public string TrainedDataPath { get; set; } = string.Empty;
+    /// <summary>Legacy: Regression, Classification, AnomalyDetection. Used when ModelKindId is empty.</summary>
+    public string ModelType { get; set; } = "Regression";
     public List<string> InputTags { get; set; } = new List<string>();
     public string OutputTag { get; set; } = string.Empty;
     public Dictionary<string, object> Parameters { get; set; } = new Dictionary<string, object>();
@@ -84,7 +89,7 @@ public class MLModel
             inputTagsArray.Add(tag);
         }
 
-        return new JObject
+        var obj = new JObject
         {
             ["id"] = Id.ToString(),
             ["name"] = Name,
@@ -94,6 +99,11 @@ public class MLModel
             ["parameters"] = parametersObj,
             ["enabled"] = Enabled
         };
+        if (!string.IsNullOrEmpty(ModelKindId))
+            obj["modelKindId"] = ModelKindId;
+        if (!string.IsNullOrEmpty(TrainedDataPath))
+            obj["trainedDataPath"] = TrainedDataPath;
+        return obj;
     }
 
     public static MLModel FromJson(JObject json)
@@ -102,6 +112,8 @@ public class MLModel
         {
             Name = json["name"]?.ToString() ?? string.Empty,
             ModelType = json["modelType"]?.ToString() ?? "Regression",
+            ModelKindId = json["modelKindId"]?.ToString() ?? string.Empty,
+            TrainedDataPath = json["trainedDataPath"]?.ToString() ?? string.Empty,
             OutputTag = json["outputTag"]?.ToString() ?? string.Empty,
             Enabled = json["enabled"]?.ToObject<bool>() ?? true
         };
