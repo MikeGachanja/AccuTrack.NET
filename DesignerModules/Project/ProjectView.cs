@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using Designer.Modules.Project;
 using Designer.Modules.TagEngine;
 using Designer.Modules.ScriptEditor;
+using Svg;
 // Removed using Designer.Modules.ScreenEditor; to break circular dependency
 // ScreenTemplate will be handled via object/dynamic
 
@@ -20,6 +22,8 @@ public partial class ProjectView : UserControl
     private TreeView _treeView;
     private ProjectManager? _projectManager;
     private ContextMenuStrip _contextMenu;
+    private ImageList _imageList;
+    private string _iconPath = "";
 
     // Events
     public event EventHandler<ScreenOpenEventArgs>? ScreenOpenRequested;
@@ -45,6 +49,9 @@ public partial class ProjectView : UserControl
 
     private void InitializeComponent()
     {
+        // Initialize icon path and image list
+        InitializeIcons();
+
         _treeView = new TreeView
         {
             Dock = DockStyle.Fill,
@@ -52,7 +59,8 @@ public partial class ProjectView : UserControl
             ShowRootLines = true,
             ShowPlusMinus = true,
             HideSelection = false,
-            ShowNodeToolTips = true
+            ShowNodeToolTips = true,
+            ImageList = _imageList
         };
 
         _treeView.NodeMouseDoubleClick += OnNodeDoubleClick;
@@ -66,6 +74,210 @@ public partial class ProjectView : UserControl
         InitializeContextMenus();
 
         Controls.Add(_treeView);
+    }
+
+    /// <summary>
+    /// Initializes the icon path and image list for tree nodes.
+    /// Icons are loaded from the icons folder in the build directory (e.g. bin/Debug/Designer/icons).
+    /// </summary>
+    private void InitializeIcons()
+    {
+        // Icons folder in build output (e.g. bin/Debug/Designer/icons)
+        string exeDir = Path.GetDirectoryName(Application.ExecutablePath) ?? Application.StartupPath;
+        _iconPath = Path.Combine(exeDir, "icons");
+
+        // Create image list
+        _imageList = new ImageList
+        {
+            ImageSize = new Size(16, 16),
+            ColorDepth = ColorDepth.Depth32Bit
+        };
+
+        // Load icons for different node types
+        LoadNodeIcons();
+    }
+
+    /// <summary>
+    /// Loads icons for tree node types from the build icons folder.
+    /// Uses only the SVG icons provided in Assets/icons (copied to build/icons).
+    /// </summary>
+    private void LoadNodeIcons()
+    {
+        // Map node types to icon file names (icons in build folder: bin/Debug/Designer/icons)
+        var iconMap = new Dictionary<string, string>
+        {
+            { "project", "project.svg" },
+            { "scada_folder", "scada_project.svg" },
+            { "scada_project", "scada_project.svg" },
+            { "screens_folder", "screens_folder.svg" },
+            { "screen", "screen.svg" },
+            { "scripts_folder", "scripts_folder.svg" },
+            { "script", "script.svg" },
+            { "tags_folder", "tags_folder.svg" },
+            { "tag_table", "tag_table.svg" },
+            { "comm_modules", "add_new.svg" },
+            { "alarms", "alarms.svg" },
+            { "schedules", "schedules.svg" },
+            { "historian", "historical_data.svg" },
+            { "security", "security.svg" },
+            { "machine_learning", "add_new.svg" },
+            { "device_network", "pc_station.svg" },
+            { "settings", "project_settings.svg" },
+            { "default", "add_new.svg" }
+        };
+
+        // Load each icon
+        foreach (var kvp in iconMap)
+        {
+            string iconFile = Path.Combine(_iconPath, kvp.Value);
+            Image? icon = LoadIcon(iconFile);
+            if (icon != null)
+            {
+                _imageList.Images.Add(kvp.Key, icon);
+            }
+        }
+
+        // If no icons loaded, create a default folder icon
+        if (_imageList.Images.Count == 0)
+        {
+            var defaultIcon = CreateDefaultFolderIcon();
+            _imageList.Images.Add("default", defaultIcon);
+        }
+    }
+
+    /// <summary>
+    /// Loads an icon from file (SVG or PNG).
+    /// </summary>
+    private Image? LoadIcon(string iconPath)
+    {
+        if (string.IsNullOrEmpty(iconPath) || !File.Exists(iconPath))
+            return null;
+
+        try
+        {
+            if (iconPath.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+            {
+                return LoadSvgAsImage(iconPath, 16, 16);
+            }
+            else if (iconPath.EndsWith(".png", StringComparison.OrdinalIgnoreCase) || iconPath.EndsWith(".ico", StringComparison.OrdinalIgnoreCase))
+            {
+                var img = Image.FromFile(iconPath);
+                if (img.Width != 16 || img.Height != 16)
+                {
+                    var resized = new Bitmap(16, 16);
+                    using (var g = Graphics.FromImage(resized))
+                    {
+                        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                        g.DrawImage(img, 0, 0, 16, 16);
+                    }
+                    img.Dispose();
+                    return resized;
+                }
+                return img;
+            }
+        }
+        catch
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Loads an SVG file as an Image.
+    /// </summary>
+    private Image? LoadSvgAsImage(string svgPath, int width, int height)
+    {
+        try
+        {
+            if (!File.Exists(svgPath))
+                return null;
+
+            var svgDoc = SvgDocument.Open(svgPath);
+            if (svgDoc == null)
+                return null;
+
+            var bitmap = new Bitmap(width, height);
+            using (var g = Graphics.FromImage(bitmap))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                g.Clear(Color.Transparent);
+                svgDoc.Draw(g);
+            }
+
+            return bitmap;
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            // Svg.NET can throw when parsing some SVG content (e.g. startIndex -1 from IndexOf)
+            return null;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Creates a default folder icon if no icons are available.
+    /// </summary>
+    private Image CreateDefaultFolderIcon()
+    {
+        var bmp = new Bitmap(16, 16);
+        using (var g = Graphics.FromImage(bmp))
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.FillRectangle(new SolidBrush(Color.FromArgb(255, 240, 200)), 2, 4, 12, 10);
+            g.FillPolygon(new SolidBrush(Color.FromArgb(255, 220, 180)), new Point[]
+            {
+                new Point(2, 4),
+                new Point(6, 4),
+                new Point(7, 6),
+                new Point(14, 6),
+                new Point(14, 14),
+                new Point(2, 14)
+            });
+            g.DrawRectangle(Pens.DarkGray, 2, 4, 12, 10);
+            g.DrawLine(Pens.DarkGray, 2, 4, 7, 4);
+        }
+        return bmp;
+    }
+
+    /// <summary>
+    /// Gets the icon index for a node type.
+    /// </summary>
+    private int GetIconIndex(NodeType nodeType)
+    {
+        string iconKey = nodeType switch
+        {
+            NodeType.Project => "project",
+            NodeType.ScadaFolder => "scada_folder",
+            NodeType.ScadaProject => "scada_project",
+            NodeType.ScreensFolder => "screens_folder",
+            NodeType.Screen => "screen",
+            NodeType.ScriptsFolder => "scripts_folder",
+            NodeType.Script => "script",
+            NodeType.TagsFolder => "tags_folder",
+            NodeType.TagTable => "tag_table",
+            NodeType.CommunicationModules => "comm_modules",
+            NodeType.Alarms => "alarms",
+            NodeType.Schedules => "schedules",
+            NodeType.Historian => "historian",
+            NodeType.Security => "security",
+            NodeType.MachineLearning => "machine_learning",
+            NodeType.DeviceNetwork => "device_network",
+            NodeType.Settings => "settings",
+            _ => "default"
+        };
+
+        int index = _imageList.Images.IndexOfKey(iconKey);
+        return index >= 0 ? index : (_imageList.Images.Count > 0 ? 0 : -1);
     }
 
     /// <summary>
@@ -93,15 +305,21 @@ public partial class ProjectView : UserControl
         var project = _projectManager.GetCurrentProject();
 
         // Root node
+        int projectIconIndex = GetIconIndex(NodeType.Project);
         var rootNode = new TreeNode(project.Name)
         {
-            Tag = new ProjectNodeData { Type = NodeType.Project, Data = project }
+            Tag = new ProjectNodeData { Type = NodeType.Project, Data = project },
+            ImageIndex = projectIconIndex,
+            SelectedImageIndex = projectIconIndex
         };
 
         // SCADA Projects folder
+        int scadaFolderIconIndex = GetIconIndex(NodeType.ScadaFolder);
         var scadaFolderNode = new TreeNode("SCADA Projects")
         {
-            Tag = new ProjectNodeData { Type = NodeType.ScadaFolder }
+            Tag = new ProjectNodeData { Type = NodeType.ScadaFolder },
+            ImageIndex = scadaFolderIconIndex,
+            SelectedImageIndex = scadaFolderIconIndex
         };
 
         foreach (var scada in project.ScadaProjects)
@@ -113,16 +331,22 @@ public partial class ProjectView : UserControl
         rootNode.Nodes.Add(scadaFolderNode);
 
         // Device Network
+        int deviceNetworkIconIndex = GetIconIndex(NodeType.DeviceNetwork);
         var deviceNetworkNode = new TreeNode("Device Network")
         {
-            Tag = new ProjectNodeData { Type = NodeType.DeviceNetwork }
+            Tag = new ProjectNodeData { Type = NodeType.DeviceNetwork },
+            ImageIndex = deviceNetworkIconIndex,
+            SelectedImageIndex = deviceNetworkIconIndex
         };
         rootNode.Nodes.Add(deviceNetworkNode);
 
         // Project Settings
+        int settingsIconIndex = GetIconIndex(NodeType.Settings);
         var settingsNode = new TreeNode("Project Settings")
         {
-            Tag = new ProjectNodeData { Type = NodeType.Settings }
+            Tag = new ProjectNodeData { Type = NodeType.Settings },
+            ImageIndex = settingsIconIndex,
+            SelectedImageIndex = settingsIconIndex
         };
         rootNode.Nodes.Add(settingsNode);
 
@@ -138,16 +362,22 @@ public partial class ProjectView : UserControl
     {
         string version = string.IsNullOrEmpty(scada.Version) ? "1.0.0" : scada.Version;
         string displayText = $"{scada.Name} (v{version})";
+        int scadaIconIndex = GetIconIndex(NodeType.ScadaProject);
         var scadaNode = new TreeNode(displayText)
         {
-            Tag = new ProjectNodeData { Type = NodeType.ScadaProject, Data = scada }
+            Tag = new ProjectNodeData { Type = NodeType.ScadaProject, Data = scada },
+            ImageIndex = scadaIconIndex,
+            SelectedImageIndex = scadaIconIndex
         };
         scadaNode.ToolTipText = $"SCADA Project: {scada.Name}\nVersion: {version}\nType: {scada.Type}";
 
         // Screens folder
+        int screensFolderIconIndex = GetIconIndex(NodeType.ScreensFolder);
         var screensFolder = new TreeNode("Screens")
         {
-            Tag = new ProjectNodeData { Type = NodeType.ScreensFolder, ScadaName = scada.Name }
+            Tag = new ProjectNodeData { Type = NodeType.ScreensFolder, ScadaName = scada.Name },
+            ImageIndex = screensFolderIconIndex,
+            SelectedImageIndex = screensFolderIconIndex
         };
         // Load and add screen items
         if (_projectManager != null)
@@ -160,9 +390,12 @@ public partial class ProjectView : UserControl
                 {
                     dynamic screenObj = screen;
                     string screenName = screenObj.Name?.ToString() ?? "Unknown";
+                    int screenIconIndex = GetIconIndex(NodeType.Screen);
                     var screenNode = new TreeNode(screenName)
                     {
-                        Tag = new ProjectNodeData { Type = NodeType.Screen, Data = screen, ScadaName = scada.Name }
+                        Tag = new ProjectNodeData { Type = NodeType.Screen, Data = screen, ScadaName = scada.Name },
+                        ImageIndex = screenIconIndex,
+                        SelectedImageIndex = screenIconIndex
                     };
                     screensFolder.Nodes.Add(screenNode);
                 }
@@ -172,19 +405,25 @@ public partial class ProjectView : UserControl
         scadaNode.Nodes.Add(screensFolder);
 
         // Scripts folder
+        int scriptsFolderIconIndex = GetIconIndex(NodeType.ScriptsFolder);
         var scriptsFolder = new TreeNode("Scripts")
         {
-            Tag = new ProjectNodeData { Type = NodeType.ScriptsFolder, ScadaName = scada.Name }
+            Tag = new ProjectNodeData { Type = NodeType.ScriptsFolder, ScadaName = scada.Name },
+            ImageIndex = scriptsFolderIconIndex,
+            SelectedImageIndex = scriptsFolderIconIndex
         };
         // Load and add script items
         if (_projectManager != null)
         {
             var scripts = _projectManager.GetScripts(scada.Name);
+            int scriptIconIndex = GetIconIndex(NodeType.Script);
             foreach (var script in scripts.OfType<LuaScript>())
             {
                 var scriptNode = new TreeNode(script.Name)
                 {
-                    Tag = new ProjectNodeData { Type = NodeType.Script, Data = script, ScadaName = scada.Name }
+                    Tag = new ProjectNodeData { Type = NodeType.Script, Data = script, ScadaName = scada.Name },
+                    ImageIndex = scriptIconIndex,
+                    SelectedImageIndex = scriptIconIndex
                 };
                 scriptsFolder.Nodes.Add(scriptNode);
             }
@@ -192,19 +431,25 @@ public partial class ProjectView : UserControl
         scadaNode.Nodes.Add(scriptsFolder);
 
         // Tags folder
+        int tagsFolderIconIndex = GetIconIndex(NodeType.TagsFolder);
         var tagsFolder = new TreeNode("Tags")
         {
-            Tag = new ProjectNodeData { Type = NodeType.TagsFolder, ScadaName = scada.Name }
+            Tag = new ProjectNodeData { Type = NodeType.TagsFolder, ScadaName = scada.Name },
+            ImageIndex = tagsFolderIconIndex,
+            SelectedImageIndex = tagsFolderIconIndex
         };
         // Load and add tag table items
         if (_projectManager != null)
         {
             var tagTables = _projectManager.GetTagTables(scada.Name);
+            int tagTableIconIndex = GetIconIndex(NodeType.TagTable);
             foreach (var table in tagTables.OfType<TagTable>())
             {
                 var tableNode = new TreeNode(table.Name)
                 {
-                    Tag = new ProjectNodeData { Type = NodeType.TagTable, Data = table, ScadaName = scada.Name }
+                    Tag = new ProjectNodeData { Type = NodeType.TagTable, Data = table, ScadaName = scada.Name },
+                    ImageIndex = tagTableIconIndex,
+                    SelectedImageIndex = tagTableIconIndex
                 };
                 tagsFolder.Nodes.Add(tableNode);
             }
@@ -212,44 +457,62 @@ public partial class ProjectView : UserControl
         scadaNode.Nodes.Add(tagsFolder);
 
         // Communication Modules
+        int commIconIndex = GetIconIndex(NodeType.CommunicationModules);
         var commNode = new TreeNode("Communication Modules")
         {
-            Tag = new ProjectNodeData { Type = NodeType.CommunicationModules, ScadaName = scada.Name }
+            Tag = new ProjectNodeData { Type = NodeType.CommunicationModules, ScadaName = scada.Name },
+            ImageIndex = commIconIndex,
+            SelectedImageIndex = commIconIndex
         };
         scadaNode.Nodes.Add(commNode);
 
         // Alarms
+        int alarmsIconIndex = GetIconIndex(NodeType.Alarms);
         var alarmsNode = new TreeNode("Alarms")
         {
-            Tag = new ProjectNodeData { Type = NodeType.Alarms, ScadaName = scada.Name }
+            Tag = new ProjectNodeData { Type = NodeType.Alarms, ScadaName = scada.Name },
+            ImageIndex = alarmsIconIndex,
+            SelectedImageIndex = alarmsIconIndex
         };
         scadaNode.Nodes.Add(alarmsNode);
 
         // Schedules
+        int schedulesIconIndex = GetIconIndex(NodeType.Schedules);
         var schedulesNode = new TreeNode("Schedules")
         {
-            Tag = new ProjectNodeData { Type = NodeType.Schedules, ScadaName = scada.Name }
+            Tag = new ProjectNodeData { Type = NodeType.Schedules, ScadaName = scada.Name },
+            ImageIndex = schedulesIconIndex,
+            SelectedImageIndex = schedulesIconIndex
         };
         scadaNode.Nodes.Add(schedulesNode);
 
         // Historian
+        int historianIconIndex = GetIconIndex(NodeType.Historian);
         var historianNode = new TreeNode("Historian")
         {
-            Tag = new ProjectNodeData { Type = NodeType.Historian, ScadaName = scada.Name }
+            Tag = new ProjectNodeData { Type = NodeType.Historian, ScadaName = scada.Name },
+            ImageIndex = historianIconIndex,
+            SelectedImageIndex = historianIconIndex
         };
         scadaNode.Nodes.Add(historianNode);
 
         // Security
+        int securityIconIndex = GetIconIndex(NodeType.Security);
         var securityNode = new TreeNode("Security")
         {
-            Tag = new ProjectNodeData { Type = NodeType.Security, ScadaName = scada.Name }
+            Tag = new ProjectNodeData { Type = NodeType.Security, ScadaName = scada.Name },
+            ImageIndex = securityIconIndex,
+            SelectedImageIndex = securityIconIndex
         };
         scadaNode.Nodes.Add(securityNode);
 
         // Machine Learning
+        int mlIconIndex = GetIconIndex(NodeType.MachineLearning);
         var mlNode = new TreeNode("Machine Learning")
         {
-            Tag = new ProjectNodeData { Type = NodeType.MachineLearning, ScadaName = scada.Name }
+            Tag = new ProjectNodeData { Type = NodeType.MachineLearning, ScadaName = scada.Name },
+            ImageIndex = mlIconIndex,
+            SelectedImageIndex = mlIconIndex
         };
         scadaNode.Nodes.Add(mlNode);
 

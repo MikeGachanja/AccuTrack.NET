@@ -116,9 +116,16 @@ public class SvgViewComponent : BaseComponent
                     }
                 }
             }
+            catch (ArgumentOutOfRangeException)
+            {
+                // Svg.NET can throw when parsing some SVG content (e.g. startIndex -1 from IndexOf)
+            }
+            catch (ArgumentException)
+            {
+                // Svg.NET parsing can throw for malformed or unsupported SVG values
+            }
             catch (Exception ex)
             {
-                // If SVG rendering fails, fall back to placeholder
                 System.Diagnostics.Debug.WriteLine($"Failed to render SVG '{SvgPath}': {ex.Message}");
             }
         }

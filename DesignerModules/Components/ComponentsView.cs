@@ -446,9 +446,18 @@ public partial class ComponentsView : UserControl
 
             return bitmap;
         }
+        catch (ArgumentOutOfRangeException)
+        {
+            // Svg.NET can throw when parsing some SVG content (e.g. startIndex -1 from IndexOf)
+            return null;
+        }
+        catch (ArgumentException)
+        {
+            // Svg.NET parsing can throw for malformed or unsupported SVG values
+            return null;
+        }
         catch (Exception ex)
         {
-            // Log error for debugging
             System.Diagnostics.Debug.WriteLine($"Failed to load SVG icon '{svgPath}': {ex.Message}");
             return null;
         }

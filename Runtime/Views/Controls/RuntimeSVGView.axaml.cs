@@ -152,6 +152,17 @@ public partial class RuntimeSVGView : UserControl
 
             PlaceholderText.IsVisible = false;
         }
+        catch (ArgumentOutOfRangeException)
+        {
+            // Svg.NET can throw when parsing some SVG content (e.g. startIndex -1 from IndexOf)
+            SvgImage.Source = null;
+            PlaceholderText.IsVisible = true;
+        }
+        catch (ArgumentException)
+        {
+            SvgImage.Source = null;
+            PlaceholderText.IsVisible = true;
+        }
         catch (Exception ex)
         {
             System.Diagnostics.Trace.WriteLine($"Failed to load SVG '{svgPath}': {ex.Message}");
