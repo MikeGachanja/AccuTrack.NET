@@ -35,6 +35,8 @@ namespace Designer
         private ToolStripMenuItem actionSave;
         private ToolStripMenuItem actionSaveAs;
         private ToolStripMenuItem actionSaveAll;
+        private ToolStripMenuItem actionCloseEditor;
+        private ToolStripMenuItem actionCloseAllEditors;
         private ToolStripSeparator separator2;
         private ToolStripMenuItem actionRename;
         private ToolStripSeparator separator3;
@@ -334,6 +336,8 @@ namespace Designer
             actionSave = new ToolStripMenuItem("Save", null, null, Keys.Control | Keys.S);
             actionSaveAs = new ToolStripMenuItem("Save As...", null, null, Keys.Control | Keys.Shift | Keys.S);
             actionSaveAll = new ToolStripMenuItem("Save All", null, null, Keys.Control | Keys.Shift | Keys.S);
+            actionCloseEditor = new ToolStripMenuItem("Close", null, null, Keys.Control | Keys.F4);
+            actionCloseAllEditors = new ToolStripMenuItem("Close All");
             separator2 = new ToolStripSeparator();
             actionRename = new ToolStripMenuItem("Rename...", null, null, Keys.F2);
             separator3 = new ToolStripSeparator();
@@ -355,6 +359,8 @@ namespace Designer
                 actionSave,
                 actionSaveAs,
                 actionSaveAll,
+                actionCloseEditor,
+                actionCloseAllEditors,
                 separator2,
                 actionRename,
                 separator3,
@@ -515,6 +521,7 @@ namespace Designer
         private TabPage debugTab;
         private TabPage propertiesTab;
         private TabControl editorTabs;
+        private ContextMenuStrip contextMenuEditorTabs;
         private Panel componentsPanel;
     }
 }

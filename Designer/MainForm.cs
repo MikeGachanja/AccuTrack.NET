@@ -218,6 +218,8 @@ namespace Designer
             return selectedScadaName;
         }
 
+        private int _rightClickedTabIndex = -1;
+
         private void InitializeTabClosing()
         {
             // Handle middle mouse button to close tabs
@@ -235,7 +237,36 @@ namespace Designer
                         }
                     }
                 }
+                else if (e.Button == MouseButtons.Right)
+                {
+                    _rightClickedTabIndex = -1;
+                    for (int i = 0; i < editorTabs.TabCount; i++)
+                    {
+                        var rect = editorTabs.GetTabRect(i);
+                        if (rect.Contains(e.Location))
+                        {
+                            _rightClickedTabIndex = i;
+                            break;
+                        }
+                    }
+                }
             };
+
+            // Context menu for editor tabs
+            contextMenuEditorTabs = new ContextMenuStrip();
+            var closeTabItem = new ToolStripMenuItem("Close", null, (o, _) => CloseEditorTabFromContext());
+            var closeAllItem = new ToolStripMenuItem("Close All Tabs", null, (o, _) => CloseAllEditorTabs());
+            contextMenuEditorTabs.Items.Add(closeTabItem);
+            contextMenuEditorTabs.Items.Add(closeAllItem);
+            contextMenuEditorTabs.Opening += (s, e) =>
+            {
+                bool hasTabs = editorTabs.TabCount > 0;
+                closeTabItem.Enabled = hasTabs;
+                closeAllItem.Enabled = hasTabs;
+                e.Cancel = !hasTabs;
+            };
+            editorTabs.ContextMenuStrip = contextMenuEditorTabs;
+            UpdateEditorCloseMenuState();
         }
 
         private void InitializeConsoles()
@@ -376,6 +407,9 @@ namespace Designer
             actionSave.Click += (s, e) => SaveProject();
             actionSaveAs.Click += (s, e) => SaveProjectAs();
             actionSaveAll.Click += (s, e) => SaveAll();
+            actionCloseEditor.Click += (s, e) => CloseCurrentEditorTab();
+            actionCloseAllEditors.Click += (s, e) => CloseAllEditorTabs();
+            menuFile.DropDownOpening += (s, e) => UpdateEditorCloseMenuState();
             actionRename.Click += (s, e) => RenameProject();
             actionImport.Click += (s, e) => ImportProject();
             actionExport.Click += (s, e) => ExportProject();
@@ -1279,6 +1313,40 @@ namespace Designer
         }
 
         /// <summary>
+        /// Closes the currently selected editor tab (File > Close or Ctrl+F4).
+        /// </summary>
+        private void CloseCurrentEditorTab()
+        {
+            if (editorTabs.TabCount == 0)
+                return;
+            int index = editorTabs.SelectedIndex;
+            if (index >= 0)
+                CloseTab(index);
+        }
+
+        /// <summary>
+        /// Closes the tab that was right-clicked, or the selected tab if none was right-clicked.
+        /// </summary>
+        private void CloseEditorTabFromContext()
+        {
+            int index = _rightClickedTabIndex >= 0 && _rightClickedTabIndex < editorTabs.TabCount
+                ? _rightClickedTabIndex
+                : editorTabs.SelectedIndex;
+            if (index >= 0)
+                CloseTab(index);
+        }
+
+        /// <summary>
+        /// Updates enabled state of Close / Close All editor menu items.
+        /// </summary>
+        private void UpdateEditorCloseMenuState()
+        {
+            bool hasTabs = editorTabs.TabCount > 0;
+            actionCloseEditor.Enabled = hasTabs;
+            actionCloseAllEditors.Enabled = hasTabs;
+        }
+
+        /// <summary>
         /// Closes a tab with save prompt if modified.
         /// </summary>
         private void CloseTab(int index)
@@ -1353,6 +1421,24 @@ namespace Designer
                         var scadaName = tabText.Replace("Schedules - ", "").Trim();
                         _projectManager.SaveSchedules(scadaName, schedules);
                     }
+                }
+                else if (result == DialogResult.Cancel)
+                {
+                    shouldClose = false;
+                }
+            }
+            else if (widget is Designer.Modules.Alarms.AlarmsEditor alarmsEditor && alarmsEditor.IsModified)
+            {
+                var result = MessageBox.Show(
+                    $"Save changes to '{tab.Text}'?",
+                    "Save Changes",
+                    MessageBoxButtons.YesNoCancel,
+                    MessageBoxIcon.Question);
+
+                if (result == DialogResult.Yes)
+                {
+                    SaveAlarmsFromEditor(alarmsEditor, tab);
+                    shouldClose = true;
                 }
                 else if (result == DialogResult.Cancel)
                 {
@@ -1455,6 +1541,7 @@ namespace Designer
             if (shouldClose)
             {
                 editorTabs.TabPages.RemoveAt(index);
+                UpdateEditorCloseMenuState();
             }
         }
 
