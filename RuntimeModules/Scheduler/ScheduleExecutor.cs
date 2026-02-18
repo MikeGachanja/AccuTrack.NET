@@ -25,10 +25,19 @@ public sealed class ScheduleExecutor
         {
             try
             {
-                _runModelById?.Invoke(schedule.ModelId);
+                if (_runModelById == null)
+                {
+                    System.Diagnostics.Trace.WriteLine($"[Scheduler] ML run not configured; cannot run model {schedule.ModelId}");
+                    return false;
+                }
+                _runModelById.Invoke(schedule.ModelId);
                 return true;
             }
-            catch { return false; }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.WriteLine($"[Scheduler] ML model run failed for {schedule.ModelId}: {ex.Message}");
+                return false;
+            }
         }
 
         var scriptPath = schedule.ScriptPath;
@@ -37,9 +46,14 @@ public sealed class ScheduleExecutor
         if (!string.IsNullOrEmpty(scriptPath) && _scriptEngine != null)
         {
             if (!_scriptEngine.LoadScript(scriptPath))
+            {
+                System.Diagnostics.Trace.WriteLine($"[Scheduler] Script load failed: {scriptPath} ({_scriptEngine.GetLastError()})");
                 return false;
+            }
             return _scriptEngine.ExecuteScript();
         }
+        if (string.IsNullOrEmpty(scriptPath) && !string.IsNullOrEmpty(schedule.ScriptName))
+            System.Diagnostics.Trace.WriteLine($"[Scheduler] Script path not resolved for: {schedule.ScriptName}");
         if (!string.IsNullOrEmpty(schedule.Command))
             return true;
         return false;

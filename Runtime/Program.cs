@@ -146,6 +146,7 @@ internal static class Program
         var scriptingEngine = new ScriptingEngineModule();
         scriptingEngine.Initialize();
 
+        // Scheduler: runs schedules from json/schedules.json (scripts + ML models on interval/time).
         var schedulerModule = new SchedulerModule();
         engine.ModuleManager.RegisterModule(schedulerModule);
         schedulerModule.SetScriptEngine(scriptingEngine);

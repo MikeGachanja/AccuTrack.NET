@@ -68,6 +68,12 @@ public sealed class ScheduleManager
     public Schedule? GetSchedule(string scheduleName) => _schedules.TryGetValue(scheduleName, out var s) ? s : null;
     public IReadOnlyList<string> GetScheduleNames() => _schedules.Keys.ToList();
 
+    /// <summary>Clear all schedules (e.g. before re-loading project config).</summary>
+    public void Clear()
+    {
+        _schedules.Clear();
+    }
+
     public void Start()
     {
         if (_running) return;
@@ -90,10 +96,15 @@ public sealed class ScheduleManager
             if (!schedule.ShouldExecute(now)) continue;
             try
             {
-                _executor.Execute(schedule);
+                var ok = _executor.Execute(schedule);
                 schedule.MarkExecuted(now);
+                if (ok)
+                    System.Diagnostics.Trace.WriteLine($"[Scheduler] Executed: {schedule.Name} ({(schedule.TargetKind == ScheduleTargetKind.MLModel ? "ML model " + schedule.ModelId : "Script " + schedule.ScriptName)})");
             }
-            catch { }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute failed for {schedule.Name}: {ex.Message}");
+            }
         }
     }
 }

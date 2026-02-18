@@ -168,10 +168,11 @@ public sealed class MLEngineModule : ModuleBase, IMLEngine
         {
             var output = runner.Predict(inputValues);
             _tagManager.UpdateTagValue(runner.OutputTagName, output, TagQuality.Good);
+            System.Diagnostics.Trace.WriteLine($"[MLEngine] RunModelOnce OK: {modelId} -> {runner.OutputTagName}={output}");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[MLEngine] RunModelOnce failed for {modelId}: {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"[MLEngine] RunModelOnce failed for {modelId}: {ex.Message}");
         }
     }
 

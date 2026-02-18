@@ -24,13 +24,16 @@ public sealed class SchedulerModule : ModuleBase, IScheduler
 
     public override bool Initialize(JsonObject? config = null)
     {
-        if (config != null)
+        _scheduleManager.Clear();
+        if (config != null && config["schedules"] is JsonArray arr)
         {
-            if (config["schedules"] is JsonArray arr)
+            foreach (var node in arr)
             {
-                foreach (var node in arr)
-                    if (node is JsonObject obj && Schedule.FromJson(obj) is { } s)
-                        _scheduleManager.AddSchedule(s);
+                if (node is JsonObject obj && Schedule.FromJson(obj) is { } s)
+                {
+                    _scheduleManager.AddSchedule(s);
+                    System.Diagnostics.Trace.WriteLine($"[Scheduler] Loaded schedule: {s.Name} ({(s.TargetKind == ScheduleTargetKind.MLModel ? "ML" : "Script")}, {(s.Type == ScheduleType.Interval ? $"every {s.IntervalSeconds}s" : s.Type.ToString())})");
+                }
             }
         }
         SetStatus("Initialized");
