@@ -14,11 +14,12 @@ namespace Designer.Modules.Components;
 /// </summary>
 public partial class ComponentsView : UserControl
 {
-    private TabControl _componentTabs;
+    private TreeView _componentTree;
     private TextBox _searchBox;
     private ComponentsModule? _componentsModule;
     private string _iconPath = "";
     private string _svgPath = "";
+    private ImageList _imageList;
 
     public ComponentsView()
     {
@@ -43,14 +44,25 @@ public partial class ComponentsView : UserControl
         };
         _searchBox.TextChanged += (s, e) => FilterComponents(_searchBox.Text);
 
-        // Component tabs (categories)
-        _componentTabs = new TabControl
+        // Component tree view
+        _imageList = new ImageList
         {
-            Dock = DockStyle.Fill
+            ImageSize = new Size(16, 16),
+            ColorDepth = ColorDepth.Depth32Bit
+        };
+        
+        _componentTree = new TreeView
+        {
+            Dock = DockStyle.Fill,
+            ImageList = _imageList,
+            ShowLines = true,
+            ShowPlusMinus = true,
+            ShowRootLines = true,
+            HideSelection = false
         };
 
         mainLayout.Controls.Add(_searchBox, 0, 0);
-        mainLayout.Controls.Add(_componentTabs, 0, 1);
+        mainLayout.Controls.Add(_componentTree, 0, 1);
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
@@ -82,14 +94,20 @@ public partial class ComponentsView : UserControl
     }
 
     /// <summary>
-    /// Sets up the component list with categories.
+    /// Sets up the component list with categories in tree structure.
     /// </summary>
     private void SetupComponentList()
     {
-        _componentTabs.TabPages.Clear();
+        _componentTree.Nodes.Clear();
+        _imageList.Images.Clear();
 
         if (_componentsModule == null)
             return;
+
+        // Create folder icon for categories
+        var folderIcon = CreateFolderIcon();
+        _imageList.Images.Add("folder", folderIcon);
+        int folderIconIndex = _imageList.Images.IndexOfKey("folder");
 
         // Define component categories matching Qt implementation
         // Component keys match the registered names in ComponentsModule
@@ -139,114 +157,174 @@ public partial class ComponentsView : UserControl
             })
         };
 
-        // Add category tabs
+        // Add category nodes with component children
         foreach (var category in categories)
         {
-            var tabPage = CreateCategoryTab(category);
-            if (tabPage != null)
+            var categoryNode = CreateCategoryNode(category, folderIconIndex);
+            if (categoryNode != null && categoryNode.Nodes.Count > 0)
             {
-                _componentTabs.TabPages.Add(tabPage);
+                _componentTree.Nodes.Add(categoryNode);
             }
         }
 
-        // Add SVG components tab if SVG files exist
-        var svgTab = CreateSvgComponentsTab();
-        if (svgTab != null)
+        // Add Miscellaneous (SVG components) node if SVG files exist
+        var miscellaneousNode = CreateMiscellaneousNode(folderIconIndex);
+        if (miscellaneousNode != null && miscellaneousNode.Nodes.Count > 0)
         {
-            _componentTabs.TabPages.Add(svgTab);
+            _componentTree.Nodes.Add(miscellaneousNode);
         }
+
+        // Expand all categories by default
+        _componentTree.ExpandAll();
+        
+        // Set up drag-and-drop handlers
+        SetupTreeDragDrop();
     }
 
     /// <summary>
-    /// Creates a tab page for a component category.
+    /// Creates a folder icon for category nodes.
     /// </summary>
-    private TabPage? CreateCategoryTab(ComponentCategory category)
+    private Image CreateFolderIcon()
     {
-        var tabPage = new TabPage(category.Name);
-        var scrollPanel = new Panel
+        var bmp = new Bitmap(16, 16);
+        using (var g = Graphics.FromImage(bmp))
         {
-            Dock = DockStyle.Fill,
-            AutoScroll = true
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            // Draw folder icon
+            g.FillRectangle(new SolidBrush(Color.FromArgb(255, 240, 200)), 2, 4, 12, 10);
+            g.FillPolygon(new SolidBrush(Color.FromArgb(255, 220, 180)), new Point[]
+            {
+                new Point(2, 4),
+                new Point(6, 4),
+                new Point(7, 6),
+                new Point(14, 6),
+                new Point(14, 14),
+                new Point(2, 14)
+            });
+            g.DrawRectangle(Pens.DarkGray, 2, 4, 12, 10);
+            g.DrawLine(Pens.DarkGray, 2, 4, 7, 4);
+        }
+        return bmp;
+    }
+
+    /// <summary>
+    /// Creates a tree node for a component category with component children.
+    /// </summary>
+    private TreeNode? CreateCategoryNode(ComponentCategory category, int folderIconIndex)
+    {
+        var categoryNode = new TreeNode(category.Name)
+        {
+            ImageIndex = folderIconIndex,
+            SelectedImageIndex = folderIconIndex,
+            Tag = null // null tag indicates category folder
         };
 
-        var gridLayout = new TableLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            AutoSize = true,
-            ColumnCount = 3,
-            Padding = new Padding(5)
-        };
+        var availableComponents = _componentsModule?.GetAvailableComponents();
+        if (availableComponents == null)
+            return null;
 
-        int row = 0;
         foreach (var (displayName, componentKey) in category.Components)
         {
             // Check if component exists in module (componentKey matches registered name)
-            var availableComponents = _componentsModule?.GetAvailableComponents();
-            if (availableComponents != null)
+            string? componentName = availableComponents.OfType<string>()
+                .FirstOrDefault(c => c.Equals(componentKey, StringComparison.OrdinalIgnoreCase));
+            
+            if (componentName == null)
+                continue; // Skip if component not available
+            
+            // Load component icon
+            Image? icon = LoadComponentIcon(componentName);
+            int iconIndex = folderIconIndex; // Default to folder icon
+            
+            if (icon != null)
             {
-                string? componentName = availableComponents.OfType<string>()
-                    .FirstOrDefault(c => c.Equals(componentKey, StringComparison.OrdinalIgnoreCase));
-                
-                if (componentName == null)
-                    continue; // Skip if component not available
-                
-                var button = CreateComponentButton(componentName, displayName);
-                if (button != null)
+                string iconKey = $"component_{componentName}";
+                if (!_imageList.Images.ContainsKey(iconKey))
                 {
-                    gridLayout.Controls.Add(button, row % 3, row / 3);
-                    gridLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 90));
-                    row++;
+                    // Resize icon to 16x16 for tree view
+                    var resizedIcon = new Bitmap(16, 16);
+                    using (var g = Graphics.FromImage(resizedIcon))
+                    {
+                        g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+                        g.DrawImage(icon, 0, 0, 16, 16);
+                    }
+                    _imageList.Images.Add(iconKey, resizedIcon);
+                    icon.Dispose();
                 }
+                iconIndex = _imageList.Images.IndexOfKey(iconKey);
             }
+            
+            var componentNode = new TreeNode(displayName)
+            {
+                ImageIndex = iconIndex,
+                SelectedImageIndex = iconIndex,
+                Tag = componentName // Store component name for drag-drop
+            };
+            
+            categoryNode.Nodes.Add(componentNode);
         }
 
-        if (gridLayout.Controls.Count == 0)
-            return null; // No components in this category
-
-        scrollPanel.Controls.Add(gridLayout);
-        tabPage.Controls.Add(scrollPanel);
-        return tabPage;
+        return categoryNode.Nodes.Count > 0 ? categoryNode : null;
     }
 
     /// <summary>
-    /// Creates a component button with icon and text.
+    /// Sets up drag-and-drop handlers for the component tree.
     /// </summary>
-    private Button? CreateComponentButton(string componentName, string displayName)
+    private void SetupTreeDragDrop()
     {
-        var button = new Button
+        _componentTree.MouseDown += (s, e) =>
         {
-            Size = new Size(80, 80),
-            Text = displayName,
-            TextAlign = ContentAlignment.BottomCenter,
-            UseVisualStyleBackColor = true,
-            FlatStyle = FlatStyle.Flat,
-            Tag = componentName
-        };
-
-        // Try to load icon
-        Image? icon = LoadComponentIcon(componentName);
-        if (icon != null)
-        {
-            button.Image = icon;
-            button.ImageAlign = ContentAlignment.TopCenter;
-            button.TextImageRelation = TextImageRelation.ImageAboveText;
-        }
-
-        // Set up drag and drop
-        button.MouseDown += (s, e) =>
-        {
-            if (e.Button == MouseButtons.Left && button.Tag is string name && _componentsModule != null)
+            if (e.Button == MouseButtons.Left)
             {
-                var component = _componentsModule.CreateComponent(name);
-                if (component != null)
+                TreeNode? node = _componentTree.GetNodeAt(e.X, e.Y);
+                if (node != null && node.Tag is string tagValue)
                 {
-                    var data = new DataObject(ComponentDragDropFormat, component);
-                    button.DoDragDrop(data, DragDropEffects.Copy);
+                    // Check if it's an SVG component (relative path) or regular component (component name)
+                    if (tagValue.Contains(Path.DirectorySeparatorChar) || tagValue.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // SVG component - use SVG drag format
+                        string fullPath = Path.Combine(_svgPath, tagValue);
+                        var data = new DataObject("AccuTrack.SCADA.SVG", fullPath);
+                        _componentTree.DoDragDrop(data, DragDropEffects.Copy);
+                    }
+                    else if (_componentsModule != null)
+                    {
+                        // Regular component - use component drag format
+                        var component = _componentsModule.CreateComponent(tagValue);
+                        if (component != null)
+                        {
+                            var data = new DataObject(ComponentDragDropFormat, component);
+                            _componentTree.DoDragDrop(data, DragDropEffects.Copy);
+                        }
+                    }
                 }
             }
         };
 
-        return button;
+        _componentTree.NodeMouseDoubleClick += (s, e) =>
+        {
+            if (e.Node.Tag is string tagValue)
+            {
+                // Check if it's an SVG component or regular component
+                if (tagValue.Contains(Path.DirectorySeparatorChar) || tagValue.EndsWith(".svg", StringComparison.OrdinalIgnoreCase))
+                {
+                    // SVG component
+                    string fullPath = Path.Combine(_svgPath, tagValue);
+                    var data = new DataObject("AccuTrack.SCADA.SVG", fullPath);
+                    _componentTree.DoDragDrop(data, DragDropEffects.Copy);
+                }
+                else if (_componentsModule != null)
+                {
+                    // Regular component
+                    var component = _componentsModule.CreateComponent(tagValue);
+                    if (component != null)
+                    {
+                        var data = new DataObject(ComponentDragDropFormat, component);
+                        _componentTree.DoDragDrop(data, DragDropEffects.Copy);
+                    }
+                }
+            }
+        };
     }
 
     /// <summary>
@@ -377,9 +455,9 @@ public partial class ComponentsView : UserControl
     }
 
     /// <summary>
-    /// Creates the SVG components tab with hierarchical folder structure.
+    /// Creates the Miscellaneous (SVG components) tree node with hierarchical folder structure.
     /// </summary>
-    private TabPage? CreateSvgComponentsTab()
+    private TreeNode? CreateMiscellaneousNode(int folderIconIndex)
     {
         if (!Directory.Exists(_svgPath))
             return null;
@@ -388,58 +466,29 @@ public partial class ComponentsView : UserControl
         if (svgFiles.Length == 0)
             return null;
 
-        var tabPage = new TabPage("SVG Components");
-        // Use larger image size for better SVG preview (24x24)
-        var imageList = new ImageList { ImageSize = new Size(24, 24) };
-        var treeView = new TreeView
-        {
-            Dock = DockStyle.Fill,
-            ImageList = imageList,
-            ShowLines = true,
-            ShowPlusMinus = true,
-            ShowRootLines = true
-        };
-
-        // Add folder icon to ImageList
-        var folderBmp = new Bitmap(24, 24);
-        using (var g = Graphics.FromImage(folderBmp))
-        {
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            // Draw folder icon (simplified)
-            g.FillRectangle(new SolidBrush(Color.FromArgb(255, 240, 200)), 3, 6, 18, 15);
-            g.FillPolygon(new SolidBrush(Color.FromArgb(255, 220, 180)), new Point[]
-            {
-                new Point(3, 6),
-                new Point(9, 6),
-                new Point(10, 9),
-                new Point(21, 9),
-                new Point(21, 21),
-                new Point(3, 21)
-            });
-            g.DrawRectangle(Pens.DarkGray, 3, 6, 18, 15);
-            g.DrawLine(Pens.DarkGray, 3, 6, 10, 6);
-        }
-        imageList.Images.Add("folder", folderBmp);
-        
         // Add default file icon (fallback for SVGs that fail to load)
-        var fileBmp = new Bitmap(24, 24);
-        using (var g = Graphics.FromImage(fileBmp))
+        if (!_imageList.Images.ContainsKey("file"))
         {
-            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
-            // Draw file icon (simplified document)
-            g.FillRectangle(Brushes.White, 4, 3, 16, 18);
-            g.DrawRectangle(Pens.Black, 4, 3, 16, 18);
-            // Draw corner fold
-            g.DrawLine(Pens.Black, 15, 3, 15, 8);
-            g.DrawLine(Pens.Black, 15, 8, 20, 8);
+            var fileBmp = new Bitmap(16, 16);
+            using (var g = Graphics.FromImage(fileBmp))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                // Draw file icon (simplified document)
+                g.FillRectangle(Brushes.White, 2, 2, 12, 12);
+                g.DrawRectangle(Pens.Black, 2, 2, 12, 12);
+                // Draw corner fold
+                g.DrawLine(Pens.Black, 11, 2, 11, 6);
+                g.DrawLine(Pens.Black, 11, 6, 14, 6);
+            }
+            _imageList.Images.Add("file", fileBmp);
         }
-        imageList.Images.Add("file", fileBmp);
+        int fileIconIndex = _imageList.Images.IndexOfKey("file");
 
         // Build hierarchical tree structure
-        var rootNode = new TreeNode("SVG Files")
+        var rootNode = new TreeNode("Miscellaneous")
         {
-            ImageIndex = treeView.ImageList.Images.IndexOfKey("folder"),
-            SelectedImageIndex = treeView.ImageList.Images.IndexOfKey("folder")
+            ImageIndex = folderIconIndex,
+            SelectedImageIndex = folderIconIndex
         };
 
         // Organize files by folder structure
@@ -479,8 +528,8 @@ public partial class ComponentsView : UserControl
                     {
                         folderNode = new TreeNode(part)
                         {
-                            ImageIndex = treeView.ImageList.Images.IndexOfKey("folder"),
-                            SelectedImageIndex = treeView.ImageList.Images.IndexOfKey("folder"),
+                            ImageIndex = folderIconIndex,
+                            SelectedImageIndex = folderIconIndex,
                             Tag = null // null tag indicates folder
                         };
                         currentNode.Nodes.Add(folderNode);
@@ -496,23 +545,18 @@ public partial class ComponentsView : UserControl
             string fileNameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
             
             // Try to load and render the SVG as an icon
-            Image? svgIcon = LoadSvgAsImage(svgFile, 24, 24);
-            int iconIndex;
+            Image? svgIcon = LoadSvgAsImage(svgFile, 16, 16);
+            int iconIndex = fileIconIndex;
             
             if (svgIcon != null)
             {
                 // Add rendered SVG icon to ImageList
                 string iconKey = $"svg_{relativePath.Replace(Path.DirectorySeparatorChar, '_').Replace(" ", "_")}";
-                if (!imageList.Images.ContainsKey(iconKey))
+                if (!_imageList.Images.ContainsKey(iconKey))
                 {
-                    imageList.Images.Add(iconKey, svgIcon);
+                    _imageList.Images.Add(iconKey, svgIcon);
                 }
-                iconIndex = imageList.Images.IndexOfKey(iconKey);
-            }
-            else
-            {
-                // Fallback to default file icon if SVG fails to load
-                iconIndex = imageList.Images.IndexOfKey("file");
+                iconIndex = _imageList.Images.IndexOfKey(iconKey);
             }
             
             var fileNode = new TreeNode(fileNameWithoutExt)
@@ -524,70 +568,43 @@ public partial class ComponentsView : UserControl
             currentNode.Nodes.Add(fileNode);
         }
 
-        treeView.Nodes.Add(rootNode);
-        rootNode.ExpandAll();
-
-        // Enable drag for the tree view
-        treeView.AllowDrop = false; // TreeView itself doesn't accept drops
-        
-        // Handle mouse down to start drag
-        treeView.MouseDown += (s, e) =>
-        {
-            if (e.Button == MouseButtons.Left)
-            {
-                TreeNode? node = treeView.GetNodeAt(e.X, e.Y);
-                if (node != null && node.Tag is string svgPath)
-                {
-                    // Only drag files (folders have null Tag)
-                    var data = new DataObject("AccuTrack.SCADA.SVG", svgPath);
-                    treeView.DoDragDrop(data, DragDropEffects.Copy);
-                }
-            }
-        };
-
-        // Handle double-click to drag
-        treeView.NodeMouseDoubleClick += (s, e) =>
-        {
-            if (e.Node.Tag is string svgPath)
-            {
-                var data = new DataObject("AccuTrack.SCADA.SVG", svgPath);
-                treeView.DoDragDrop(data, DragDropEffects.Copy);
-            }
-        };
-
-        tabPage.Controls.Add(treeView);
-        return tabPage;
+        return rootNode.Nodes.Count > 0 ? rootNode : null;
     }
 
     /// <summary>
-    /// Filters components by search text.
+    /// Filters components by search text in the tree view.
+    /// Expands categories that contain matches and collapses those that don't.
+    /// (WinForms TreeNode does not support hiding individual nodes.)
     /// </summary>
     private void FilterComponents(string searchText)
     {
-        foreach (TabPage tab in _componentTabs.TabPages)
+        if (string.IsNullOrEmpty(searchText))
         {
-            foreach (Control control in tab.Controls)
+            _componentTree.ExpandAll();
+            return;
+        }
+
+        foreach (TreeNode categoryNode in _componentTree.Nodes)
+        {
+            bool hasMatch = categoryNode.Text.Contains(searchText, StringComparison.OrdinalIgnoreCase);
+
+            if (!hasMatch)
             {
-                if (control is Panel panel)
+                foreach (TreeNode componentNode in categoryNode.Nodes)
                 {
-                    foreach (Control ctrl in panel.Controls)
+                    if (componentNode.Text.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
+                        (componentNode.Tag is string tag && tag.Contains(searchText, StringComparison.OrdinalIgnoreCase)))
                     {
-                        if (ctrl is TableLayoutPanel grid)
-                        {
-                            foreach (Control btn in grid.Controls)
-                            {
-                                if (btn is Button button)
-                                {
-                                    bool visible = string.IsNullOrEmpty(searchText) ||
-                                                  button.Text.Contains(searchText, StringComparison.OrdinalIgnoreCase) ||
-                                                  (button.Tag is string tag && tag.Contains(searchText, StringComparison.OrdinalIgnoreCase));
-                                    button.Visible = visible;
-                                }
-                            }
-                        }
+                        hasMatch = true;
+                        break;
                     }
                 }
             }
+
+            if (hasMatch)
+                categoryNode.Expand();
+            else
+                categoryNode.Collapse();
         }
     }
 
