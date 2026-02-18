@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
@@ -52,7 +53,7 @@ internal static class Program
                 if (tag != null)
                     tags.Add((tagName, tag.Address ?? ""));
             }
-            System.Diagnostics.Debug.WriteLine($"[Runtime] TagProvider called: Returning {tags.Count} tags from TagManager (Total tags: {tagsModule.TagManager.TagCount})");
+            System.Diagnostics.Trace.WriteLine($"[Runtime] TagProvider called: Returning {tags.Count} tags from TagManager (Total tags: {tagsModule.TagManager.TagCount})");
             return tags;
         });
     }
@@ -67,6 +68,11 @@ internal static class Program
 
         var console = new ConsoleModule();
         engine.ModuleManager.RegisterModule(console);
+
+        // Route Trace output to the console (visible on the Logs screen). In .NET Core, Debug.Listeners
+        // does not exist; the codebase uses Trace.WriteLine so all such messages appear on the Logs screen.
+        var consoleListener = new ConsoleTraceListener(console, "Runtime");
+        System.Diagnostics.Trace.Listeners.Add(consoleListener);
 
         engine.ModuleManager.RegisterModule(new SecurityModule());
         engine.ModuleManager.RegisterModule(new MLEngineModule());
@@ -83,19 +89,19 @@ internal static class Program
         // Since tag name == tag address, either can work for resolution
         commModule.SetTagUpdateCallback((tagNameOrAddress, value) =>
         {
-            System.Diagnostics.Debug.WriteLine($"[Runtime] Tag update callback received - TagName/Address: '{tagNameOrAddress}', Value: '{value}' (Type: {value?.GetType().Name ?? "null"})");
+            System.Diagnostics.Trace.WriteLine($"[Runtime] Tag update callback received - TagName/Address: '{tagNameOrAddress}', Value: '{value}' (Type: {value?.GetType().Name ?? "null"})");
             
             // Try updating by tag name first (tag name == tag address, so this should work)
             if (tagsModule.TagManager.UpdateTagValue(tagNameOrAddress, value, TagQuality.Good))
             {
-                System.Diagnostics.Debug.WriteLine($"[Runtime] Successfully updated tag '{tagNameOrAddress}' by name");
+                System.Diagnostics.Trace.WriteLine($"[Runtime] Successfully updated tag '{tagNameOrAddress}' by name");
                 return;
             }
             
             // If tag name update failed, try updating by address (tag name == tag address)
             if (tagsModule.TagManager.UpdateTagValueByAddress(tagNameOrAddress, value, TagQuality.Good))
             {
-                System.Diagnostics.Debug.WriteLine($"[Runtime] Successfully updated tag '{tagNameOrAddress}' by address");
+                System.Diagnostics.Trace.WriteLine($"[Runtime] Successfully updated tag '{tagNameOrAddress}' by address");
                 return;
             }
             
@@ -106,7 +112,7 @@ internal static class Program
                 // Found by name, try updating again (should have worked above, but try once more)
                 if (tagsModule.TagManager.UpdateTagValue(tagNameOrAddress, value, TagQuality.Good))
                 {
-                    System.Diagnostics.Debug.WriteLine($"[Runtime] Successfully updated tag '{tagNameOrAddress}' after finding by name");
+                    System.Diagnostics.Trace.WriteLine($"[Runtime] Successfully updated tag '{tagNameOrAddress}' after finding by name");
                     return;
                 }
             }
@@ -117,19 +123,19 @@ internal static class Program
             {
                 if (tagsModule.TagManager.UpdateTagValue(tag.Name, value, TagQuality.Good))
                 {
-                    System.Diagnostics.Debug.WriteLine($"[Runtime] Successfully updated tag '{tag.Name}' after finding by address '{tagNameOrAddress}'");
+                    System.Diagnostics.Trace.WriteLine($"[Runtime] Successfully updated tag '{tag.Name}' after finding by address '{tagNameOrAddress}'");
                     return;
                 }
             }
             
             // If all attempts failed, log warning
-            System.Diagnostics.Debug.WriteLine($"[Runtime] WARNING - Failed to update tag '{tagNameOrAddress}' - tag not found in TagManager (Total tags: {tagsModule.TagManager.TagCount})");
+            System.Diagnostics.Trace.WriteLine($"[Runtime] WARNING - Failed to update tag '{tagNameOrAddress}' - tag not found in TagManager (Total tags: {tagsModule.TagManager.TagCount})");
             
             // Log available tag names for debugging
             var availableTags = tagsModule.TagManager.GetTagNames();
             if (availableTags.Count > 0)
             {
-                System.Diagnostics.Debug.WriteLine($"[Runtime] Available tags: {string.Join(", ", availableTags.Take(10))}");
+                System.Diagnostics.Trace.WriteLine($"[Runtime] Available tags: {string.Join(", ", availableTags.Take(10))}");
             }
         });
         
@@ -167,9 +173,9 @@ internal static class Program
         var discovery = new DiscoveryService();
         Services.Register(discovery.TransferServer);
         if (!discovery.TransferServer.Start(8888))
-            System.Diagnostics.Debug.WriteLine("Transfer server failed to start");
+            System.Diagnostics.Trace.WriteLine("Transfer server failed to start");
         if (!discovery.DiscoveryResponder.Start())
-            System.Diagnostics.Debug.WriteLine("Discovery responder failed to start");
+            System.Diagnostics.Trace.WriteLine("Discovery responder failed to start");
 
         discovery.TransferServer.TransferCompleted += (_, projectPath) =>
         {
@@ -196,14 +202,14 @@ internal static class Program
         var metadataPath = Path.Combine(dataPath, "metadata.iscr");
         bool projectLoaded = false;
         
-        System.Diagnostics.Debug.WriteLine($"[Runtime] Checking for project data in: {dataPath}");
-        System.Diagnostics.Debug.WriteLine($"[Runtime] App directory: {appDir}");
-        System.Diagnostics.Debug.WriteLine($"[Runtime] Data directory exists: {Directory.Exists(dataPath)}");
-        System.Diagnostics.Debug.WriteLine($"[Runtime] Metadata file exists: {File.Exists(metadataPath)}");
+        System.Diagnostics.Trace.WriteLine($"[Runtime] Checking for project data in: {dataPath}");
+        System.Diagnostics.Trace.WriteLine($"[Runtime] App directory: {appDir}");
+        System.Diagnostics.Trace.WriteLine($"[Runtime] Data directory exists: {Directory.Exists(dataPath)}");
+        System.Diagnostics.Trace.WriteLine($"[Runtime] Metadata file exists: {File.Exists(metadataPath)}");
         
         if (File.Exists(metadataPath))
         {
-            System.Diagnostics.Debug.WriteLine($"[Runtime] Attempting to load project from: {metadataPath}");
+            System.Diagnostics.Trace.WriteLine($"[Runtime] Attempting to load project from: {metadataPath}");
             if (project.OpenProject(metadataPath))
             {
                 engine.ReinitializeWithProject(dataPath);
@@ -214,29 +220,29 @@ internal static class Program
                 projectLoaded = true;
                 var projectName = project.CurrentProject?.Name ?? "Unknown";
                 var screenCount = project.CurrentProject?.Screen.Count ?? 0;
-                System.Diagnostics.Debug.WriteLine($"[Runtime] Successfully loaded project: {projectName} with {screenCount} screen(s)");
-                System.Diagnostics.Debug.WriteLine($"[Runtime] Tags loaded: {tagsModule.TagManager.TagCount} tags");
+                System.Diagnostics.Trace.WriteLine($"[Runtime] Successfully loaded project: {projectName} with {screenCount} screen(s)");
+                System.Diagnostics.Trace.WriteLine($"[Runtime] Tags loaded: {tagsModule.TagManager.TagCount} tags");
                 if (screenCount > 0)
                 {
                     var firstScreen = project.GetFirstScreenPath();
-                    System.Diagnostics.Debug.WriteLine($"[Runtime] First screen path: {firstScreen}");
+                    System.Diagnostics.Trace.WriteLine($"[Runtime] First screen path: {firstScreen}");
                 }
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine("[Runtime] Failed to load existing project data (OpenProject returned false).");
+                System.Diagnostics.Trace.WriteLine("[Runtime] Failed to load existing project data (OpenProject returned false).");
             }
         }
         else
         {
-            System.Diagnostics.Debug.WriteLine($"[Runtime] No existing project data found at {metadataPath}. Runtime will start without a project.");
+            System.Diagnostics.Trace.WriteLine($"[Runtime] No existing project data found at {metadataPath}. Runtime will start without a project.");
             if (Directory.Exists(dataPath))
             {
                 var files = Directory.GetFiles(dataPath, "*", SearchOption.AllDirectories);
-                System.Diagnostics.Debug.WriteLine($"[Runtime] Found {files.Length} file(s) in data directory:");
+                System.Diagnostics.Trace.WriteLine($"[Runtime] Found {files.Length} file(s) in data directory:");
                 foreach (var file in files.Take(10)) // Log first 10 files
                 {
-                    System.Diagnostics.Debug.WriteLine($"  - {file}");
+                    System.Diagnostics.Trace.WriteLine($"  - {file}");
                 }
             }
         }

@@ -280,17 +280,35 @@ public class ProjectManager
     }
 
     /// <summary>
-    /// Increments a version string (e.g., "1.0.0" -> "1.0.1").
+    /// Increments a version string with rollover (e.g., "1.0.0" -> "1.0.1", "1.0.9" -> "1.1.0", "1.9.9" -> "2.0.0").
     /// </summary>
     public static string IncrementVersion(string version)
     {
-        var parts = version.Split('.');
-        if (parts.Length >= 3 && int.TryParse(parts[2], out int patch))
+        if (string.IsNullOrWhiteSpace(version))
+            return "1.0.0";
+
+        var parts = version.Trim().Split('.');
+        if (parts.Length < 3 ||
+            !int.TryParse(parts[0], out int major) ||
+            !int.TryParse(parts[1], out int minor) ||
+            !int.TryParse(parts[2], out int patch))
         {
-            patch++;
-            return $"{parts[0]}.{parts[1]}.{patch}";
+            return "1.0.0";
         }
-        return version;
+
+        patch++;
+        if (patch > 9)
+        {
+            patch = 0;
+            minor++;
+            if (minor > 9)
+            {
+                minor = 0;
+                major++;
+            }
+        }
+
+        return $"{major}.{minor}.{patch}";
     }
 
     /// <summary>

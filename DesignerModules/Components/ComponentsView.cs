@@ -127,7 +127,8 @@ public partial class ComponentsView : UserControl
                 ("Table", "Table"),
                 ("Trend View", "TrendView"),
                 ("Alarm View", "AlarmView"),
-                ("Gauge View", "GaugeView")
+                ("Gauge View", "GaugeView"),
+                ("Console", "Console")
             }),
             new ComponentCategory("Industrial Components", new[]
             {

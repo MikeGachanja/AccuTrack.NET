@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using Designer.Modules.Project;
 using Designer.Modules.TagEngine;
@@ -50,7 +51,8 @@ public partial class ProjectView : UserControl
             ShowLines = true,
             ShowRootLines = true,
             ShowPlusMinus = true,
-            HideSelection = false
+            HideSelection = false,
+            ShowNodeToolTips = true
         };
 
         _treeView.NodeMouseDoubleClick += OnNodeDoubleClick;
@@ -134,10 +136,13 @@ public partial class ProjectView : UserControl
 
     private TreeNode CreateScadaNode(ScadaProject scada)
     {
-        var scadaNode = new TreeNode(scada.Name)
+        string version = string.IsNullOrEmpty(scada.Version) ? "1.0.0" : scada.Version;
+        string displayText = $"{scada.Name} (v{version})";
+        var scadaNode = new TreeNode(displayText)
         {
             Tag = new ProjectNodeData { Type = NodeType.ScadaProject, Data = scada }
         };
+        scadaNode.ToolTipText = $"SCADA Project: {scada.Name}\nVersion: {version}\nType: {scada.Type}";
 
         // Screens folder
         var screensFolder = new TreeNode("Screens")
@@ -633,6 +638,35 @@ public partial class ProjectView : UserControl
                             );
                             components.Add(acknowledgeButton);
                         }
+
+                        // Console component (only for Logs screen) - fills main area for log output
+                        if (screenName == "Logs")
+                        {
+                            var consoleComponentType = Type.GetType("Designer.Modules.Components.ConsoleComponent, Components");
+                            if (consoleComponentType != null)
+                            {
+                                int buttonColumnWidth = 150; // space reserved for buttons on the right
+                                int consoleX = leftMargin;
+                                int consoleY = topMargin;
+                                int consoleWidth = resolution.Width - leftMargin - buttonColumnWidth - leftMargin;
+                                int consoleHeight = resolution.Height - (2 * topMargin);
+                                if (consoleWidth > 0 && consoleHeight > 0)
+                                {
+                                    var consoleComp = Activator.CreateInstance(consoleComponentType);
+                                    if (consoleComp != null)
+                                    {
+                                        consoleComponentType.GetProperty("Id")?.SetValue(consoleComp, Guid.NewGuid());
+                                        consoleComponentType.GetProperty("Name")?.SetValue(consoleComp, "logConsole");
+                                        consoleComponentType.GetProperty("Location")?.SetValue(consoleComp, new System.Drawing.Point(consoleX, consoleY));
+                                        consoleComponentType.GetProperty("Size")?.SetValue(consoleComp, new System.Drawing.Size(consoleWidth, consoleHeight));
+                                        consoleComponentType.GetProperty("Visible")?.SetValue(consoleComp, true);
+                                        consoleComponentType.GetProperty("Enabled")?.SetValue(consoleComp, true);
+                                        consoleComponentType.GetProperty("ZOrder")?.SetValue(consoleComp, 0);
+                                        components.Add(consoleComp);
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
                 
@@ -921,7 +955,8 @@ public partial class ProjectView : UserControl
                 case NodeType.ScadaProject:
                     if (nodeData.Data is ScadaProject scada)
                     {
-                        scada.Name = e.Label;
+                        // Strip optional " (vX.Y.Z)" suffix so we only store the project name
+                        scada.Name = StripVersionSuffixFromDisplayName(e.Label ?? scada.Name);
                         if (_projectManager != null)
                         {
                             _projectManager.SaveProject();
@@ -931,6 +966,16 @@ public partial class ProjectView : UserControl
                 // Add other rename handlers as needed
             }
         }
+    }
+
+    /// <summary>
+    /// Removes " (vX.Y.Z)" suffix from display name so only the project name is stored.
+    /// </summary>
+    private static string StripVersionSuffixFromDisplayName(string displayName)
+    {
+        if (string.IsNullOrEmpty(displayName)) return displayName;
+        var match = Regex.Match(displayName, @"\s*\(v\d+\.\d+\.\d+\)\s*$");
+        return match.Success ? displayName[..match.Index].TrimEnd() : displayName.Trim();
     }
 
     /// <summary>

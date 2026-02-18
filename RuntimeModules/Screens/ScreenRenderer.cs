@@ -100,6 +100,7 @@ public static class ScreenRenderer
             // Only add if not already in properties dict
             var rootLevelProperties = new[] { 
                 "text", "backColor", "foreColor", "borderColor", "borderWidth", "font", "fontSize", "fontStyle", "action",
+                "maxLines",
                 "value", "minimum", "maximum", "needleColor", "textColor", "showValue", "showMinMax", "unit",
                 "level", "tankColor", "fillColor", "lowLevelColor", "highLevelColor", "lowLevelThreshold", "highLevelThreshold", "label", "showLevel",
                 "onColor", "offColor", "faultColor", "warningColor", "errorColor", "color", "backgroundColor", "running", "faulted", "state", "direction", "shape"

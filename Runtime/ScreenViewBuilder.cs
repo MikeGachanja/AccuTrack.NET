@@ -6,6 +6,7 @@ using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Layout;
 using Avalonia.Media;
+using Runtime.Modules.Console;
 using Runtime.Modules.Screens;
 using Runtime.Modules.TagsEngine;
 using Runtime.Views.Controls;
@@ -16,13 +17,14 @@ namespace Runtime;
 public static class ScreenViewBuilder
 {
     public static Control? Build(ScreenRenderer.ScreenDescriptor? screen)
-        => Build(screen, null, null, null, null, null, null);
+        => Build(screen, null, null, null, null, null, null, null);
 
     /// <summary>Builds view and wires tag bindings and button events when services are provided.</summary>
     /// <param name="resolveImagePath">Optional resolver for image names (e.g. ScreenManager.ResolveImagePath).</param>
     /// <param name="resolveSvgPath">Optional resolver for SVG paths (e.g. ScreenManager.ResolveSvgPath). If null, uses resolveImagePath.</param>
     /// <param name="animationManager">Optional; when set, subscribes each control with an Id to animation state (visibility, opacity, color).</param>
-    public static Control? Build(ScreenRenderer.ScreenDescriptor? screen, Runtime.Modules.TagsEngine.TagManager? tagManager, EventManager? eventManager, TagIOHandler? tagIOHandler = null, Func<string, string?>? resolveImagePath = null, Func<string, string?>? resolveSvgPath = null, AnimationManager? animationManager = null)
+    /// <param name="console">Optional; when set, Console components on the screen will display log output from this service.</param>
+    public static Control? Build(ScreenRenderer.ScreenDescriptor? screen, Runtime.Modules.TagsEngine.TagManager? tagManager, EventManager? eventManager, TagIOHandler? tagIOHandler = null, Func<string, string?>? resolveImagePath = null, Func<string, string?>? resolveSvgPath = null, AnimationManager? animationManager = null, IConsole? console = null)
     {
         if (screen == null) return null;
         var subs = new List<IDisposable>();
@@ -44,7 +46,7 @@ public static class ScreenViewBuilder
         sorted.Sort((a, b) => a.ZOrder.CompareTo(b.ZOrder));
         foreach (var comp in sorted)
         {
-            var control = CreateControl(comp, tagManager, eventManager, tagIOHandler, resolveImagePath, resolveSvgPath, subs);
+            var control = CreateControl(comp, tagManager, eventManager, tagIOHandler, resolveImagePath, resolveSvgPath, subs, console);
             if (control == null) continue;
             
             // Set size constraints BEFORE adding to canvas to ensure they're respected
@@ -79,13 +81,13 @@ public static class ScreenViewBuilder
         return scroll;
     }
 
-    private static Control? CreateControl(ComponentDescriptor d, Runtime.Modules.TagsEngine.TagManager? tagManager, EventManager? eventManager, TagIOHandler? tagIOHandler, Func<string, string?>? resolveImagePath, Func<string, string?>? resolveSvgPath, List<IDisposable> subs)
+    private static Control? CreateControl(ComponentDescriptor d, Runtime.Modules.TagsEngine.TagManager? tagManager, EventManager? eventManager, TagIOHandler? tagIOHandler, Func<string, string?>? resolveImagePath, Func<string, string?>? resolveSvgPath, List<IDisposable> subs, IConsole? console = null)
     {
         if (!d.Visible) return null;
         var type = d.ComponentType ?? "";
         Control? c = type switch
         {
-            "Button" => CreateButton(d, eventManager),
+            "Button" => CreateButton(d, eventManager, console),
             "TextLabel" => CreateTextLabel(d, tagManager, subs),
             "GaugeView" => CreateGaugeView(d, tagManager, subs),
             "Checkbox" => CreateCheckbox(d, tagManager, tagIOHandler, eventManager, subs),
@@ -103,6 +105,7 @@ public static class ScreenViewBuilder
             "DateTime" => CreateDateTime(d, tagManager, subs),
             "TrendView" => CreateTrendView(d),
             "AlarmView" => CreateAlarmView(d),
+            "Console" => CreateConsole(d, console),
             "CircularGauge" => CreateGaugeView(d, tagManager, subs),
             "Tank" => CreateTank(d, tagManager, subs),
             "Motor" => CreateMotor(d, tagManager, subs),
@@ -120,7 +123,15 @@ public static class ScreenViewBuilder
         return c;
     }
 
-    private static RuntimeButton CreateButton(ComponentDescriptor d, EventManager? eventManager)
+    private static RuntimeConsoleView CreateConsole(ComponentDescriptor d, IConsole? console)
+    {
+        var c = new RuntimeConsoleView();
+        c.ApplyDescriptor(d);
+        c.SetConsole(console);
+        return c;
+    }
+
+    private static RuntimeButton CreateButton(ComponentDescriptor d, EventManager? eventManager, IConsole? console = null)
     {
         var b = new RuntimeButton();
         b.ApplyDescriptor(d);
@@ -132,7 +143,19 @@ public static class ScreenViewBuilder
             b.Click += (_, _) => eventManager.FireTrigger(d.Id, "OnClick");
             // Note: Double-click and right-click would need to be added to RuntimeButton if not already present
         }
+        // Wire ClearLogs action to console when on Logs screen
+        var action = GetProperty(d, "action", "");
+        if (string.Equals(action, "ClearLogs", StringComparison.OrdinalIgnoreCase) && console != null)
+        {
+            b.Click += (_, _) => console.ClearLogs();
+        }
         return b;
+    }
+
+    private static string GetProperty(ComponentDescriptor d, string key, string fallback)
+    {
+        if (d.Properties.TryGetValue(key, out var v) && v is string s) return s;
+        return fallback;
     }
 
     private static RuntimeTextLabel CreateTextLabel(ComponentDescriptor d, Runtime.Modules.TagsEngine.TagManager? tagManager, List<IDisposable> subs)
@@ -499,11 +522,11 @@ public static class ScreenViewBuilder
                 resolvedPath = resolveSvgPath(svgPath);
                 if (resolvedPath != null)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[ScreenViewBuilder] Resolved SVG path '{svgPath}' to '{resolvedPath}'");
+                    System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Resolved SVG path '{svgPath}' to '{resolvedPath}'");
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine($"[ScreenViewBuilder] Failed to resolve SVG path '{svgPath}'");
+                    System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Failed to resolve SVG path '{svgPath}'");
                 }
             }
             
@@ -515,12 +538,12 @@ public static class ScreenViewBuilder
             else if (File.Exists(svgPath))
             {
                 // Try direct path if resolver not available or returned null
-                System.Diagnostics.Debug.WriteLine($"[ScreenViewBuilder] Using direct SVG path '{svgPath}'");
+                System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Using direct SVG path '{svgPath}'");
                 s.SetSvgPath(svgPath);
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"[ScreenViewBuilder] SVG path not found: '{svgPath}'");
+                System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] SVG path not found: '{svgPath}'");
             }
         }
         

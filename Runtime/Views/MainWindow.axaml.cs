@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading.Tasks;
 using Avalonia.Controls;
 using Runtime.Modules.Communication;
+using Runtime.Modules.Console;
 using Runtime.Modules.Discovery;
 using Runtime.Modules.ExecutionEngine;
 using Runtime.Modules.Project;
@@ -74,7 +75,7 @@ public partial class MainWindow : Window
             MinWidth = minWidth;
             MinHeight = minHeight;
             
-            System.Diagnostics.Debug.WriteLine($"[MainWindow] Resized to match project resolution: {width}x{height}");
+            System.Diagnostics.Trace.WriteLine($"[MainWindow] Resized to match project resolution: {width}x{height}");
         }
     }
 
@@ -138,10 +139,12 @@ public partial class MainWindow : Window
                 _screensModule.AnimationManager.TriggerInitialStates(tagManager);
             }
             
+            var console = ExecutionEngine.Instance.ModuleManager.GetModule("ConsoleModule") as IConsole;
             var view = ScreenViewBuilder.Build(screenDesc, tagManager, eventManager, tagIOHandler, 
                 name => _screensModule?.ScreenManager.ResolveImagePath(name), 
                 svgPath => _screensModule?.ScreenManager.ResolveSvgPath(svgPath), 
-                _screensModule?.AnimationManager);
+                _screensModule?.AnimationManager, 
+                console);
             if (view != null)
             {
                 _screenContainer.Content = view;

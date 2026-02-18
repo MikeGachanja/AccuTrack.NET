@@ -68,13 +68,13 @@ public partial class RuntimeSVGView : UserControl
         
         if (!File.Exists(svgPath))
         {
-            System.Diagnostics.Debug.WriteLine($"[RuntimeSVGView] SVG file not found: '{svgPath}'");
+            System.Diagnostics.Trace.WriteLine($"[RuntimeSVGView] SVG file not found: '{svgPath}'");
             SvgImage.Source = null;
             PlaceholderText.IsVisible = true;
             return;
         }
         
-        System.Diagnostics.Debug.WriteLine($"[RuntimeSVGView] Loading SVG from: '{svgPath}'");
+        System.Diagnostics.Trace.WriteLine($"[RuntimeSVGView] Loading SVG from: '{svgPath}'");
 
         try
         {
@@ -154,7 +154,7 @@ public partial class RuntimeSVGView : UserControl
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"Failed to load SVG '{svgPath}': {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"Failed to load SVG '{svgPath}': {ex.Message}");
             SvgImage.Source = null;
             PlaceholderText.IsVisible = true;
         }
