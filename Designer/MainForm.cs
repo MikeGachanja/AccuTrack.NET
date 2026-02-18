@@ -16,6 +16,7 @@ using Designer.Modules.Simulator;
 using Designer.Modules.Tools;
 using Designer.Modules.Project;
 using System;
+using System.IO;
 using System.Windows.Forms;
 using System.Linq;
 using System.Drawing;
@@ -47,6 +48,16 @@ namespace Designer
             _componentsModule = new ComponentsModule();
             _simulatorModule = new SimulatorModule();
             _simulatorModule.SetProjectManager(_projectManager);
+            _simulatorModule.SimulationError += (s, err) =>
+            {
+                if (InvokeRequired) BeginInvoke(() => MessageBox.Show(this, err ?? "Simulation error.", "Simulation Error", MessageBoxButtons.OK, MessageBoxIcon.Error));
+                else MessageBox.Show(this, err ?? "Simulation error.", "Simulation Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            };
+            _simulatorModule.SimulationStopped += (s, _) =>
+            {
+                if (InvokeRequired) BeginInvoke(UpdateSimulationStoppedUI);
+                else UpdateSimulationStoppedUI();
+            };
             ConnectMenuActions();
             InitializeProjectView();
             InitializeConsoles();
@@ -1088,23 +1099,64 @@ namespace Designer
             if (_simulatorModule == null || _projectManager == null)
                 return;
 
-            var scadaName = _projectManager.GetCurrentScadaName();
-            if (string.IsNullOrEmpty(scadaName))
+            if (_projectManager.GetCurrentProject() == null)
             {
-                scadaName = _simulatorModule.ShowProjectSelectionDialog();
+                MessageBox.Show(this, "No project is currently open.", "Simulation", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
             }
 
-            if (!string.IsNullOrEmpty(scadaName))
+            string result = _simulatorModule.ShowProjectSelectionDialog(this);
+            if (string.IsNullOrEmpty(result))
+                return;
+
+            string projectPath = result;
+            if (result.StartsWith("BUILD_REQUIRED:", StringComparison.OrdinalIgnoreCase))
             {
-                if (_simulatorModule.StartSimulation(scadaName))
+                string rest = result.Substring(14);
+                int pipe = rest.IndexOf('|');
+                string scadaName = pipe > 0 ? rest.Substring(0, pipe) : rest;
+                projectPath = pipe > 0 ? rest.Substring(pipe + 1) : rest;
+
+                bool doBuild = _simulatorModule.GetAutoBuildBeforeSimulate();
+                if (!doBuild)
                 {
-                    actionStartSimulation.Enabled = false;
-                    actionPauseSimulation.Enabled = true;
-                    actionStopSimulation.Enabled = true;
-                    statusStrip.Items.Clear();
-                    statusStrip.Items.Add($"Simulation running: {scadaName}");
+                    var choice = MessageBox.Show(this,
+                        "The selected project has not been built yet. Do you want to build it now?",
+                        "Project Not Built",
+                        MessageBoxButtons.YesNoCancel,
+                        MessageBoxIcon.Question);
+                    if (choice == DialogResult.Cancel)
+                        return;
+                    doBuild = (choice == DialogResult.Yes);
                 }
+
+                if (doBuild && !PerformBuild(scadaName))
+                {
+                    MessageBox.Show(this, "Failed to build project. Cannot start simulation.", "Simulation Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    return;
+                }
+                if (!doBuild)
+                    return;
             }
+
+            if (_simulatorModule.StartSimulation(projectPath))
+            {
+                actionStartSimulation.Enabled = false;
+                actionPauseSimulation.Enabled = true;
+                actionStopSimulation.Enabled = true;
+                statusStrip.Items.Clear();
+                statusStrip.Items.Add($"Simulation running: {Path.GetFileName(Path.GetDirectoryName(projectPath)) ?? projectPath}");
+            }
+        }
+
+        private void UpdateSimulationStoppedUI()
+        {
+            actionStartSimulation.Enabled = true;
+            actionPauseSimulation.Enabled = false;
+            actionPauseSimulation.Text = "Pause Simulation";
+            actionStopSimulation.Enabled = false;
+            statusStrip.Items.Clear();
+            statusStrip.Items.Add("Simulation stopped");
         }
 
         private void PauseSimulation()
@@ -1130,17 +1182,12 @@ namespace Designer
                 return;
 
             _simulatorModule.StopSimulation();
-            actionStartSimulation.Enabled = true;
-            actionPauseSimulation.Enabled = false;
-            actionPauseSimulation.Text = "Pause Simulation";
-            actionStopSimulation.Enabled = false;
-            statusStrip.Items.Clear();
-            statusStrip.Items.Add("Simulation stopped");
+            UpdateSimulationStoppedUI();
         }
 
         private void ShowSimulationSettings()
         {
-            _simulatorModule?.ShowSettingsDialog();
+            _simulatorModule?.ShowSettingsDialog(this);
         }
 
         private void ShowOptions()
