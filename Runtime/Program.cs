@@ -82,7 +82,12 @@ internal static class Program
 
         var tagsModule = new TagsModule();
         engine.ModuleManager.RegisterModule(tagsModule);
-        engine.ModuleManager.RegisterModule(new MLEngineModule());
+
+        // ML Engine and Scripting Engine both use the same TagManager (read/write tags).
+        var mlEngineModule = new MLEngineModule();
+        engine.ModuleManager.RegisterModule(mlEngineModule);
+        mlEngineModule.SetTagManager(tagsModule.TagManager);
+
         tagsModule.SetCommunicationModule(commModule);
         
         // Set up tag update callback that handles both tag name and address resolution
@@ -145,13 +150,18 @@ internal static class Program
 
         var scriptingEngine = new ScriptingEngineModule();
         scriptingEngine.Initialize();
+        if (engine.ModuleManager.GetModule("ConsoleModule") is IConsole consoleForLua)
+            scriptingEngine.SetPrintCallback(msg => consoleForLua.LogDebug(msg, "Lua"));
+        // Scripting engine: Lua read_tag(name) / write_tag(name, value) use TagManager.
+        scriptingEngine.SetTagAccess(
+            name => tagsModule.TagManager.GetTagValue(name),
+            (name, value) => tagsModule.TagManager.UpdateTagValue(name, value, TagQuality.Good));
 
         // Scheduler: runs schedules from json/schedules.json (scripts + ML models on interval/time).
         var schedulerModule = new SchedulerModule();
         engine.ModuleManager.RegisterModule(schedulerModule);
         schedulerModule.SetScriptEngine(scriptingEngine);
-        if (engine.ModuleManager.GetModule("MLEngine") is IMLEngine mlEngine)
-            schedulerModule.SetMLRunAction(mlEngine.RunModelOnce);
+        schedulerModule.SetMLRunAction(mlEngineModule.RunModelOnce);
 
         engine.ModuleManager.RegisterModule(new HistorianModule());
 
@@ -160,7 +170,8 @@ internal static class Program
         schedulerModule.SetScriptPathResolver(scriptName =>
         {
             var p = Services.Get<IProject>();
-            var script = p?.CurrentProject?.Script?.FirstOrDefault(s => string.Equals(s.Name, scriptName, StringComparison.Ordinal));
+            var script = p?.CurrentProject?.Script?.FirstOrDefault(s =>
+                s.Enabled && string.Equals(s.Name, scriptName, StringComparison.Ordinal));
             if (script == null || string.IsNullOrEmpty(script.Path)) return null;
             var projectPath = ExecutionEngine.Instance.ProjectPath;
             return string.IsNullOrEmpty(projectPath) ? script.Path : Path.Combine(projectPath, script.Path);

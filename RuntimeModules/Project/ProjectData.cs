@@ -30,6 +30,7 @@ public sealed class ScriptInfo
 {
     public string Name { get; set; } = "";
     public string Path { get; set; } = "";
+    public bool Enabled { get; set; } = true;
 }
 
 public sealed class TagInfo

@@ -2204,8 +2204,10 @@ namespace Designer
                 }
             }
 
-            // Create script editor
+            // Create script editor and route output to Debug tab
             var editor = new ScriptEditor();
+            editor.ScriptOutput += (s, line) => _consoleModule?.WriteDebug(line ?? "");
+            editor.ScriptError += (s, msg) => _consoleModule?.WriteDebug("[Error] " + (msg ?? ""));
             editor.SetScript(luaScript);
 
             // Update available tags

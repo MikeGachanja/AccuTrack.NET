@@ -5,7 +5,7 @@ using Newtonsoft.Json.Linq;
 namespace Designer.Modules.ScriptEditor;
 
 /// <summary>
-/// Represents a Lua script.
+/// Represents a Lua script (designer model; runtime runs via MoonSharp).
 /// </summary>
 public class LuaScript
 {
@@ -14,6 +14,7 @@ public class LuaScript
     public string Description { get; set; } = string.Empty;
     public string Code { get; set; } = string.Empty;
     public string FilePath { get; set; } = string.Empty;
+    public bool Enabled { get; set; } = true;
     public DateTime CreatedDate { get; set; } = DateTime.Now;
     public DateTime ModifiedDate { get; set; } = DateTime.Now;
 
@@ -82,6 +83,7 @@ public class LuaScript
             ["description"] = Description,
             ["code"] = Code,
             ["filePath"] = FilePath,
+            ["enabled"] = Enabled,
             ["createdDate"] = CreatedDate.ToString("O"),
             ["modifiedDate"] = ModifiedDate.ToString("O")
         };
@@ -104,6 +106,8 @@ public class LuaScript
         }
 
         script.Code = json["code"]?.ToString() ?? string.Empty;
+        if (json["enabled"] != null)
+            script.Enabled = json["enabled"]?.Value<bool>() ?? true;
 
         if (DateTime.TryParse(json["createdDate"]?.ToString(), out DateTime createdDate))
         {

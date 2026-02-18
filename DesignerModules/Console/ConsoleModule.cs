@@ -19,7 +19,7 @@ public class ConsoleModule
 
     private void InitializeConsoles()
     {
-        // Output Console
+        // Output Console (copy via Ctrl+C or context menu)
         _outputConsole = new TextBox
         {
             Multiline = true,
@@ -28,10 +28,12 @@ public class ConsoleModule
             Dock = DockStyle.Fill,
             Font = new Font("Consolas", 9),
             BackColor = Color.Black,
-            ForeColor = Color.LightGreen
+            ForeColor = Color.LightGreen,
+            ShortcutsEnabled = true
         };
+        _outputConsole.ContextMenuStrip = CreateConsoleContextMenu(_outputConsole);
 
-        // Debug Console
+        // Debug Console (copy via Ctrl+C or context menu)
         _debugConsole = new TextBox
         {
             Multiline = true,
@@ -40,8 +42,21 @@ public class ConsoleModule
             Dock = DockStyle.Fill,
             Font = new Font("Consolas", 9),
             BackColor = Color.Black,
-            ForeColor = Color.Yellow
+            ForeColor = Color.Yellow,
+            ShortcutsEnabled = true
         };
+        _debugConsole.ContextMenuStrip = CreateConsoleContextMenu(_debugConsole);
+    }
+
+    private static ContextMenuStrip CreateConsoleContextMenu(TextBox box)
+    {
+        var menu = new ContextMenuStrip();
+        var copyItem = new ToolStripMenuItem("Copy", null, (s, e) => box.Copy()) { ShortcutKeyDisplayString = "Ctrl+C" };
+        var selectAllItem = new ToolStripMenuItem("Select All", null, (s, e) => box.SelectAll()) { ShortcutKeyDisplayString = "Ctrl+A" };
+        menu.Items.Add(copyItem);
+        menu.Items.Add(new ToolStripSeparator());
+        menu.Items.Add(selectAllItem);
+        return menu;
     }
 
     /// <summary>

@@ -18,6 +18,9 @@ public sealed class MLEngineModule : ModuleBase, IMLEngine
     public override string DisplayName => "ML Engine";
     public override IReadOnlyList<string> Dependencies => new[] { "TagsModule" };
 
+    /// <summary>Optional: set TagManager explicitly (e.g. from Program). If not set, resolved from TagsModule in Start().</summary>
+    public void SetTagManager(TagManager? tagManager) => _tagManager = tagManager;
+
     private readonly List<ModelInstanceConfig> _modelConfigs = new();
     private readonly List<IMLModelRunner> _runners = new();
     private readonly List<TagSubscription> _subscriptions = new();
@@ -101,8 +104,11 @@ public sealed class MLEngineModule : ModuleBase, IMLEngine
 
         var engine = global::Runtime.Modules.ExecutionEngine.ExecutionEngine.Instance;
         _projectPath = engine.ProjectPath;
-        var tagsModule = engine.ModuleManager.GetModule("TagsModule") as TagsModule;
-        _tagManager = tagsModule?.TagManager;
+        if (_tagManager == null)
+        {
+            var tagsModule = engine.ModuleManager.GetModule("TagsModule") as TagsModule;
+            _tagManager = tagsModule?.TagManager;
+        }
         if (_tagManager == null || string.IsNullOrEmpty(_projectPath))
         {
             SetRunning(true);

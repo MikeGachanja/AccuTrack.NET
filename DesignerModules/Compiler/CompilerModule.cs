@@ -424,7 +424,7 @@ public class CompilerModule
                         ["id"] = script.Id.ToString(),
                         ["name"] = script.Name ?? "",
                         ["description"] = script.Description ?? "",
-                        ["enabled"] = true,
+                        ["enabled"] = script.Enabled,
                         ["code"] = script.Code ?? "",
                         ["path"] = script.FilePath ?? ""
                     });

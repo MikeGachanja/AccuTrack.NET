@@ -239,11 +239,17 @@ public sealed class ProjectModule : IProject
             var root = doc.RootElement;
             if (root.TryGetProperty("scripts", out var arr) && arr.ValueKind == JsonValueKind.Array)
                 foreach (var item in arr.EnumerateArray())
+                {
+                    var enabled = true;
+                    if (item.TryGetProperty("enabled", out var ev))
+                        enabled = ev.ValueKind == JsonValueKind.True || (ev.ValueKind == JsonValueKind.String && ev.GetString() == "true");
                     _project.Script.Add(new ScriptInfo
                     {
                         Name = item.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "",
-                        Path = item.TryGetProperty("path", out var p) ? p.GetString() ?? "" : ""
+                        Path = item.TryGetProperty("path", out var p) ? p.GetString() ?? "" : "",
+                        Enabled = enabled
                     });
+                }
         }
         catch { }
     }

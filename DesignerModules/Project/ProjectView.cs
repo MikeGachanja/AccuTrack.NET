@@ -1116,8 +1116,49 @@ public partial class ProjectView : UserControl
 
     private void AddScript(string scadaName)
     {
-        // TODO: Show dialog to create new script
-        MessageBox.Show($"Add script functionality for {scadaName} - TODO", "Info", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        if (_projectManager == null) return;
+
+        var scada = _projectManager.FindScadaProject(scadaName);
+        if (scada == null)
+        {
+            MessageBox.Show($"SCADA project '{scadaName}' not found.", "Add Script",
+                MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        using (var dialog = new NewItemDialog("Script", includeDescription: true))
+        {
+            if (dialog.ShowDialog(FindForm()) != DialogResult.OK)
+                return;
+
+            var name = dialog.ItemName.Trim();
+            if (string.IsNullOrEmpty(name))
+            {
+                MessageBox.Show("Please enter a script name.", "Add Script",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var existing = _projectManager.GetScripts(scadaName).OfType<LuaScript>()
+                .Any(s => string.Equals(s.Name, name, StringComparison.OrdinalIgnoreCase));
+            if (existing)
+            {
+                MessageBox.Show($"A script named '{name}' already exists in this SCADA project.",
+                    "Add Script", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            var script = _projectManager.AddScript(scadaName, name, dialog.Description ?? "");
+            if (script == null)
+            {
+                MessageBox.Show("Failed to create the script.", "Add Script",
+                    MessageBoxButtons.OK, MessageBoxIcon.Error);
+                return;
+            }
+
+            ScriptCreated?.Invoke(this, new ScriptCreatedEventArgs(script, scadaName));
+            RefreshView();
+        }
     }
 
     private void AddTagTable(string scadaName)

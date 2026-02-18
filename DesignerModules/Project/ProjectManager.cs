@@ -582,7 +582,68 @@ public class ProjectManager
         catch { /* Return empty list on error */ }
         return scripts;
     }
-    
+
+    /// <summary>
+    /// Creates a new script for a SCADA project and saves JSON + .lua files.
+    /// Returns the created LuaScript, or null if creation failed (e.g. duplicate name).
+    /// </summary>
+    public LuaScript? AddScript(string scadaName, string scriptName, string description = "")
+    {
+        var scada = FindScadaProject(scadaName);
+        if (scada == null || string.IsNullOrWhiteSpace(scriptName))
+            return null;
+
+        var scriptsPath = scada.Paths.ScriptsPath;
+        try
+        {
+            if (!Directory.Exists(scriptsPath))
+                Directory.CreateDirectory(scriptsPath);
+
+            var existing = GetScripts(scadaName).OfType<LuaScript>().Select(s => s.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+            if (existing.Contains(scriptName.Trim()))
+                return null;
+
+            string baseName = SanitizeScriptFileName(scriptName.Trim());
+            string jsonPath = Path.Combine(scriptsPath, baseName + ".json");
+            string luaPath = Path.Combine(scriptsPath, baseName + ".lua");
+            int suffix = 0;
+            while (File.Exists(jsonPath) || File.Exists(luaPath))
+            {
+                suffix++;
+                jsonPath = Path.Combine(scriptsPath, baseName + "_" + suffix + ".json");
+                luaPath = Path.Combine(scriptsPath, baseName + "_" + suffix + ".lua");
+            }
+
+            var script = new LuaScript(scriptName.Trim(), description ?? "", luaPath);
+            script.Code = "-- " + scriptName.Trim() + "\n\n";
+            if (!script.SaveCode())
+                return null;
+
+            var json = script.ToJson();
+            File.WriteAllText(jsonPath, json.ToString());
+
+            if (_currentProject != null)
+                _currentProject.Modified = true;
+
+            return script;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static string SanitizeScriptFileName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "script";
+        var invalid = Path.GetInvalidFileNameChars();
+        var sb = new System.Text.StringBuilder(name.Length);
+        foreach (char c in name)
+            sb.Append(invalid.Contains(c) ? '_' : c);
+        var s = sb.ToString().Trim();
+        return string.IsNullOrEmpty(s) ? "script" : s;
+    }
+
     /// <summary>
     /// Gets communication modules for a SCADA project.
     /// Returns JSON string or null.
