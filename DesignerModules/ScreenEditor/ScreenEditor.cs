@@ -172,31 +172,19 @@ public partial class ScreenEditor : UserControl
         _canvasContainer.Scroll += (s, e) => _canvas.Invalidate(); // Invalidate canvas when scrolling
         _canvasContainer.Resize += (s, e) =>
         {
-            // Recalculate zoom to fit screen when container is resized (if zoom is still at default)
-            if (_zoomFactor == 1.0f && _scadaResolution.Width > 0 && _scadaResolution.Height > 0)
-            {
-                CalculateInitialZoom();
-                UpdateCanvasSize();
-            }
-            else
-            {
-                UpdateCanvasPosition();
-            }
+            // Update canvas position when container is resized (zoom stays at 100%)
+            UpdateCanvasPosition();
+            UpdateCanvasSize();
         };
         
-        // Calculate initial zoom when container handle is created
+        // Initialize canvas size when container handle is created (zoom stays at 100%)
         _canvasContainer.HandleCreated += (s, e) =>
         {
-            if (_zoomFactor == 1.0f && _scadaResolution.Width > 0 && _scadaResolution.Height > 0)
+            if (_scadaResolution.Width > 0 && _scadaResolution.Height > 0)
             {
-                // Use BeginInvoke to ensure container size is available
                 BeginInvoke(new Action(() =>
                 {
-                    if (_zoomFactor == 1.0f && _scadaResolution.Width > 0 && _scadaResolution.Height > 0)
-                    {
-                        CalculateInitialZoom();
-                        UpdateCanvasSize();
-                    }
+                    UpdateCanvasSize();
                 }));
             }
         };
@@ -261,14 +249,8 @@ public partial class ScreenEditor : UserControl
     public void SetScadaResolution(Size resolution)
     {
         _scadaResolution = resolution;
-        // Reset zoom to fit screen when resolution changes
+        // Reset zoom to 100% when resolution changes
         _zoomFactor = 1.0f;
-        
-        // Calculate initial zoom if container is already created
-        if (_canvasContainer != null && _canvasContainer.IsHandleCreated)
-        {
-            CalculateInitialZoom();
-        }
         
         UpdateCanvasSize();
     }
@@ -556,13 +538,7 @@ public partial class ScreenEditor : UserControl
     {
         if (_scadaResolution.Width > 0 && _scadaResolution.Height > 0)
         {
-            // Calculate initial zoom to fit screen if not already set
-            if (_zoomFactor == 1.0f && _canvasContainer != null)
-            {
-                CalculateInitialZoom();
-            }
-            
-            // Set canvas size with zoom applied
+            // Set canvas size with zoom applied (default zoom is 100%)
             _canvas.Size = new Size(
                 (int)(_scadaResolution.Width * _zoomFactor),
                 (int)(_scadaResolution.Height * _zoomFactor)
