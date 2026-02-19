@@ -27,8 +27,8 @@ public class ConsoleModule
             ScrollBars = ScrollBars.Both,
             Dock = DockStyle.Fill,
             Font = new Font("Consolas", 9),
-            BackColor = Color.Black,
-            ForeColor = Color.LightGreen,
+            BackColor = SystemColors.Window,
+            ForeColor = SystemColors.WindowText,
             ShortcutsEnabled = true
         };
         _outputConsole.ContextMenuStrip = CreateConsoleContextMenu(_outputConsole);
@@ -41,8 +41,8 @@ public class ConsoleModule
             ScrollBars = ScrollBars.Both,
             Dock = DockStyle.Fill,
             Font = new Font("Consolas", 9),
-            BackColor = Color.Black,
-            ForeColor = Color.Yellow,
+            BackColor = SystemColors.Window,
+            ForeColor = SystemColors.WindowText,
             ShortcutsEnabled = true
         };
         _debugConsole.ContextMenuStrip = CreateConsoleContextMenu(_debugConsole);

@@ -280,6 +280,20 @@ public class ProjectManager
     }
 
     /// <summary>
+    /// Increments the main project version (ProjectSettings.Version).
+    /// Use when any SCADA project is built so the main project version stays in sync.
+    /// </summary>
+    public bool IncrementProjectVersion()
+    {
+        if (_currentProject == null)
+            return false;
+
+        _currentProject.Settings.Version = IncrementVersion(_currentProject.Settings.Version);
+        _currentProject.Modified = true;
+        return true;
+    }
+
+    /// <summary>
     /// Increments a version string with rollover (e.g., "1.0.0" -> "1.0.1", "1.0.9" -> "1.1.0", "1.9.9" -> "2.0.0").
     /// </summary>
     public static string IncrementVersion(string version)

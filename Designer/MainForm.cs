@@ -1024,8 +1024,9 @@ namespace Designer
             // Save project before building
             SaveProject();
 
-            // Increment version
+            // Increment SCADA project version and main project version on build
             _projectManager.IncrementScadaProjectVersion(selectedScadaName);
+            _projectManager.IncrementProjectVersion();
             _projectManager.SaveProject();
 
             // Refresh to get updated version
@@ -2206,6 +2207,11 @@ namespace Designer
 
             // Create script editor and route output to Debug tab
             var editor = new ScriptEditor();
+            editor.ScriptRunStarted += (s, _) =>
+            {
+                if (bottomTabWidget != null && bottomTabWidget.TabPages.Count >= 2)
+                    bottomTabWidget.SelectedIndex = 1; // Debug tab
+            };
             editor.ScriptOutput += (s, line) => _consoleModule?.WriteDebug(line ?? "");
             editor.ScriptError += (s, msg) => _consoleModule?.WriteDebug("[Error] " + (msg ?? ""));
             editor.SetScript(luaScript);

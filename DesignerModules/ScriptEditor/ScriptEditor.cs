@@ -21,6 +21,8 @@ public partial class ScriptEditor : UserControl
     private bool _isHighlighting;
 
     public event EventHandler<bool>? ModifiedChanged;
+    /// <summary>Raised when the user clicks Run (so the host can e.g. switch to the Debug tab).</summary>
+    public event EventHandler? ScriptRunStarted;
     /// <summary>Raised when script produces output (e.g. print).</summary>
     public event EventHandler<string>? ScriptOutput;
     /// <summary>Raised when script execution fails.</summary>
@@ -144,6 +146,7 @@ public partial class ScriptEditor : UserControl
 
     private void OnRunClicked(object? sender, EventArgs e)
     {
+        ScriptRunStarted?.Invoke(this, EventArgs.Empty);
         var code = _codeTextBox.Text.Trim();
         if (string.IsNullOrEmpty(code))
         {
