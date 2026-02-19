@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Windows.Forms;
 using Designer.Modules.Components;
 using Designer.Modules.Events;
@@ -149,8 +150,8 @@ public partial class ScreenEditor : UserControl
             Padding = new Padding(MarginSize)
         };
 
-        // Canvas for screen design - sized to exactly match SCADA resolution
-        _canvas = new Panel
+        // Canvas for screen design - use double-buffered panel to reduce flicker
+        _canvas = new DoubleBufferedPanel
         {
             BackColor = Color.White,
             Size = _scadaResolution,
@@ -166,6 +167,7 @@ public partial class ScreenEditor : UserControl
         _canvas.AllowDrop = true;
         _canvas.DragEnter += OnCanvasDragEnter;
         _canvas.DragDrop += OnCanvasDragDrop;
+        _canvas.ContextMenuStrip = CreateCanvasContextMenu();
 
         _canvasContainer.Paint += OnContainerPaint;
         _canvasContainer.Controls.Add(_canvas);
@@ -444,8 +446,8 @@ public partial class ScreenEditor : UserControl
         // Draw grid (will be scaled by zoom transform)
         DrawGrid(g);
 
-        // Draw components (will be scaled by zoom transform)
-        foreach (var component in _components)
+        // Draw components in ZOrder (will be scaled by zoom transform)
+        foreach (var component in _components.OrderBy(c => c.ZOrder))
         {
             bool isSelected = component == _selectedComponent;
             component.Draw(g, isSelected);
@@ -853,7 +855,7 @@ public partial class ScreenEditor : UserControl
             }
             
             _selectedComponent.Move(newLocation);
-            _canvas.Invalidate();
+            InvalidateComponentRegion(_selectedComponent, _dragStartComponentLocation, newLocation);
         }
         else if (_isResizing && _selectedComponent != null && _activeResizeHandle != ResizeHandle.None)
         {
@@ -994,7 +996,7 @@ public partial class ScreenEditor : UserControl
             
             _selectedComponent.Move(newLocation);
             _selectedComponent.Resize(newSize);
-            _canvas.Invalidate();
+            InvalidateComponentRegion(_selectedComponent, _dragStartComponentLocation, newLocation, _dragStartComponentSize, newSize);
         }
         else
         {
@@ -1040,6 +1042,21 @@ public partial class ScreenEditor : UserControl
                 // Start selection rectangle (in canvas coordinates)
                 _selectionRect = new Rectangle(clickPoint, Size.Empty);
             }
+        }
+        else if (e.Button == MouseButtons.Right)
+        {
+            // Select component under cursor so context menu applies to it
+            Point clickPoint = ScreenToCanvas(e.Location);
+            BaseComponent? clickedComponent = null;
+            for (int i = _components.Count - 1; i >= 0; i--)
+            {
+                if (_components[i].Contains(clickPoint))
+                {
+                    clickedComponent = _components[i];
+                    break;
+                }
+            }
+            SetSelectedComponent(clickedComponent);
         }
     }
 
@@ -1569,5 +1586,140 @@ public partial class ScreenEditor : UserControl
             Math.Min(size.Width, maxWidth),
             Math.Min(size.Height, maxHeight)
         );
+    }
+
+    /// <summary>
+    /// Converts a canvas-space rectangle to client (zoomed) coordinates with padding for handles.
+    /// </summary>
+    private Rectangle CanvasRectToClient(Rectangle canvasRect)
+    {
+        int pad = ResizeHandleSize + 2;
+        return new Rectangle(
+            (int)((canvasRect.X - pad) * _zoomFactor),
+            (int)((canvasRect.Y - pad) * _zoomFactor),
+            Math.Max(1, (int)((canvasRect.Width + 2 * pad) * _zoomFactor)),
+            Math.Max(1, (int)((canvasRect.Height + 2 * pad) * _zoomFactor)));
+    }
+
+    /// <summary>
+    /// Invalidates only the region affected by a component move (reduces flicker).
+    /// </summary>
+    private void InvalidateComponentRegion(BaseComponent component, Point oldLocation, Point newLocation, Size? oldSize = null, Size? newSize = null)
+    {
+        Size os = oldSize ?? component.Size;
+        Size ns = newSize ?? component.Size;
+        var oldBounds = new Rectangle(oldLocation, os);
+        var newBounds = new Rectangle(newLocation, ns);
+        var union = Rectangle.Union(oldBounds, newBounds);
+        _canvas.Invalidate(CanvasRectToClient(union));
+    }
+
+    private ContextMenuStrip CreateCanvasContextMenu()
+    {
+        var menu = new ContextMenuStrip();
+
+        var bringToFront = new ToolStripMenuItem("Bring to Front");
+        bringToFront.Click += (s, e) => BringSelectedToFront();
+        menu.Items.Add(bringToFront);
+
+        var sendToBack = new ToolStripMenuItem("Send to Back");
+        sendToBack.Click += (s, e) => SendSelectedToBack();
+        menu.Items.Add(sendToBack);
+
+        menu.Items.Add(new ToolStripSeparator());
+
+        var alignMenu = new ToolStripMenuItem("Align");
+        alignMenu.DropDownItems.Add("Align Left", null, (_, _) => AlignSelectedComponents(Alignment.Left));
+        alignMenu.DropDownItems.Add("Align Right", null, (_, _) => AlignSelectedComponents(Alignment.Right));
+        alignMenu.DropDownItems.Add("Align Top", null, (_, _) => AlignSelectedComponents(Alignment.Top));
+        alignMenu.DropDownItems.Add("Align Bottom", null, (_, _) => AlignSelectedComponents(Alignment.Bottom));
+        alignMenu.DropDownItems.Add("Center Horizontal", null, (_, _) => AlignSelectedComponents(Alignment.CenterHorizontal));
+        alignMenu.DropDownItems.Add("Center Vertical", null, (_, _) => AlignSelectedComponents(Alignment.CenterVertical));
+        menu.Items.Add(alignMenu);
+
+        menu.Items.Add(new ToolStripSeparator());
+
+        var cutItem = new ToolStripMenuItem("Cut");
+        cutItem.Click += (s, e) => CutSelectedComponents();
+        menu.Items.Add(cutItem);
+
+        var copyItem = new ToolStripMenuItem("Copy");
+        copyItem.Click += (s, e) => CopySelectedComponents();
+        menu.Items.Add(copyItem);
+
+        var pasteItem = new ToolStripMenuItem("Paste");
+        pasteItem.Click += (s, e) => PasteComponents();
+        menu.Items.Add(pasteItem);
+
+        var deleteItem = new ToolStripMenuItem("Delete");
+        deleteItem.Click += (s, e) => DeleteSelectedComponents();
+        menu.Items.Add(deleteItem);
+
+        menu.Items.Add(new ToolStripSeparator());
+
+        var propertiesItem = new ToolStripMenuItem("Properties...");
+        propertiesItem.Click += (s, e) =>
+        {
+            if (_selectedComponent != null)
+                ComponentDoubleClicked?.Invoke(this, _selectedComponent);
+        };
+        menu.Items.Add(propertiesItem);
+
+        menu.Opening += (s, e) =>
+        {
+            var selected = GetSelectedComponents();
+            bool hasSelection = selected.Count > 0;
+            bool hasMultiple = selected.Count >= 2;
+            bringToFront.Enabled = hasSelection;
+            sendToBack.Enabled = hasSelection;
+            alignMenu.Enabled = hasMultiple;
+            cutItem.Enabled = hasSelection;
+            copyItem.Enabled = hasSelection;
+            pasteItem.Enabled = HasClipboardComponents();
+            deleteItem.Enabled = hasSelection;
+            propertiesItem.Enabled = _selectedComponent != null;
+        };
+
+        return menu;
+    }
+
+    private void BringSelectedToFront()
+    {
+        var selected = GetSelectedComponents();
+        if (selected.Count == 0) return;
+        int maxZ = _components.Max(c => c.ZOrder);
+        foreach (var comp in selected)
+        {
+            comp.ZOrder = maxZ + 1;
+            maxZ = comp.ZOrder;
+        }
+        SetModified(true);
+        _canvas.Invalidate();
+    }
+
+    private void SendSelectedToBack()
+    {
+        var selected = GetSelectedComponents();
+        if (selected.Count == 0) return;
+        int minZ = _components.Min(c => c.ZOrder);
+        foreach (var comp in selected)
+        {
+            comp.ZOrder = minZ - 1;
+            minZ = comp.ZOrder;
+        }
+        SetModified(true);
+        _canvas.Invalidate();
+    }
+}
+
+/// <summary>
+/// Double-buffered panel to reduce flicker when redrawing the canvas.
+/// </summary>
+internal sealed class DoubleBufferedPanel : Panel
+{
+    public DoubleBufferedPanel()
+    {
+        var prop = typeof(Control).GetProperty("DoubleBuffered", BindingFlags.Instance | BindingFlags.NonPublic);
+        prop?.SetValue(this, true);
     }
 }

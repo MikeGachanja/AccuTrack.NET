@@ -391,6 +391,18 @@ public partial class PropertyEditor : UserControl
         {
             UpdateToggleSwitchProperties(layout, toggleSwitch, ref row);
         }
+        else if (_selectedComponent is RectangleComponent rectangle)
+        {
+            UpdateRectangleProperties(layout, rectangle, ref row);
+        }
+        else if (_selectedComponent is TriangleComponent triangle)
+        {
+            UpdateTriangleProperties(layout, triangle, ref row);
+        }
+        else if (_selectedComponent is LineComponent line)
+        {
+            UpdateLineProperties(layout, line, ref row);
+        }
         // Add other component types as needed
 
         scrollPanel.Controls.Add(layout);
@@ -761,6 +773,209 @@ public partial class PropertyEditor : UserControl
         };
         layout.Controls.Add(showLabelsCheckBox, 0, row);
         layout.SetColumnSpan(showLabelsCheckBox, 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
+    private void UpdateRectangleProperties(TableLayoutPanel layout, RectangleComponent rectangle, ref int row)
+    {
+        // Fill Color
+        layout.Controls.Add(new Label { Text = "Fill Color:", AutoSize = true }, 0, row);
+        var fillColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(fillColorButton, rectangle.FillColor);
+        fillColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = rectangle.FillColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    rectangle.FillColor = colorDialog.Color;
+                    UpdateColorButton(fillColorButton, rectangle.FillColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(fillColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Border Color
+        layout.Controls.Add(new Label { Text = "Border Color:", AutoSize = true }, 0, row);
+        var borderColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(borderColorButton, rectangle.BorderColor);
+        borderColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = rectangle.BorderColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    rectangle.BorderColor = colorDialog.Color;
+                    UpdateColorButton(borderColorButton, rectangle.BorderColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(borderColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Border Width
+        layout.Controls.Add(new Label { Text = "Border Width:", AutoSize = true }, 0, row);
+        var borderWidthNumeric = new NumericUpDown { Minimum = 0, Maximum = 20, Value = rectangle.BorderWidth, Width = 100 };
+        borderWidthNumeric.ValueChanged += (s, e) =>
+        {
+            rectangle.BorderWidth = (int)borderWidthNumeric.Value;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(borderWidthNumeric, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Filled
+        var filledCheckBox = new CheckBox { Text = "Filled", Checked = rectangle.Filled };
+        filledCheckBox.CheckedChanged += (s, e) =>
+        {
+            rectangle.Filled = filledCheckBox.Checked;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(filledCheckBox, 0, row);
+        layout.SetColumnSpan(filledCheckBox, 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
+    private void UpdateTriangleProperties(TableLayoutPanel layout, TriangleComponent triangle, ref int row)
+    {
+        // Fill Color
+        layout.Controls.Add(new Label { Text = "Fill Color:", AutoSize = true }, 0, row);
+        var fillColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(fillColorButton, triangle.FillColor);
+        fillColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = triangle.FillColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    triangle.FillColor = colorDialog.Color;
+                    UpdateColorButton(fillColorButton, triangle.FillColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(fillColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Border Color
+        layout.Controls.Add(new Label { Text = "Border Color:", AutoSize = true }, 0, row);
+        var borderColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(borderColorButton, triangle.BorderColor);
+        borderColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = triangle.BorderColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    triangle.BorderColor = colorDialog.Color;
+                    UpdateColorButton(borderColorButton, triangle.BorderColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(borderColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Border Width
+        layout.Controls.Add(new Label { Text = "Border Width:", AutoSize = true }, 0, row);
+        var borderWidthNumeric = new NumericUpDown { Minimum = 0, Maximum = 20, Value = triangle.BorderWidth, Width = 100 };
+        borderWidthNumeric.ValueChanged += (s, e) =>
+        {
+            triangle.BorderWidth = (int)borderWidthNumeric.Value;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(borderWidthNumeric, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Filled
+        var filledCheckBox = new CheckBox { Text = "Filled", Checked = triangle.Filled };
+        filledCheckBox.CheckedChanged += (s, e) =>
+        {
+            triangle.Filled = filledCheckBox.Checked;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(filledCheckBox, 0, row);
+        layout.SetColumnSpan(filledCheckBox, 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Direction
+        layout.Controls.Add(new Label { Text = "Direction:", AutoSize = true }, 0, row);
+        var directionCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
+        directionCombo.Items.AddRange(new object[] { "Up", "Down", "Left", "Right" });
+        directionCombo.SelectedItem = triangle.Direction.ToString();
+        directionCombo.SelectedIndexChanged += (s, e) =>
+        {
+            if (Enum.TryParse<TriangleDirection>(directionCombo.SelectedItem?.ToString(), out var dir))
+            {
+                triangle.Direction = dir;
+                TriggerAutoSave();
+            }
+        };
+        layout.Controls.Add(directionCombo, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
+    private void UpdateLineProperties(TableLayoutPanel layout, LineComponent line, ref int row)
+    {
+        // Line Color
+        layout.Controls.Add(new Label { Text = "Line Color:", AutoSize = true }, 0, row);
+        var lineColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(lineColorButton, line.LineColor);
+        lineColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = line.LineColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    line.LineColor = colorDialog.Color;
+                    UpdateColorButton(lineColorButton, line.LineColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(lineColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Line Width
+        layout.Controls.Add(new Label { Text = "Line Width:", AutoSize = true }, 0, row);
+        var lineWidthNumeric = new NumericUpDown { Minimum = 1, Maximum = 20, Value = line.LineWidth, Width = 100 };
+        lineWidthNumeric.ValueChanged += (s, e) =>
+        {
+            line.LineWidth = (int)lineWidthNumeric.Value;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(lineWidthNumeric, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Style
+        layout.Controls.Add(new Label { Text = "Style:", AutoSize = true }, 0, row);
+        var styleCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 120 };
+        styleCombo.Items.AddRange(new object[] { "Solid", "Dashed", "Dotted" });
+        styleCombo.SelectedItem = line.Style.ToString();
+        styleCombo.SelectedIndexChanged += (s, e) =>
+        {
+            if (Enum.TryParse<LineStyle>(styleCombo.SelectedItem?.ToString(), out var style))
+            {
+                line.Style = style;
+                TriggerAutoSave();
+            }
+        };
+        layout.Controls.Add(styleCombo, 1, row);
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
     }
