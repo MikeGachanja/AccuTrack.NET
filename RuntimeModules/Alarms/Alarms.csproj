@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ExecutionEngine\ExecutionEngine.csproj" />
     <ProjectReference Include="..\EventDispatcher\EventDispatcher.csproj" />
+    <ProjectReference Include="..\TagsEngine\TagsEngine.csproj" />
   </ItemGroup>
 
 </Project>

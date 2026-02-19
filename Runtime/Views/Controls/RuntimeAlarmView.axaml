@@ -1,10 +1,40 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Runtime.Views.Controls.RuntimeAlarmView">
-  <Border Background="White" BorderBrush="#cccccc" BorderThickness="1" CornerRadius="4" Padding="8">
+  <Border x:Name="MainBorder" Background="White" BorderBrush="#cccccc" BorderThickness="1" CornerRadius="4" Padding="8">
     <StackPanel>
       <TextBlock x:Name="TitleText" Text="Alarms" Foreground="#333333" FontSize="12" FontWeight="SemiBold" />
-      <TextBlock x:Name="PlaceholderText" Text="Alarm list (stub)" Foreground="#666666" FontSize="11" Margin="0,6,0,0" />
+      <Grid x:Name="AlarmsContainer" Margin="0,6,0,0">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="Auto" />
+          <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+        <Border x:Name="HeaderBorder" Grid.Row="0" Background="LightGray" BorderBrush="#cccccc" BorderThickness="0,0,0,1">
+          <Grid x:Name="HeaderGrid" />
+        </Border>
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+          <ItemsControl x:Name="AlarmsList">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Background="#f0f0f0" BorderBrush="#cccccc" BorderThickness="0,0,0,1" Padding="4">
+                  <Grid>
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="100" />
+                      <ColumnDefinition Width="150" />
+                      <ColumnDefinition Width="*" />
+                      <ColumnDefinition Width="100" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="0" Text="{Binding Time}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="1" Text="{Binding TagName}" VerticalAlignment="Center" />
+                    <TextBlock Grid.Column="2" Text="{Binding Message}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                    <TextBlock Grid.Column="3" Text="{Binding Status}" VerticalAlignment="Center" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Grid>
     </StackPanel>
   </Border>
 </UserControl>

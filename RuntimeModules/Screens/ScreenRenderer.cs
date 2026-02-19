@@ -107,20 +107,36 @@ public static class ScreenRenderer
                 "labelColor", "valueColor", "labelFont", "labelFontSize", "labelFontStyle", "valueFont", "valueFontSize", "valueFontStyle", "decimalPlaces", "suffix",
                 "lineColor", "lineWidth", "style", "startPoint", "endPoint", "filled",
                 "headerFont", "headerFontSize", "headerFontStyle", "rowFont", "rowFontSize", "rowFontStyle", "title", "format",
-                "svgPath"
+                "svgPath",
+                "columns", "headerBackColor", "headerForeColor", "activeAlarmColor", "acknowledgedAlarmColor", "normalColor", "showHeader", "maxRows"
             };
             foreach (var propName in rootLevelProperties)
             {
                 if (!dict.ContainsKey(propName) && item.TryGetProperty(propName, out var rootProp))
                 {
-                    object? val = rootProp.ValueKind switch
+                    object? val;
+                    if (propName == "columns" && rootProp.ValueKind == JsonValueKind.Array)
                     {
-                        JsonValueKind.String => rootProp.GetString(),
-                        JsonValueKind.Number => rootProp.TryGetInt32(out var i) ? i : rootProp.GetDouble(),
-                        JsonValueKind.True => true,
-                        JsonValueKind.False => false,
-                        _ => rootProp.ToString()
-                    };
+                        // Handle columns array specially
+                        var columnsList = new List<string>();
+                        foreach (var colItem in rootProp.EnumerateArray())
+                        {
+                            if (colItem.ValueKind == JsonValueKind.String)
+                                columnsList.Add(colItem.GetString() ?? "");
+                        }
+                        val = columnsList;
+                    }
+                    else
+                    {
+                        val = rootProp.ValueKind switch
+                        {
+                            JsonValueKind.String => rootProp.GetString(),
+                            JsonValueKind.Number => rootProp.TryGetInt32(out var i) ? i : rootProp.GetDouble(),
+                            JsonValueKind.True => true,
+                            JsonValueKind.False => false,
+                            _ => rootProp.ToString()
+                        };
+                    }
                     dict[propName] = val;
                     
                     // Log svgPath parsing for debugging

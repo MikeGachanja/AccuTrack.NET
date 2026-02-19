@@ -1,3 +1,4 @@
+using System;
 using System.Text.Json.Nodes;
 
 namespace Runtime.Modules.Alarms;
@@ -96,15 +97,50 @@ public sealed class Alarm
         var alarm = new Alarm
         {
             Name = json["name"]?.GetValue<string>() ?? "",
-            Description = json["description"]?.GetValue<string>() ?? "",
+            Description = json["description"]?.GetValue<string>() ?? json["message"]?.GetValue<string>() ?? "",
             TagName = json["tagName"]?.GetValue<string>() ?? "",
-            Condition = json["condition"]?.GetValue<string>() ?? "",
+            Condition = NormalizeCondition(json["condition"]?.GetValue<string>() ?? ""),
             Deadband = json["deadband"]?.GetValue<double>() ?? 0,
             Hysteresis = json["hysteresis"]?.GetValue<double>() ?? 0,
             Enabled = json["enabled"]?.GetValue<bool>() ?? true
         };
-        if (json["type"] != null && Enum.TryParse<AlarmType>(json["type"]!.ToString(), out var at)) alarm.Type = at;
-        if (json["priority"] != null && Enum.TryParse<AlarmPriority>(json["priority"]!.ToString(), out var ap)) alarm.Priority = ap;
+        
+        // Map alarm type from JSON format (type: "HMI"/"Controller", source: "Digital"/"Analog")
+        // to AlarmType enum (Digital/Analog)
+        var typeStr = json["type"]?.GetValue<string>() ?? "";
+        var sourceStr = json["source"]?.GetValue<string>() ?? "";
+        
+        if (!string.IsNullOrEmpty(sourceStr))
+        {
+            // Use source field to determine alarm type
+            if (sourceStr.Equals("Digital", StringComparison.OrdinalIgnoreCase))
+                alarm.Type = AlarmType.Digital;
+            else if (sourceStr.Equals("Analog", StringComparison.OrdinalIgnoreCase))
+                alarm.Type = AlarmType.Analog;
+            else
+                alarm.Type = AlarmType.Digital; // Default
+        }
+        else if (!string.IsNullOrEmpty(typeStr))
+        {
+            // Fallback: try to parse type directly
+            if (Enum.TryParse<AlarmType>(typeStr, true, out var at))
+                alarm.Type = at;
+            else
+                alarm.Type = AlarmType.Digital; // Default
+        }
+        else
+        {
+            alarm.Type = AlarmType.Digital; // Default
+        }
+        
+        // Parse priority
+        var priorityStr = json["priority"]?.GetValue<string>() ?? "Medium";
+        if (Enum.TryParse<AlarmPriority>(priorityStr, true, out var ap))
+            alarm.Priority = ap;
+        else
+            alarm.Priority = AlarmPriority.Medium; // Default
+        
+        // Parse threshold
         try
         {
             if (json["threshold"] != null)
@@ -115,6 +151,24 @@ public sealed class Alarm
             if (json["threshold"] != null)
                 alarm.Threshold = json["threshold"]!.ToString();
         }
+        
         return alarm;
+    }
+    
+    /// <summary>
+    /// Normalizes condition strings from designer format to runtime format.
+    /// </summary>
+    private static string NormalizeCondition(string condition)
+    {
+        return condition switch
+        {
+            "EqualTo" or "Equal" => "==",
+            "NotEqualTo" or "NotEqual" => "!=",
+            "GreaterThan" or "Greater" => ">",
+            "LessThan" or "Less" => "<",
+            "GreaterThanOrEqual" or "GreaterOrEqual" => ">=",
+            "LessThanOrEqual" or "LessOrEqual" => "<=",
+            _ => condition // Return as-is if already normalized or unknown
+        };
     }
 }

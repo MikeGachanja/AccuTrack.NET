@@ -1756,6 +1756,13 @@ namespace Designer
             {
                 editor.SetScadaProject(scadaProject);
             }
+            
+            if (_projectManager != null)
+            {
+                editor.SetProjectManager(_projectManager);
+            }
+            
+            editor.SetScadaName(scadaName);
 
             var tabPage = new TabPage(tabName);
             tabPage.Controls.Add(editor);

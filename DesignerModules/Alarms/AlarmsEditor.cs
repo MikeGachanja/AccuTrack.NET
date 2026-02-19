@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using Designer.Modules.Alarms;
 using Designer.Modules.TagEngine;
 using Designer.Modules.Project;
+using Designer.Modules.Components;
 
 namespace Designer.Modules.Alarms;
 
@@ -20,6 +21,8 @@ public partial class AlarmsEditor : UserControl
     private DataGridView _controllerAnalogGrid;
     private Alarms? _alarms;
     private ScadaProject? _scadaProject;
+    private string? _scadaName;
+    private ProjectManager? _projectManager;
     private List<Tag> _availableTags = new List<Tag>();
     private bool _isModified = false;
 
@@ -108,16 +111,9 @@ public partial class AlarmsEditor : UserControl
         grid.Columns.Add("Message", "Message");
         grid.Columns.Add("Enabled", "Enabled");
 
-        // Make TagName a combo box with available tags
-        var tagColumn = new DataGridViewComboBoxColumn
-        {
-            Name = "TagName",
-            HeaderText = "Tag",
-            DataPropertyName = "TagName"
-        };
-        tagColumn.Items.AddRange(_availableTags.Select(t => t.Name).ToArray());
-        grid.Columns.Remove("TagName");
-        grid.Columns.Insert(1, tagColumn);
+        // TagName column is a text column - clicking it opens the tag selector dialog
+        var tagColumn = grid.Columns["TagName"];
+        tagColumn.ReadOnly = false; // Allow editing via dialog
 
         // Make Condition a combo box
         var conditionColumn = new DataGridViewComboBoxColumn
@@ -152,6 +148,7 @@ public partial class AlarmsEditor : UserControl
         grid.Columns.Add(enabledColumn);
 
         grid.CellValueChanged += (s, e) => OnCellValueChanged(s, e, type, source);
+        grid.CellClick += (s, e) => OnCellClick(s, e, type, source);
 
         panel.Controls.Add(grid);
         panel.Controls.Add(toolbar);
@@ -234,7 +231,7 @@ public partial class AlarmsEditor : UserControl
                     Threshold = double.TryParse(row.Cells["Threshold"].Value?.ToString(), out double t) ? t : 0,
                     Priority = row.Cells["Priority"].Value?.ToString() ?? "Medium",
                     Message = row.Cells["Message"].Value?.ToString() ?? string.Empty,
-                    Enabled = row.Cells["Enabled"].Value is bool e ? e : true,
+                    Enabled = row.Cells["Enabled"].Value is bool enabledVal ? enabledVal : true,
                     Type = type,
                     Source = source
                 };
@@ -258,6 +255,22 @@ public partial class AlarmsEditor : UserControl
     public void SetScadaProject(ScadaProject project)
     {
         _scadaProject = project;
+    }
+
+    /// <summary>
+    /// Sets the SCADA name for accessing tag tables.
+    /// </summary>
+    public void SetScadaName(string scadaName)
+    {
+        _scadaName = scadaName;
+    }
+
+    /// <summary>
+    /// Sets the project manager for accessing tag tables.
+    /// </summary>
+    public void SetProjectManager(ProjectManager projectManager)
+    {
+        _projectManager = projectManager;
     }
 
     /// <summary>
@@ -349,6 +362,117 @@ public partial class AlarmsEditor : UserControl
     }
 
     /// <summary>
+    /// Handles cell clicks - opens tag selector dialog for TagName column.
+    /// </summary>
+    private void OnCellClick(object? sender, DataGridViewCellEventArgs e, string type, string source)
+    {
+        if (e.RowIndex < 0 || e.ColumnIndex < 0)
+            return;
+
+        var grid = sender as DataGridView;
+        if (grid == null)
+            return;
+
+        var column = grid.Columns[e.ColumnIndex];
+        if (column.Name != "TagName")
+            return;
+
+        var row = grid.Rows[e.RowIndex];
+        if (row.IsNewRow)
+            return;
+
+        // Get or create alarm definition (don't add to list yet - wait for successful tag selection)
+        AlarmDefinition alarm;
+        if (row.Tag is AlarmDefinition existingAlarm)
+        {
+            alarm = existingAlarm;
+        }
+        else
+        {
+            // Create new alarm from row data (temporary, will be added to list after tag selection)
+            alarm = new AlarmDefinition
+            {
+                Name = row.Cells["Name"].Value?.ToString() ?? "New Alarm",
+                TagName = row.Cells["TagName"].Value?.ToString() ?? string.Empty,
+                Condition = row.Cells["Condition"].Value?.ToString() ?? "GreaterThan",
+                Threshold = double.TryParse(row.Cells["Threshold"].Value?.ToString(), out double t) ? t : 0,
+                Priority = row.Cells["Priority"].Value?.ToString() ?? "Medium",
+                Message = row.Cells["Message"].Value?.ToString() ?? string.Empty,
+                Enabled = row.Cells["Enabled"].Value is bool enabledVal ? enabledVal : true,
+                Type = type,
+                Source = source
+            };
+            row.Tag = alarm;
+        }
+
+        // Get tag tables from ProjectManager if available, otherwise from scadaProject
+        var tagTables = new List<TagTable>();
+        
+        // Try to get tag tables via ProjectManager (most reliable)
+        if (_projectManager != null && !string.IsNullOrEmpty(_scadaName))
+        {
+            var tables = _projectManager.GetTagTables(_scadaName);
+            tagTables = tables.OfType<TagTable>().ToList();
+        }
+        
+        // Fallback to scadaProject if tagTables is still empty
+        if (tagTables.Count == 0 && _scadaProject != null)
+        {
+            tagTables = _scadaProject.TagTables.OfType<TagTable>().ToList();
+        }
+
+        if (tagTables.Count == 0)
+        {
+            MessageBox.Show(this, "No tag tables available. Please configure tag tables first.", "No Tags", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        // Determine required data type based on alarm source
+        string? requiredDataType = null;
+        if (source == "Digital")
+        {
+            // Digital alarms should use Boolean/Bit types
+            requiredDataType = "Boolean";
+        }
+        else if (source == "Analog")
+        {
+            // Analog alarms should use numeric types (Real, Float32, Float64, Int32, etc.)
+            requiredDataType = "Real";
+        }
+
+        // Open tag selector dialog
+        using var dialog = new TagSelectorDialog();
+        dialog.SetTagTables(tagTables);
+        dialog.SetSelectedTagName(alarm.TagName);
+        
+        if (!string.IsNullOrEmpty(requiredDataType))
+        {
+            dialog.SetRequiredDataType(requiredDataType);
+        }
+        
+        if (dialog.ShowDialog(this) == DialogResult.OK && dialog.SelectedTag != null)
+        {
+            alarm.TagName = dialog.SelectedTagName;
+            
+            // Update the cell display
+            var cell = row.Cells[e.ColumnIndex];
+            cell.Value = alarm.TagName;
+            
+            // Ensure alarm type and source match the grid
+            alarm.Type = type;
+            alarm.Source = source;
+            
+            // Add alarm to list if it's not already there (for new alarms)
+            if (_alarms == null)
+                _alarms = new Alarms();
+            if (!_alarms.AlarmDefinitions.Contains(alarm))
+                _alarms.AlarmDefinitions.Add(alarm);
+            
+            _isModified = true;
+        }
+    }
+
+    /// <summary>
     /// Handles cell value changes.
     /// </summary>
     private void OnCellValueChanged(object? sender, DataGridViewCellEventArgs e, string type, string source)
@@ -361,41 +485,67 @@ public partial class AlarmsEditor : UserControl
             return;
 
         var row = grid.Rows[e.RowIndex];
-        if (row.Tag is AlarmDefinition alarm)
-        {
-            var columnName = grid.Columns[e.ColumnIndex].Name;
+        if (row.IsNewRow)
+            return;
 
-            switch (columnName)
-            {
-                case "Name":
-                    alarm.Name = row.Cells[e.ColumnIndex].Value?.ToString() ?? string.Empty;
-                    break;
-                case "TagName":
-                    alarm.TagName = row.Cells[e.ColumnIndex].Value?.ToString() ?? string.Empty;
-                    break;
-                case "Condition":
-                    alarm.Condition = row.Cells[e.ColumnIndex].Value?.ToString() ?? "GreaterThan";
-                    break;
-                case "Threshold":
-                    if (double.TryParse(row.Cells[e.ColumnIndex].Value?.ToString(), out double threshold))
-                        alarm.Threshold = threshold;
-                    break;
-                case "Priority":
-                    alarm.Priority = row.Cells[e.ColumnIndex].Value?.ToString() ?? "Medium";
-                    break;
-                case "Message":
-                    alarm.Message = row.Cells[e.ColumnIndex].Value?.ToString() ?? string.Empty;
-                    break;
-                case "Enabled":
-                    if (row.Cells[e.ColumnIndex].Value is bool enabled)
-                        alarm.Enabled = enabled;
-                    break;
-            }
-            
-            // Ensure alarm type and source match the grid
-            alarm.Type = type;
-            alarm.Source = source;
-            _isModified = true;
+        // Get or create alarm definition
+        AlarmDefinition alarm;
+        if (row.Tag is AlarmDefinition existingAlarm)
+        {
+            alarm = existingAlarm;
         }
+        else
+        {
+            // Create new alarm from row data
+            alarm = new AlarmDefinition
+            {
+                Name = row.Cells["Name"].Value?.ToString() ?? "New Alarm",
+                TagName = row.Cells["TagName"].Value?.ToString() ?? string.Empty,
+                Condition = row.Cells["Condition"].Value?.ToString() ?? "GreaterThan",
+                Threshold = double.TryParse(row.Cells["Threshold"].Value?.ToString(), out double t) ? t : 0,
+                Priority = row.Cells["Priority"].Value?.ToString() ?? "Medium",
+                Message = row.Cells["Message"].Value?.ToString() ?? string.Empty,
+                Enabled = row.Cells["Enabled"].Value is bool enabledVal ? enabledVal : true,
+                Type = type,
+                Source = source
+            };
+            row.Tag = alarm;
+            if (!_alarms.AlarmDefinitions.Contains(alarm))
+                _alarms.AlarmDefinitions.Add(alarm);
+        }
+
+        var columnName = grid.Columns[e.ColumnIndex].Name;
+
+        switch (columnName)
+        {
+            case "Name":
+                alarm.Name = row.Cells[e.ColumnIndex].Value?.ToString() ?? string.Empty;
+                break;
+            case "TagName":
+                alarm.TagName = row.Cells[e.ColumnIndex].Value?.ToString() ?? string.Empty;
+                break;
+            case "Condition":
+                alarm.Condition = row.Cells[e.ColumnIndex].Value?.ToString() ?? "GreaterThan";
+                break;
+            case "Threshold":
+                if (double.TryParse(row.Cells[e.ColumnIndex].Value?.ToString(), out double threshold))
+                    alarm.Threshold = threshold;
+                break;
+            case "Priority":
+                alarm.Priority = row.Cells[e.ColumnIndex].Value?.ToString() ?? "Medium";
+                break;
+            case "Message":
+                alarm.Message = row.Cells[e.ColumnIndex].Value?.ToString() ?? string.Empty;
+                break;
+            case "Enabled":
+                if (row.Cells[e.ColumnIndex].Value is bool enabled)
+                    alarm.Enabled = enabled;
+                break;
+        }
+        
+        // Ensure alarm type and source match the grid
+        alarm.Type = type;
+        alarm.Source = source;
+        _isModified = true;
     }
 }
