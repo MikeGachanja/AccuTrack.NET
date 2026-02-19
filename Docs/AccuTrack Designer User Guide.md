@@ -45,6 +45,8 @@ AccuTrack Designer is a comprehensive SCADA (Supervisory Control and Data Acquis
 - **Historical Data**: Configure data collection and trending
 - **Cross-Platform**: Runs on Windows and Linux
 
+For an end-to-end workflow that covers configuring all modules and transferring your project to Runtime, see [AccuTrack SCADA – How to Use](AccuTrack%20SCADA%20%E2%80%93%20How%20to%20Use.md).
+
 ---
 
 ## Getting Started

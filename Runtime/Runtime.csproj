@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
@@ -9,11 +9,15 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <ApplicationIcon />
+    <ApplicationIcon>Runtime.ico</ApplicationIcon>
     <StartupObject>Runtime.Program</StartupObject>
     <RootNamespace>Runtime</RootNamespace>
     <AssemblyName>Runtime</AssemblyName>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Runtime.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="11.2.2" />
