@@ -30,15 +30,17 @@ public partial class RuntimeMotor : UserControl
         IndicatorEllipse.Width = indicatorSize;
         IndicatorEllipse.Height = indicatorSize;
         
-        // Font from designer (labelFont, labelFontSize, labelFontStyle)
+        // Font from designer; enforce minimum 12pt for label so text is readable
         var labelFontName = GetProperty(d, "labelFont", "Arial");
         var labelFontSize = GetPropDouble(d, "labelFontSize", 12);
-        if (labelFontSize <= 0) labelFontSize = Math.Max(8, size / 2);
+        if (labelFontSize <= 0) labelFontSize = Math.Max(12, size / 2);
+        LabelText.FontSize = Math.Max(12, labelFontSize);
         var labelFontStyleStr = GetProperty(d, "labelFontStyle", "Regular");
         LabelText.FontFamily = new FontFamily(labelFontName);
-        LabelText.FontSize = labelFontSize;
         LabelText.FontWeight = labelFontStyleStr.Contains("Bold", StringComparison.OrdinalIgnoreCase) ? FontWeight.Bold : FontWeight.Normal;
         LabelText.FontStyle = labelFontStyleStr.Contains("Italic", StringComparison.OrdinalIgnoreCase) ? FontStyle.Italic : FontStyle.Normal;
+        var labelColor = GetProperty(d, "labelColor", "#333333");
+        LabelText.Foreground = new SolidColorBrush(ParseColor(labelColor));
         MotorText.FontFamily = new FontFamily(labelFontName);
         MotorText.FontSize = Math.Max(8, size / 2);
         MotorText.FontWeight = FontWeight.Bold;

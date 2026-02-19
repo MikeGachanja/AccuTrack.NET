@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Runtime;
 using Runtime.Modules.Screens;
 
 namespace Runtime.Views.Controls;
@@ -22,24 +23,27 @@ public partial class RuntimeButton : UserControl
         var text = GetProperty(d, "text", d.Name);
         ButtonText.Text = text;
         
-        // Colors (designer may use hex with or without #)
+        // Colors (designer may use hex or named colors e.g. "Black")
         var backColor = GetProperty(d, "backColor", "#F0F0F0");
-        TheButton.Background = ParseBrush(backColor);
+        TheButton.Background = ColorParser.ParseBrush(backColor);
 
-        var foreColor = GetProperty(d, "foreColor", "#000000");
-        TheButton.Foreground = ParseBrush(foreColor);
-        ButtonText.Foreground = ParseBrush(foreColor); // Explicitly set text color
-        
+        // Text color: use textColor from designer first, then foreColor (so text is independent of background)
+        var textColor = GetProperty(d, "textColor", "");
+        if (string.IsNullOrEmpty(textColor)) textColor = GetProperty(d, "foreColor", "#000000");
+        var textBrush = ColorParser.ParseBrush(textColor);
+        TheButton.Foreground = textBrush;
+        ButtonText.Foreground = textBrush;
+
         var borderColor = GetProperty(d, "borderColor", "#808080");
-        TheButton.BorderBrush = ParseBrush(borderColor);
+        TheButton.BorderBrush = ColorParser.ParseBrush(borderColor);
         
         // Border width
         var borderWidth = GetPropertyInt(d, "borderWidth", 1);
         TheButton.BorderThickness = new Avalonia.Thickness(borderWidth);
         
-        // Font properties (default 12pt so text is readable at runtime)
+        // Font properties: enforce minimum 12pt so button text is always readable
         var fontName = GetProperty(d, "font", "Arial");
-        var fontSize = GetPropertyDouble(d, "fontSize", 12.0);
+        var fontSize = Math.Max(12, GetPropertyDouble(d, "fontSize", 12.0));
         var fontStyleStr = GetProperty(d, "fontStyle", "Regular");
         
         var fontWeight = FontWeight.Normal;
@@ -99,28 +103,4 @@ public partial class RuntimeButton : UserControl
         return double.TryParse(v?.ToString(), out var parsed) ? parsed : fallback;
     }
 
-    private static IBrush ParseBrush(string hex)
-    {
-        if (string.IsNullOrEmpty(hex)) return new SolidColorBrush(Colors.Gray);
-        
-        // Handle hex colors with or without #
-        if (!hex.StartsWith("#"))
-            hex = "#" + hex;
-            
-        if (hex.Length >= 7)
-        {
-            try
-            {
-                var r = Convert.ToInt32(hex.Substring(1, 2), 16);
-                var g = Convert.ToInt32(hex.Substring(3, 2), 16);
-                var b = Convert.ToInt32(hex.Substring(5, 2), 16);
-                return new SolidColorBrush(Color.FromRgb((byte)r, (byte)g, (byte)b));
-            }
-            catch
-            {
-                return new SolidColorBrush(Colors.Gray);
-            }
-        }
-        return new SolidColorBrush(Colors.Gray);
-    }
 }

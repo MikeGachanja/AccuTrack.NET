@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Runtime;
 using Runtime.Modules.Screens;
 
 namespace Runtime.Views.Controls;
@@ -17,9 +18,13 @@ public partial class RuntimeCheckbox : UserControl
     {
         if (d == null) return;
         TheCheckBox.Content = GetProperty(d, "text", d.Name);
+        // Text color: use textColor first, then foreColor
+        var textColor = GetProperty(d, "textColor", "");
+        if (string.IsNullOrEmpty(textColor)) textColor = GetProperty(d, "foreColor", "#333333");
+        TheCheckBox.Foreground = ColorParser.ParseBrush(textColor);
         // Font from designer (font, fontSize, fontStyle)
         var fontName = GetProperty(d, "font", "Arial");
-        var fontSize = GetPropDouble(d, "fontSize", 12);
+        var fontSize = Math.Max(12, GetPropDouble(d, "fontSize", 12));
         if (fontSize <= 0) fontSize = 12;
         var fontStyleStr = GetProperty(d, "fontStyle", "Regular");
         TheCheckBox.FontFamily = new FontFamily(fontName);
@@ -56,4 +61,5 @@ public partial class RuntimeCheckbox : UserControl
         if (d.Properties.TryGetValue(key, out var v) && v is string s) return s;
         return fallback;
     }
+
 }

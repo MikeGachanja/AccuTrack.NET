@@ -32,9 +32,11 @@ public partial class RuntimePump : UserControl
         if (labelFontSize <= 0) labelFontSize = Math.Max(8, size / 2);
         var labelFontStyleStr = GetProperty(d, "labelFontStyle", "Regular");
         LabelText.FontFamily = new FontFamily(labelFontName);
-        LabelText.FontSize = labelFontSize;
+        LabelText.FontSize = Math.Max(12, labelFontSize);
         LabelText.FontWeight = labelFontStyleStr.Contains("Bold", StringComparison.OrdinalIgnoreCase) ? FontWeight.Bold : FontWeight.Normal;
         LabelText.FontStyle = labelFontStyleStr.Contains("Italic", StringComparison.OrdinalIgnoreCase) ? FontStyle.Italic : FontStyle.Normal;
+        var labelColor = GetProperty(d, "labelColor", "#333333");
+        LabelText.Foreground = new SolidColorBrush(ParseColor(labelColor));
         PumpText.FontFamily = new FontFamily(labelFontName);
         PumpText.FontSize = Math.Max(8, size / 2);
         PumpText.FontWeight = FontWeight.Bold;

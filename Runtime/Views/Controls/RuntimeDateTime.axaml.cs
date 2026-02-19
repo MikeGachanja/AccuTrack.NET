@@ -2,6 +2,7 @@ using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Runtime;
 using Runtime.Modules.Screens;
 
 namespace Runtime.Views.Controls;
@@ -23,22 +24,27 @@ public partial class RuntimeDateTime : UserControl
         LabelText.IsVisible = !string.IsNullOrEmpty(label);
         _format = GetProperty(d, "format", _format);
 
-        // Font from designer (font, fontSize, fontStyle) - main value uses full size, label uses ~70%
+        // Font from designer; minimum 12pt so text is readable
         var fontName = GetProperty(d, "font", "Arial");
-        var fontSize = GetPropDouble(d, "fontSize", 12);
+        var fontSize = Math.Max(12, GetPropDouble(d, "fontSize", 12));
         if (fontSize <= 0) fontSize = 12;
         var fontStyleStr = GetProperty(d, "fontStyle", "Regular");
         var fontWeight = fontStyleStr.Contains("Bold", StringComparison.OrdinalIgnoreCase) ? FontWeight.Bold : FontWeight.Normal;
         var fontStyle = fontStyleStr.Contains("Italic", StringComparison.OrdinalIgnoreCase) ? FontStyle.Italic : FontStyle.Normal;
+        var textColor = GetProperty(d, "textColor", "");
+        if (string.IsNullOrEmpty(textColor)) textColor = GetProperty(d, "foreColor", "#333333");
+        var brush = new SolidColorBrush(ColorParser.ParseColor(textColor));
 
         ValueText.FontFamily = new FontFamily(fontName);
         ValueText.FontSize = fontSize;
         ValueText.FontWeight = fontWeight;
         ValueText.FontStyle = fontStyle;
+        ValueText.Foreground = brush;
         LabelText.FontFamily = new FontFamily(fontName);
-        LabelText.FontSize = fontSize * 0.7;
+        LabelText.FontSize = Math.Max(10, fontSize * 0.7);
         LabelText.FontWeight = fontWeight;
         LabelText.FontStyle = fontStyle;
+        LabelText.Foreground = brush;
 
         IsVisible = d.Visible;
         IsEnabled = d.Enabled;
@@ -80,4 +86,5 @@ public partial class RuntimeDateTime : UserControl
         if (d.Properties.TryGetValue(key, out var v) && v is string s) return s;
         return fallback;
     }
+
 }

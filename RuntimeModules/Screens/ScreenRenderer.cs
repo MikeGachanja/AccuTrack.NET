@@ -99,7 +99,7 @@ public static class ScreenRenderer
             // Also check root level for backward compatibility (designer writes many props at root, e.g. fillColor, lineColor)
             // Only add if not already in properties dict
             var rootLevelProperties = new[] {
-                "text", "backColor", "foreColor", "borderColor", "borderWidth", "font", "fontSize", "fontStyle", "action",
+                "text", "backColor", "foreColor", "textColor", "borderColor", "borderWidth", "font", "fontSize", "fontStyle", "action",
                 "maxLines",
                 "value", "minimum", "maximum", "needleColor", "textColor", "showValue", "showMinMax", "unit",
                 "level", "tankColor", "fillColor", "lowLevelColor", "highLevelColor", "lowLevelThreshold", "highLevelThreshold", "label", "showLevel",

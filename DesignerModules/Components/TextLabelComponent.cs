@@ -13,6 +13,8 @@ public class TextLabelComponent : BaseComponent
 
     public string Text { get; set; } = "Label";
     public Color ForeColor { get; set; } = Color.Black;
+    /// <summary>Color of the label text (independent of background).</summary>
+    public Color TextColor { get; set; } = Color.Black;
     public Font Font { get; set; } = new Font("Arial", 9);
     public ContentAlignment TextAlign { get; set; } = ContentAlignment.MiddleLeft;
     public bool AutoSize { get; set; } = false;
@@ -20,7 +22,7 @@ public class TextLabelComponent : BaseComponent
     public override void Draw(Graphics g, bool isSelected = false)
     {
         var rect = Bounds;
-        var brush = new SolidBrush(ForeColor);
+        var brush = new SolidBrush(TextColor);
         var stringFormat = new StringFormat();
 
         // Set alignment
@@ -90,6 +92,7 @@ public class TextLabelComponent : BaseComponent
             TagName = TagName,
             Text = Text,
             ForeColor = ForeColor,
+            TextColor = TextColor,
             Font = new Font(Font.FontFamily, Font.Size, Font.Style),
             TextAlign = TextAlign,
             AutoSize = AutoSize
@@ -101,6 +104,7 @@ public class TextLabelComponent : BaseComponent
         var json = base.ToJson();
         json["text"] = Text;
         json["foreColor"] = ColorTranslator.ToHtml(ForeColor);
+        json["textColor"] = ColorTranslator.ToHtml(TextColor);
         json["font"] = Font.Name;
         json["fontSize"] = Font.Size;
         json["fontStyle"] = Font.Style.ToString();
@@ -116,6 +120,10 @@ public class TextLabelComponent : BaseComponent
         
         if (ColorTranslator.FromHtml(json["foreColor"]?.ToString() ?? "#000000") is Color foreColor)
             ForeColor = foreColor;
+        if (json["textColor"] != null && ColorTranslator.FromHtml(json["textColor"]?.ToString() ?? "") is Color textColor)
+            TextColor = textColor;
+        else
+            TextColor = ForeColor;
 
         var fontName = json["font"]?.ToString() ?? "Arial";
         var fontSize = json["fontSize"]?.ToObject<float>() ?? 9f;

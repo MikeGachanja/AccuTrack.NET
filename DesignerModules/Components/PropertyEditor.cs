@@ -499,6 +499,26 @@ public partial class PropertyEditor : UserControl
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
+        // Text Color (color of the button text, independent of background)
+        layout.Controls.Add(new Label { Text = "Text Color:", AutoSize = true }, 0, row);
+        var textColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(textColorButton, button.TextColor);
+        textColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = button.TextColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    button.TextColor = colorDialog.Color;
+                    UpdateColorButton(textColorButton, button.TextColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(textColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
         // BorderColor
         layout.Controls.Add(new Label { Text = "Border Color:", AutoSize = true }, 0, row);
         var borderColorButton = new Button { Text = "", Width = 50, Height = 25 };
@@ -680,6 +700,26 @@ public partial class PropertyEditor : UserControl
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
+        // Text Color (color of the label text, independent of background)
+        layout.Controls.Add(new Label { Text = "Text Color:", AutoSize = true }, 0, row);
+        var textColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(textColorButton, textLabel.TextColor);
+        textColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = textLabel.TextColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    textLabel.TextColor = colorDialog.Color;
+                    UpdateColorButton(textColorButton, textLabel.TextColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(textColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
         // Font (family, size, style) - so components can have different fonts at runtime
         AddFontEditorRows(layout, textLabel.Font, (name, size, style) =>
         {
@@ -713,6 +753,26 @@ public partial class PropertyEditor : UserControl
             TriggerAutoSave();
         };
         layout.Controls.Add(labelTextBox, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Text Color (color of the date/time text)
+        layout.Controls.Add(new Label { Text = "Text Color:", AutoSize = true }, 0, row);
+        var textColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(textColorButton, dateTime.TextColor);
+        textColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = dateTime.TextColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    dateTime.TextColor = colorDialog.Color;
+                    UpdateColorButton(textColorButton, dateTime.TextColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(textColorButton, 1, row);
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
     }

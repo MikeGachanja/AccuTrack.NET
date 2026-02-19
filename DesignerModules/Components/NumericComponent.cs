@@ -22,29 +22,29 @@ public class NumericComponent : BaseComponent
     public override void Draw(Graphics g, bool isSelected = false)
     {
         var rect = Bounds;
-        var yOffset = 0;
+        var labelWidth = 0f;
 
-        // Draw label if present
+        // Draw label on the left if present
         if (!string.IsNullOrEmpty(Label))
         {
             var labelBrush = new SolidBrush(LabelColor);
             var labelFormat = new StringFormat
             {
                 Alignment = StringAlignment.Near,
-                LineAlignment = StringAlignment.Near
+                LineAlignment = StringAlignment.Center
             };
-            var labelRect = new Rectangle(rect.X, rect.Y, rect.Width, (int)(LabelFont.Height * 1.2));
+            labelWidth = g.MeasureString(Label, LabelFont).Width + 6; // label width + gap
+            var labelRect = new Rectangle(rect.X, rect.Y, (int)labelWidth, rect.Height);
             g.DrawString(Label, LabelFont, labelBrush, labelRect, labelFormat);
-            yOffset = labelRect.Height;
             labelBrush.Dispose();
         }
 
-        // Draw value (placeholder: "0" or formatted number)
+        // Draw value to the right of the label (placeholder: "0" or formatted number)
         var valueBrush = new SolidBrush(ValueColor);
         var valueFormat = new StringFormat
         {
             Alignment = StringAlignment.Near,
-            LineAlignment = StringAlignment.Near
+            LineAlignment = StringAlignment.Center
         };
         var valueText = "0";
         if (DecimalPlaces > 0)
@@ -52,8 +52,8 @@ public class NumericComponent : BaseComponent
             valueText = string.Format($"{{0:F{DecimalPlaces}}}", 0.0);
         }
         valueText += Suffix;
-        
-        var valueRect = new Rectangle(rect.X, rect.Y + yOffset, rect.Width, rect.Height - yOffset);
+
+        var valueRect = new Rectangle(rect.X + (int)labelWidth, rect.Y, rect.Width - (int)labelWidth, rect.Height);
         g.DrawString(valueText, ValueFont, valueBrush, valueRect, valueFormat);
 
         if (isSelected)

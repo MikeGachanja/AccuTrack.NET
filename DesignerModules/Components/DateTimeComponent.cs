@@ -15,6 +15,8 @@ public class DateTimeComponent : BaseComponent
     public string CustomFormat { get; set; } = string.Empty;
     public Color BackColor { get; set; } = Color.White;
     public Color ForeColor { get; set; } = Color.Black;
+    /// <summary>Color of the date/time text (independent of background).</summary>
+    public Color TextColor { get; set; } = Color.Black;
     public Color BorderColor { get; set; } = Color.Gray;
     public int BorderWidth { get; set; } = 1;
     public Font Font { get; set; } = new Font("Arial", 12);
@@ -50,7 +52,7 @@ public class DateTimeComponent : BaseComponent
         if (ShowLabel && !string.IsNullOrEmpty(Label))
         {
             var labelFont = new Font(Font.FontFamily, Font.Size * 0.7f, Font.Style);
-            var labelBrush = new SolidBrush(ForeColor);
+            var labelBrush = new SolidBrush(TextColor);
             var labelRect = new Rectangle(rect.X, rect.Y, rect.Width, rect.Height / 3);
             var labelFormat = new StringFormat
             {
@@ -63,8 +65,8 @@ public class DateTimeComponent : BaseComponent
             labelBrush.Dispose();
         }
 
-        // Draw date/time text
-        var textBrush = new SolidBrush(ForeColor);
+        // Draw date/time text (use TextColor)
+        var textBrush = new SolidBrush(TextColor);
         var stringFormat = new StringFormat();
 
         switch (TextAlign)
@@ -130,6 +132,7 @@ public class DateTimeComponent : BaseComponent
             CustomFormat = CustomFormat,
             BackColor = BackColor,
             ForeColor = ForeColor,
+            TextColor = TextColor,
             BorderColor = BorderColor,
             BorderWidth = BorderWidth,
             Font = new Font(Font.FontFamily, Font.Size, Font.Style),
@@ -146,6 +149,7 @@ public class DateTimeComponent : BaseComponent
         json["customFormat"] = CustomFormat;
         json["backColor"] = ColorTranslator.ToHtml(BackColor);
         json["foreColor"] = ColorTranslator.ToHtml(ForeColor);
+        json["textColor"] = ColorTranslator.ToHtml(TextColor);
         json["borderColor"] = ColorTranslator.ToHtml(BorderColor);
         json["borderWidth"] = BorderWidth;
         json["font"] = Font.Name;
@@ -172,6 +176,10 @@ public class DateTimeComponent : BaseComponent
             BackColor = backColor;
         if (ColorTranslator.FromHtml(json["foreColor"]?.ToString() ?? "#000000") is Color foreColor)
             ForeColor = foreColor;
+        if (json["textColor"] != null && ColorTranslator.FromHtml(json["textColor"]?.ToString() ?? "") is Color textColor)
+            TextColor = textColor;
+        else
+            TextColor = ForeColor;
         if (ColorTranslator.FromHtml(json["borderColor"]?.ToString() ?? "#808080") is Color borderColor)
             BorderColor = borderColor;
 

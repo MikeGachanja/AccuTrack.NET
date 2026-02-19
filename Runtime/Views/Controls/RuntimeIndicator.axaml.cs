@@ -51,8 +51,8 @@ public partial class RuntimeIndicator : UserControl
         LabelText.Text = label;
         LabelText.IsVisible = !string.IsNullOrEmpty(label);
 
-        // Font from designer (font, fontSize, fontStyle)
-        ApplyFontToText(LabelText, d, "font", "fontSize", "fontStyle", 10);
+        // Font from designer; minimum 12pt so label is readable
+        ApplyFontToText(LabelText, d, "font", "fontSize", "fontStyle", 12);
 
         IsVisible = d.Visible;
         IsEnabled = d.Enabled;
@@ -120,7 +120,9 @@ public partial class RuntimeIndicator : UserControl
         var fontName = GetProperty(d, fontKey, "Arial");
         text.FontFamily = new FontFamily(fontName);
         var size = GetPropDouble(d, sizeKey, defaultSize);
-        text.FontSize = size > 0 ? size : defaultSize;
+        text.FontSize = Math.Max(12, size > 0 ? size : defaultSize);
+        var labelColor = GetProperty(d, "labelColor", "#333333");
+        text.Foreground = new SolidColorBrush(ParseColor(labelColor));
         var styleStr = GetProperty(d, styleKey, "Regular");
         text.FontWeight = styleStr.Contains("Bold", StringComparison.OrdinalIgnoreCase) ? FontWeight.Bold : FontWeight.Normal;
         text.FontStyle = styleStr.Contains("Italic", StringComparison.OrdinalIgnoreCase) ? FontStyle.Italic : FontStyle.Normal;

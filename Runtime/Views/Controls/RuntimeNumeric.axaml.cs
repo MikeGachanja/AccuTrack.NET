@@ -36,10 +36,10 @@ public partial class RuntimeNumeric : UserControl
         LabelText.FontFamily = new FontFamily(labelFont);
         ValueText.FontFamily = new FontFamily(valueFont);
 
-        var labelFontSize = GetPropDouble(d, "labelFontSize", 11);
-        LabelText.FontSize = labelFontSize > 0 ? labelFontSize : 11;
+        var labelFontSize = GetPropDouble(d, "labelFontSize", 12);
+        LabelText.FontSize = Math.Max(12, labelFontSize > 0 ? labelFontSize : 12);
         var valueFontSize = GetPropDouble(d, "valueFontSize", 18);
-        ValueText.FontSize = valueFontSize > 0 ? valueFontSize : 18;
+        ValueText.FontSize = Math.Max(14, valueFontSize > 0 ? valueFontSize : 18);
 
         var labelFontStyle = GetProperty(d, "labelFontStyle", "Regular");
         LabelText.FontWeight = labelFontStyle.Contains("Bold", System.StringComparison.OrdinalIgnoreCase) ? FontWeight.Bold : FontWeight.Normal;

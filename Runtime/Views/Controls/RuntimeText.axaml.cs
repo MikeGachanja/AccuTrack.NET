@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Runtime;
 using Runtime.Modules.Screens;
 
 namespace Runtime.Views.Controls;
@@ -16,19 +17,17 @@ public partial class RuntimeText : UserControl
     {
         if (d == null) return;
         TheText.Text = GetProperty(d, "text", d.Name);
-        
-        // Apply colors if available
-        var foreColor = GetProperty(d, "foreColor", "");
-        if (!string.IsNullOrEmpty(foreColor))
-        {
-            TheText.Foreground = ParseBrush(foreColor);
-        }
-        
+
+        // Text color: use textColor first, then foreColor (supports "Black" and hex)
+        var textColor = GetProperty(d, "textColor", "");
+        if (string.IsNullOrEmpty(textColor)) textColor = GetProperty(d, "foreColor", "#333333");
+        TheText.Foreground = ColorParser.ParseBrush(textColor);
+
         var backColor = GetProperty(d, "backColor", "");
         if (!string.IsNullOrEmpty(backColor))
-        {
-            TheText.Background = ParseBrush(backColor);
-        }
+            TheText.Background = ColorParser.ParseBrush(backColor);
+        else
+            TheText.Background = Brushes.Transparent;
         
         // Apply font properties if available
         var fontName = GetProperty(d, "font", "");
@@ -83,27 +82,4 @@ public partial class RuntimeText : UserControl
         return double.TryParse(v?.ToString(), out var parsed) ? parsed : fallback;
     }
     
-    private static IBrush ParseBrush(string hex)
-    {
-        if (string.IsNullOrEmpty(hex)) return new SolidColorBrush(Colors.Black);
-        
-        if (!hex.StartsWith("#"))
-            hex = "#" + hex;
-            
-        if (hex.Length >= 7)
-        {
-            try
-            {
-                var r = Convert.ToInt32(hex.Substring(1, 2), 16);
-                var g = Convert.ToInt32(hex.Substring(3, 2), 16);
-                var b = Convert.ToInt32(hex.Substring(5, 2), 16);
-                return new SolidColorBrush(Color.FromRgb((byte)r, (byte)g, (byte)b));
-            }
-            catch
-            {
-                return new SolidColorBrush(Colors.Black);
-            }
-        }
-        return new SolidColorBrush(Colors.Black);
-    }
 }

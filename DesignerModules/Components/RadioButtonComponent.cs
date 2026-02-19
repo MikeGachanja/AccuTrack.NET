@@ -15,6 +15,8 @@ public class RadioButtonComponent : BaseComponent
     public bool Checked { get; set; } = false;
     public string GroupName { get; set; } = "Group1";
     public Color ForeColor { get; set; } = Color.Black;
+    /// <summary>Color of the radio button label text.</summary>
+    public Color TextColor { get; set; } = Color.Black;
     public Color CheckColor { get; set; } = Color.Blue;
     public Font Font { get; set; } = new Font("Arial", 9);
 
@@ -43,9 +45,9 @@ public class RadioButtonComponent : BaseComponent
             checkBrush.Dispose();
         }
 
-        // Draw text
+        // Draw text (use TextColor)
         var textRect = new Rectangle(radioRect.Right + 5, rect.Y, rect.Width - radioRect.Width - 10, rect.Height);
-        var brush = new SolidBrush(ForeColor);
+        var brush = new SolidBrush(TextColor);
         var stringFormat = new StringFormat
         {
             Alignment = StringAlignment.Near,
@@ -73,6 +75,7 @@ public class RadioButtonComponent : BaseComponent
             Checked = Checked,
             GroupName = GroupName,
             ForeColor = ForeColor,
+            TextColor = TextColor,
             CheckColor = CheckColor,
             Font = new Font(Font.FontFamily, Font.Size, Font.Style)
         };
@@ -85,6 +88,7 @@ public class RadioButtonComponent : BaseComponent
         json["checked"] = Checked;
         json["groupName"] = GroupName;
         json["foreColor"] = ColorTranslator.ToHtml(ForeColor);
+        json["textColor"] = ColorTranslator.ToHtml(TextColor);
         json["checkColor"] = ColorTranslator.ToHtml(CheckColor);
         json["font"] = Font.Name;
         json["fontSize"] = Font.Size;
@@ -101,6 +105,10 @@ public class RadioButtonComponent : BaseComponent
         
         if (ColorTranslator.FromHtml(json["foreColor"]?.ToString() ?? "#000000") is Color foreColor)
             ForeColor = foreColor;
+        if (json["textColor"] != null && ColorTranslator.FromHtml(json["textColor"]?.ToString() ?? "") is Color textColor)
+            TextColor = textColor;
+        else
+            TextColor = ForeColor;
         if (ColorTranslator.FromHtml(json["checkColor"]?.ToString() ?? "#0000FF") is Color checkColor)
             CheckColor = checkColor;
 

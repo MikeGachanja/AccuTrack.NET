@@ -19,10 +19,14 @@ public partial class RuntimeConveyor : UserControl
     public void ApplyDescriptor(ComponentDescriptor d)
     {
         if (d == null) return;
-        
-        // Apply label
+
+        // Apply label with readable font size and contrast (dark text)
         LabelText.Text = GetProperty(d, "label", "Conveyor");
-        
+        var labelColor = GetProperty(d, "labelColor", "#333333");
+        LabelText.Foreground = new SolidColorBrush(ParseColor(labelColor));
+        var labelFontSize = GetPropDouble(d, "labelFontSize", 12);
+        LabelText.FontSize = labelFontSize >= 8 ? labelFontSize : 12;
+
         // Apply colors from properties
         var onColorStr = GetProperty(d, "onColor", "");
         var offColorStr = GetProperty(d, "offColor", "");
@@ -58,6 +62,15 @@ public partial class RuntimeConveyor : UserControl
         TheBorder.Background = faulted ? FaultBrush : (on ? OnBrush : OffBrush);
     }
     
+    private static double GetPropDouble(ComponentDescriptor d, string key, double fallback)
+    {
+        if (!d.Properties.TryGetValue(key, out var v)) return fallback;
+        if (v is int i) return i;
+        if (v is double dbl) return dbl;
+        if (v is float f) return f;
+        return double.TryParse(v?.ToString(), out var parsed) ? parsed : fallback;
+    }
+
     private static int GetPropertyInt(ComponentDescriptor d, string key, int fallback)
     {
         if (!d.Properties.TryGetValue(key, out var v)) return fallback;

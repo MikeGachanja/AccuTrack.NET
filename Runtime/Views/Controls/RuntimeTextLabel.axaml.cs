@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Runtime;
 using Runtime.Modules.Screens;
 
 namespace Runtime.Views.Controls;
@@ -17,24 +18,23 @@ public partial class RuntimeTextLabel : UserControl
         if (d == null) return;
         TheText.Text = GetProperty(d, "text", d.Name);
         
-        // Apply colors if available
-        var foreColor = GetProperty(d, "foreColor", "#000000");
-        TheText.Foreground = ParseBrush(foreColor);
+        // Text color: use textColor from designer first, then foreColor (supports "Black" and hex)
+        var textColor = GetProperty(d, "textColor", "");
+        if (string.IsNullOrEmpty(textColor)) textColor = GetProperty(d, "foreColor", "#000000");
+        TheText.Foreground = ColorParser.ParseBrush(textColor);
         
         var backColor = GetProperty(d, "backColor", "");
         if (!string.IsNullOrEmpty(backColor))
-        {
-            TheText.Background = ParseBrush(backColor);
-        }
+            TheText.Background = ColorParser.ParseBrush(backColor);
         
-        // Apply font from designer (font, fontSize, fontStyle) so each component can have different fonts
+        // Apply font from designer; enforce minimum 12pt so text is always readable
         var fontName = GetProperty(d, "font", "Arial");
         var fontSize = GetPropertyDouble(d, "fontSize", 12);
         if (fontSize <= 0) fontSize = 12;
+        TheText.FontSize = Math.Max(12, fontSize);
         var fontStyleStr = GetProperty(d, "fontStyle", "Regular");
 
         TheText.FontFamily = new FontFamily(fontName);
-        TheText.FontSize = fontSize;
 
         var fontWeight = FontWeight.Normal;
         var fontStyle = FontStyle.Normal;
@@ -47,30 +47,6 @@ public partial class RuntimeTextLabel : UserControl
         
         IsVisible = d.Visible;
         IsEnabled = d.Enabled;
-    }
-    
-    private static IBrush ParseBrush(string hex)
-    {
-        if (string.IsNullOrEmpty(hex)) return new SolidColorBrush(Colors.Black);
-        
-        if (!hex.StartsWith("#"))
-            hex = "#" + hex;
-            
-        if (hex.Length >= 7)
-        {
-            try
-            {
-                var r = Convert.ToInt32(hex.Substring(1, 2), 16);
-                var g = Convert.ToInt32(hex.Substring(3, 2), 16);
-                var b = Convert.ToInt32(hex.Substring(5, 2), 16);
-                return new SolidColorBrush(Color.FromRgb((byte)r, (byte)g, (byte)b));
-            }
-            catch
-            {
-                return new SolidColorBrush(Colors.Black);
-            }
-        }
-        return new SolidColorBrush(Colors.Black);
     }
     
     private static double GetPropertyDouble(ComponentDescriptor d, string key, double fallback)

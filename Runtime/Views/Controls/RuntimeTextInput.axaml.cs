@@ -2,6 +2,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Runtime;
 using Runtime.Modules.Screens;
 
 namespace Runtime.Views.Controls;
@@ -29,19 +30,17 @@ public partial class RuntimeTextInput : UserControl
             TheTextBox.Height = d.Height;
         
         TheTextBox.Watermark = GetProperty(d, "placeholder", "");
-        
-        // Apply colors if available
-        var foreColor = GetProperty(d, "foreColor", "");
-        if (!string.IsNullOrEmpty(foreColor))
-        {
-            TheTextBox.Foreground = ParseBrush(foreColor);
-        }
-        
+
+        // Text color: use textColor first, then foreColor (supports "Black" and hex)
+        var textColor = GetProperty(d, "textColor", "");
+        if (string.IsNullOrEmpty(textColor)) textColor = GetProperty(d, "foreColor", "#333333");
+        TheTextBox.Foreground = ColorParser.ParseBrush(textColor);
+
         var backColor = GetProperty(d, "backColor", "");
         if (!string.IsNullOrEmpty(backColor))
-        {
-            TheTextBox.Background = ParseBrush(backColor);
-        }
+            TheTextBox.Background = ColorParser.ParseBrush(backColor);
+        else
+            TheTextBox.Background = new SolidColorBrush(Colors.White);
         
         // Font from designer (font, fontSize, fontStyle) so each component can have different fonts
         var fontName = GetProperty(d, "font", "Arial");
@@ -83,27 +82,4 @@ public partial class RuntimeTextInput : UserControl
         return double.TryParse(v?.ToString(), out var parsed) ? parsed : fallback;
     }
     
-    private static IBrush ParseBrush(string hex)
-    {
-        if (string.IsNullOrEmpty(hex)) return new SolidColorBrush(Colors.Black);
-        
-        if (!hex.StartsWith("#"))
-            hex = "#" + hex;
-            
-        if (hex.Length >= 7)
-        {
-            try
-            {
-                var r = Convert.ToInt32(hex.Substring(1, 2), 16);
-                var g = Convert.ToInt32(hex.Substring(3, 2), 16);
-                var b = Convert.ToInt32(hex.Substring(5, 2), 16);
-                return new SolidColorBrush(Color.FromRgb((byte)r, (byte)g, (byte)b));
-            }
-            catch
-            {
-                return new SolidColorBrush(Colors.Black);
-            }
-        }
-        return new SolidColorBrush(Colors.Black);
-    }
 }

@@ -14,6 +14,8 @@ public class TextInputComponent : BaseComponent
     public string PlaceholderText { get; set; } = "Enter text...";
     public Color BackColor { get; set; } = Color.White;
     public Color ForeColor { get; set; } = Color.Black;
+    /// <summary>Color of the input text (independent of background).</summary>
+    public Color TextColor { get; set; } = Color.Black;
     public Color BorderColor { get; set; } = Color.Gray;
     public int BorderWidth { get; set; } = 1;
     public Font Font { get; set; } = new Font("Arial", 9);
@@ -33,7 +35,7 @@ public class TextInputComponent : BaseComponent
         g.DrawRectangle(pen, rect);
 
         // Draw placeholder or text
-        var textBrush = new SolidBrush(ForeColor);
+        var textBrush = new SolidBrush(TextColor);
         var stringFormat = new StringFormat
         {
             Alignment = StringAlignment.Near,
@@ -62,6 +64,7 @@ public class TextInputComponent : BaseComponent
             PlaceholderText = PlaceholderText,
             BackColor = BackColor,
             ForeColor = ForeColor,
+            TextColor = TextColor,
             BorderColor = BorderColor,
             BorderWidth = BorderWidth,
             Font = new Font(Font.FontFamily, Font.Size, Font.Style),
@@ -76,6 +79,7 @@ public class TextInputComponent : BaseComponent
         json["placeholderText"] = PlaceholderText;
         json["backColor"] = ColorTranslator.ToHtml(BackColor);
         json["foreColor"] = ColorTranslator.ToHtml(ForeColor);
+        json["textColor"] = ColorTranslator.ToHtml(TextColor);
         json["borderColor"] = ColorTranslator.ToHtml(BorderColor);
         json["borderWidth"] = BorderWidth;
         json["font"] = Font.Name;
@@ -95,6 +99,10 @@ public class TextInputComponent : BaseComponent
             BackColor = backColor;
         if (ColorTranslator.FromHtml(json["foreColor"]?.ToString() ?? "#000000") is Color foreColor)
             ForeColor = foreColor;
+        if (json["textColor"] != null && ColorTranslator.FromHtml(json["textColor"]?.ToString() ?? "") is Color textColor)
+            TextColor = textColor;
+        else
+            TextColor = ForeColor;
         if (ColorTranslator.FromHtml(json["borderColor"]?.ToString() ?? "#808080") is Color borderColor)
             BorderColor = borderColor;
 
