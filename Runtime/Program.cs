@@ -173,8 +173,17 @@ internal static class Program
             var script = p?.CurrentProject?.Script?.FirstOrDefault(s =>
                 s.Enabled && string.Equals(s.Name, scriptName, StringComparison.Ordinal));
             if (script == null || string.IsNullOrEmpty(script.Path)) return null;
+            
+            // Script.Path is relative to data folder (e.g., "scripts/{id}.lua")
+            // Resolve to full path: {projectPath}/data/scripts/{id}.lua
             var projectPath = ExecutionEngine.Instance.ProjectPath;
-            return string.IsNullOrEmpty(projectPath) ? script.Path : Path.Combine(projectPath, script.Path);
+            if (string.IsNullOrEmpty(projectPath))
+            {
+                // Fallback: use data folder relative to executable
+                var appDir = AppContext.BaseDirectory;
+                return Path.Combine(appDir, "data", script.Path);
+            }
+            return Path.Combine(projectPath, "data", script.Path);
         });
 
         var screensModule = new ScreensModule();

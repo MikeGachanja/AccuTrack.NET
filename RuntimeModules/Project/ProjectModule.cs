@@ -243,10 +243,18 @@ public sealed class ProjectModule : IProject
                     var enabled = true;
                     if (item.TryGetProperty("enabled", out var ev))
                         enabled = ev.ValueKind == JsonValueKind.True || (ev.ValueKind == JsonValueKind.String && ev.GetString() == "true");
+                    
+                    var scriptId = item.TryGetProperty("id", out var id) ? id.GetString() ?? "" : "";
+                    var scriptName = item.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "";
+                    
+                    // Path is relative to data folder: scripts/{id}.lua
+                    string scriptPath = string.IsNullOrEmpty(scriptId) ? "" : $"scripts/{scriptId}.lua";
+                    
                     _project.Script.Add(new ScriptInfo
                     {
-                        Name = item.TryGetProperty("name", out var n) ? n.GetString() ?? "" : "",
-                        Path = item.TryGetProperty("path", out var p) ? p.GetString() ?? "" : "",
+                        Id = scriptId,
+                        Name = scriptName,
+                        Path = scriptPath,
                         Enabled = enabled
                     });
                 }

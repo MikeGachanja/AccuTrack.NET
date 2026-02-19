@@ -28,8 +28,9 @@ public sealed class ScreenInfo
 
 public sealed class ScriptInfo
 {
+    public string Id { get; set; } = "";
     public string Name { get; set; } = "";
-    public string Path { get; set; } = "";
+    public string Path { get; set; } = ""; // Relative path: "scripts/{id}.lua"
     public bool Enabled { get; set; } = true;
 }
 

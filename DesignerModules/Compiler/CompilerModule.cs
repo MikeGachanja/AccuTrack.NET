@@ -406,6 +406,14 @@ public class CompilerModule
 
         string scriptsPath = _currentProject.Paths.ScriptsPath;
         var scriptsArray = new JArray();
+        
+        // Create scripts directory in build output (buildPath/scripts, which becomes data/scripts in runtime)
+        string buildPath = _currentProject.Paths.BuildPath;
+        string dataScriptsPath = Path.Combine(buildPath, "scripts");
+        if (!Directory.Exists(dataScriptsPath))
+        {
+            Directory.CreateDirectory(dataScriptsPath);
+        }
 
         if (Directory.Exists(scriptsPath))
         {
@@ -416,17 +424,23 @@ public class CompilerModule
                     var json = JObject.Parse(File.ReadAllText(file));
                     var script = LuaScript.FromJson(json);
                     script.FilePath = json["filePath"]?.ToString() ?? file.Replace(".json", ".lua");
+                    
+                    // Copy script file to buildPath/scripts/{id}.lua (will be in data/scripts in runtime)
                     if (File.Exists(script.FilePath))
-                        script.LoadCode();
+                    {
+                        string scriptId = script.Id.ToString();
+                        string destScriptPath = Path.Combine(dataScriptsPath, $"{scriptId}.lua");
+                        File.Copy(script.FilePath, destScriptPath, overwrite: true);
+                        EmitMessage($"Copied script '{script.Name}' to scripts/{scriptId}.lua");
+                    }
 
+                    // Only include metadata in scripts.json (no code, no path)
                     scriptsArray.Add(new JObject
                     {
                         ["id"] = script.Id.ToString(),
                         ["name"] = script.Name ?? "",
                         ["description"] = script.Description ?? "",
-                        ["enabled"] = script.Enabled,
-                        ["code"] = script.Code ?? "",
-                        ["path"] = script.FilePath ?? ""
+                        ["enabled"] = script.Enabled
                     });
                 }
                 catch (Exception ex)
