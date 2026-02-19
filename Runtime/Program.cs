@@ -150,12 +150,28 @@ internal static class Program
 
         var scriptingEngine = new ScriptingEngineModule();
         scriptingEngine.Initialize();
+        
+        // Connect console to script engine for Lua print() output
         if (engine.ModuleManager.GetModule("ConsoleModule") is IConsole consoleForLua)
-            scriptingEngine.SetPrintCallback(msg => consoleForLua.LogDebug(msg, "Lua"));
+        {
+            scriptingEngine.SetPrintCallback(msg =>
+            {
+                System.Diagnostics.Trace.WriteLine($"[Runtime] Script print callback invoked with message: '{msg}'");
+                consoleForLua.LogDebug(msg, "Lua");
+                System.Diagnostics.Trace.WriteLine($"[Runtime] Logged to console: Level=Debug, Source=Lua, Message='{msg}'");
+            });
+            System.Diagnostics.Trace.WriteLine("[Runtime] Script engine connected to console for Lua output");
+        }
+        else
+        {
+            System.Diagnostics.Trace.WriteLine("[Runtime] WARNING: Console module not found, Lua print() output will not be displayed");
+        }
+        
         // Scripting engine: Lua read_tag(name) / write_tag(name, value) use TagManager.
         scriptingEngine.SetTagAccess(
             name => tagsModule.TagManager.GetTagValue(name),
             (name, value) => tagsModule.TagManager.UpdateTagValue(name, value, TagQuality.Good));
+        System.Diagnostics.Trace.WriteLine("[Runtime] Script engine connected to tag manager for read_tag/write_tag");
 
         // Scheduler: runs schedules from json/schedules.json (scripts + ML models on interval/time).
         var schedulerModule = new SchedulerModule();
@@ -172,18 +188,31 @@ internal static class Program
             var p = Services.Get<IProject>();
             var script = p?.CurrentProject?.Script?.FirstOrDefault(s =>
                 s.Enabled && string.Equals(s.Name, scriptName, StringComparison.Ordinal));
-            if (script == null || string.IsNullOrEmpty(script.Path)) return null;
+            if (script == null || string.IsNullOrEmpty(script.Path))
+            {
+                System.Diagnostics.Trace.WriteLine($"[Scheduler] ScriptPathResolver: Script '{scriptName}' not found or path is empty");
+                return null;
+            }
             
             // Script.Path is relative to data folder (e.g., "scripts/{id}.lua")
-            // Resolve to full path: {projectPath}/data/scripts/{id}.lua
+            // ProjectPath is already the data folder path, so just combine directly
             var projectPath = ExecutionEngine.Instance.ProjectPath;
+            string fullPath;
+            
             if (string.IsNullOrEmpty(projectPath))
             {
                 // Fallback: use data folder relative to executable
                 var appDir = AppContext.BaseDirectory;
-                return Path.Combine(appDir, "data", script.Path);
+                fullPath = Path.Combine(appDir, "data", script.Path);
             }
-            return Path.Combine(projectPath, "data", script.Path);
+            else
+            {
+                // ProjectPath is already the data folder, so combine directly
+                fullPath = Path.Combine(projectPath, script.Path);
+            }
+            
+            System.Diagnostics.Trace.WriteLine($"[Scheduler] ScriptPathResolver: Resolved '{scriptName}' -> '{fullPath}' (ProjectPath: {projectPath ?? "null"})");
+            return fullPath;
         });
 
         var screensModule = new ScreensModule();

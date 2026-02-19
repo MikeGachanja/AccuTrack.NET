@@ -24,33 +24,58 @@ public sealed class SchedulerModule : ModuleBase, IScheduler
 
     public override bool Initialize(JsonObject? config = null)
     {
+        System.Diagnostics.Trace.WriteLine("[Scheduler] Initialize: Starting scheduler initialization");
         _scheduleManager.Clear();
+        
         if (config != null && config["schedules"] is JsonArray arr)
         {
+            System.Diagnostics.Trace.WriteLine($"[Scheduler] Initialize: Found {arr.Count} schedule(s) in config");
+            int loadedCount = 0;
             foreach (var node in arr)
             {
                 if (node is JsonObject obj && Schedule.FromJson(obj) is { } s)
                 {
-                    _scheduleManager.AddSchedule(s);
-                    System.Diagnostics.Trace.WriteLine($"[Scheduler] Loaded schedule: {s.Name} ({(s.TargetKind == ScheduleTargetKind.MLModel ? "ML" : "Script")}, {(s.Type == ScheduleType.Interval ? $"every {s.IntervalSeconds}s" : s.Type.ToString())})");
+                    if (_scheduleManager.AddSchedule(s))
+                    {
+                        loadedCount++;
+                        System.Diagnostics.Trace.WriteLine($"[Scheduler] Initialize: Loaded schedule: {s.Name} " +
+                            $"(Target: {(s.TargetKind == ScheduleTargetKind.MLModel ? "ML " + s.ModelId : "Script " + s.ScriptName)}, " +
+                            $"Type: {(s.Type == ScheduleType.Interval ? $"Interval every {s.IntervalSeconds}s" : s.Type.ToString())}, " +
+                            $"Enabled: {s.Enabled})");
+                    }
+                }
+                else
+                {
+                    System.Diagnostics.Trace.WriteLine("[Scheduler] Initialize: Failed to parse schedule node");
                 }
             }
+            System.Diagnostics.Trace.WriteLine($"[Scheduler] Initialize: Successfully loaded {loadedCount} schedule(s)");
         }
+        else
+        {
+            System.Diagnostics.Trace.WriteLine("[Scheduler] Initialize: No schedules found in config (config is null or schedules array not found)");
+        }
+        
         SetStatus("Initialized");
         RaiseInitialized();
+        System.Diagnostics.Trace.WriteLine("[Scheduler] Initialize: Scheduler initialization completed");
         return true;
     }
 
     public override bool Start()
     {
+        System.Diagnostics.Trace.WriteLine("[Scheduler] Start: Starting scheduler module");
         _scheduleManager.Start();
         SetRunning(true);
+        System.Diagnostics.Trace.WriteLine("[Scheduler] Start: Scheduler module started successfully");
         return true;
     }
 
     public override void Stop()
     {
+        System.Diagnostics.Trace.WriteLine("[Scheduler] Stop: Stopping scheduler module");
         _scheduleManager.Stop();
         SetRunning(false);
+        System.Diagnostics.Trace.WriteLine("[Scheduler] Stop: Scheduler module stopped");
     }
 }

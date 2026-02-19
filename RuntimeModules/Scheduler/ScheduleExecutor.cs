@@ -19,43 +19,87 @@ public sealed class ScheduleExecutor
 
     public bool Execute(Schedule schedule)
     {
-        if (schedule == null) return false;
+        if (schedule == null)
+        {
+            System.Diagnostics.Trace.WriteLine("[Scheduler] Execute: Schedule is null");
+            return false;
+        }
+
+        System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: Starting execution of '{schedule.Name}' (Target: {schedule.TargetKind})");
 
         if (schedule.TargetKind == ScheduleTargetKind.MLModel && !string.IsNullOrEmpty(schedule.ModelId))
         {
+            System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: Executing ML model '{schedule.ModelId}'");
             try
             {
                 if (_runModelById == null)
                 {
-                    System.Diagnostics.Trace.WriteLine($"[Scheduler] ML run not configured; cannot run model {schedule.ModelId}");
+                    System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: ML run callback not configured; cannot run model {schedule.ModelId}");
                     return false;
                 }
                 _runModelById.Invoke(schedule.ModelId);
+                System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: ML model '{schedule.ModelId}' execution completed");
                 return true;
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Trace.WriteLine($"[Scheduler] ML model run failed for {schedule.ModelId}: {ex.Message}");
+                System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: ML model run failed for {schedule.ModelId}: {ex.Message}");
+                System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: Exception: {ex}");
                 return false;
             }
         }
 
+        // Script execution
         var scriptPath = schedule.ScriptPath;
         if (string.IsNullOrEmpty(scriptPath) && !string.IsNullOrEmpty(schedule.ScriptName))
+        {
+            System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: Resolving script path for '{schedule.ScriptName}'");
             scriptPath = _scriptPathResolver?.Invoke(schedule.ScriptName) ?? "";
+            if (!string.IsNullOrEmpty(scriptPath))
+            {
+                System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: Resolved script path: {scriptPath}");
+            }
+            else
+            {
+                System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: Script path resolver returned null for '{schedule.ScriptName}'");
+            }
+        }
+        
         if (!string.IsNullOrEmpty(scriptPath) && _scriptEngine != null)
         {
+            System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: Loading script from: {scriptPath}");
             if (!_scriptEngine.LoadScript(scriptPath))
             {
-                System.Diagnostics.Trace.WriteLine($"[Scheduler] Script load failed: {scriptPath} ({_scriptEngine.GetLastError()})");
+                var error = _scriptEngine.GetLastError();
+                System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: Script load failed: {scriptPath} (Error: {error})");
                 return false;
             }
-            return _scriptEngine.ExecuteScript();
+            System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: Executing script: {scriptPath}");
+            var result = _scriptEngine.ExecuteScript();
+            if (result)
+            {
+                System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: Script execution completed successfully");
+            }
+            else
+            {
+                var error = _scriptEngine.GetLastError();
+                System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: Script execution failed: {error}");
+            }
+            return result;
         }
+        
         if (string.IsNullOrEmpty(scriptPath) && !string.IsNullOrEmpty(schedule.ScriptName))
-            System.Diagnostics.Trace.WriteLine($"[Scheduler] Script path not resolved for: {schedule.ScriptName}");
+        {
+            System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: Script path not resolved for: {schedule.ScriptName} (ScriptEngine: {(_scriptEngine != null ? "available" : "null")})");
+        }
+        
         if (!string.IsNullOrEmpty(schedule.Command))
+        {
+            System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: Executing command: {schedule.Command}");
             return true;
+        }
+        
+        System.Diagnostics.Trace.WriteLine($"[Scheduler] Execute: No valid execution target found for schedule '{schedule.Name}'");
         return false;
     }
 }

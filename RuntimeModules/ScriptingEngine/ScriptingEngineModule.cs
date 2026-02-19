@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using MoonSharp.Interpreter;
 
@@ -16,7 +17,16 @@ public sealed class ScriptingEngineModule : IScriptingEngine
     private Action<string, object?>? _writeTag;
 
     /// <summary>Optional: set a callback to capture print() output (e.g. for console/logs).</summary>
-    public void SetPrintCallback(Action<string>? callback) => _printCallback = callback;
+    public void SetPrintCallback(Action<string>? callback)
+    {
+        _printCallback = callback;
+        // Re-register print to ensure the callback is used if script already exists
+        if (_script != null)
+        {
+            RegisterPrint();
+            System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] SetPrintCallback: Callback {(callback != null ? "set" : "cleared")}, re-registered print");
+        }
+    }
 
     /// <summary>Optional: provide tag read/write so Lua can use read_tag(name) and write_tag(name, value).</summary>
     public void SetTagAccess(Func<string, object?>? readTag, Action<string, object?>? writeTag)
@@ -49,6 +59,11 @@ public sealed class ScriptingEngineModule : IScriptingEngine
             _script = new Script();
             RegisterPrint();
             RegisterTagGlobals();
+        }
+        else
+        {
+            // Ensure print is registered even if script already exists (callback might have been set after script creation)
+            RegisterPrint();
         }
     }
 
@@ -84,11 +99,63 @@ public sealed class ScriptingEngineModule : IScriptingEngine
     private void RegisterPrint()
     {
         if (_script == null) return;
+        
+        System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] RegisterPrint: Callback is {(_printCallback != null ? "set" : "null")}");
+        
+        // Set DebugPrint option to capture print() calls (MoonSharp's primary print mechanism)
         _script.Options.DebugPrint = s =>
         {
-            _printCallback?.Invoke(s ?? "");
-            System.Diagnostics.Trace.WriteLine("[Lua] " + (s ?? ""));
+            string message = s ?? "";
+            System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] DebugPrint: Received message='{message}', callback={(_printCallback != null ? "set" : "null")}");
+            if (_printCallback != null)
+            {
+                _printCallback.Invoke(message);
+            }
+            else
+            {
+                System.Diagnostics.Trace.WriteLine("[ScriptingEngine] WARNING: Print callback is null, message will not appear in console!");
+            }
+            System.Diagnostics.Trace.WriteLine("[Lua] " + message);
         };
+        
+        // Also register print as a global function to ensure all print calls are captured
+        // This overrides MoonSharp's default print implementation
+        _script.Globals["print"] = (Action<DynValue[]>)PrintImpl;
+        
+        System.Diagnostics.Trace.WriteLine("[ScriptingEngine] RegisterPrint: Print function registered");
+    }
+    
+    private void PrintImpl(params DynValue[] args)
+    {
+        if (args == null || args.Length == 0)
+        {
+            var emptyMsg = "";
+            System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] PrintImpl: Empty print call, callback={(_printCallback != null ? "set" : "null")}");
+            _printCallback?.Invoke(emptyMsg);
+            System.Diagnostics.Trace.WriteLine("[Lua] ");
+            return;
+        }
+        
+        // Format multiple arguments similar to Lua's print behavior
+        var parts = new List<string>();
+        foreach (var arg in args)
+        {
+            if (arg.IsNil())
+                parts.Add("nil");
+            else if (arg.Type == DataType.String)
+                parts.Add(arg.String);
+            else if (arg.Type == DataType.Number)
+                parts.Add(arg.Number.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            else if (arg.Type == DataType.Boolean)
+                parts.Add(arg.Boolean ? "true" : "false");
+            else
+                parts.Add(arg.ToString());
+        }
+        
+        string message = string.Join("\t", parts);
+        System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] PrintImpl: Calling callback with message='{message}', callback={(_printCallback != null ? "set" : "null")}");
+        _printCallback?.Invoke(message);
+        System.Diagnostics.Trace.WriteLine("[Lua] " + message);
     }
 
     public bool LoadScript(string filePath)
@@ -109,6 +176,11 @@ public sealed class ScriptingEngineModule : IScriptingEngine
         {
             _loadedCode = File.ReadAllText(filePath);
             _loadedPath = filePath;
+            
+            // Ensure script instance exists and print is registered before loading code
+            EnsureScript();
+            System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] LoadScript: Loaded script from {filePath}, callback={(_printCallback != null ? "set" : "null")}");
+            
             ScriptLoaded?.Invoke(this, filePath);
             return true;
         }
@@ -132,11 +204,18 @@ public sealed class ScriptingEngineModule : IScriptingEngine
         }
         try
         {
+            // Ensure print function is registered before execution
+            RegisterPrint();
+            System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] ExecuteScript: Print callback is {(_printCallback != null ? "set" : "null")}");
+            
             if (!string.IsNullOrEmpty(arguments))
                 _script!.Globals["arg"] = arguments;
 
             if (!string.IsNullOrEmpty(_loadedCode))
+            {
+                System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] ExecuteScript: Executing script code ({_loadedCode.Length} chars)");
                 _script!.DoString(_loadedCode);
+            }
 
             ScriptExecuted?.Invoke(this, EventArgs.Empty);
             return true;
@@ -144,18 +223,27 @@ public sealed class ScriptingEngineModule : IScriptingEngine
         catch (ScriptRuntimeException ex)
         {
             _lastError = ex.DecoratedMessage ?? ex.Message;
+            string errorMsg = $"[Lua Error] {_lastError}";
+            _printCallback?.Invoke(errorMsg);
+            System.Diagnostics.Trace.WriteLine(errorMsg);
             ErrorOccurred?.Invoke(this, _lastError);
             return false;
         }
         catch (SyntaxErrorException ex)
         {
             _lastError = ex.DecoratedMessage ?? ex.Message;
+            string errorMsg = $"[Lua Syntax Error] {_lastError}";
+            _printCallback?.Invoke(errorMsg);
+            System.Diagnostics.Trace.WriteLine(errorMsg);
             ErrorOccurred?.Invoke(this, _lastError);
             return false;
         }
         catch (Exception ex)
         {
             _lastError = ex.Message;
+            string errorMsg = $"[Lua Exception] {_lastError}";
+            _printCallback?.Invoke(errorMsg);
+            System.Diagnostics.Trace.WriteLine(errorMsg);
             ErrorOccurred?.Invoke(this, _lastError);
             return false;
         }
@@ -179,18 +267,27 @@ public sealed class ScriptingEngineModule : IScriptingEngine
         catch (ScriptRuntimeException ex)
         {
             _lastError = ex.DecoratedMessage ?? ex.Message;
+            string errorMsg = $"[Lua Error] {_lastError}";
+            _printCallback?.Invoke(errorMsg);
+            System.Diagnostics.Trace.WriteLine(errorMsg);
             ErrorOccurred?.Invoke(this, _lastError);
             return false;
         }
         catch (SyntaxErrorException ex)
         {
             _lastError = ex.DecoratedMessage ?? ex.Message;
+            string errorMsg = $"[Lua Syntax Error] {_lastError}";
+            _printCallback?.Invoke(errorMsg);
+            System.Diagnostics.Trace.WriteLine(errorMsg);
             ErrorOccurred?.Invoke(this, _lastError);
             return false;
         }
         catch (Exception ex)
         {
             _lastError = ex.Message;
+            string errorMsg = $"[Lua Exception] {_lastError}";
+            _printCallback?.Invoke(errorMsg);
+            System.Diagnostics.Trace.WriteLine(errorMsg);
             ErrorOccurred?.Invoke(this, _lastError);
             return false;
         }
