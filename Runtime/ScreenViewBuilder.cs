@@ -51,8 +51,10 @@ public static class ScreenViewBuilder
             
             // Set size constraints BEFORE adding to canvas to ensure they're respected
             // Use explicit Width/Height, MinWidth/MinHeight, and MaxWidth/MaxHeight to ensure controls maintain their exact size
-            var width = Math.Max(1, comp.Width);
-            var height = Math.Max(1, comp.Height);
+            // For Numeric components, ensure minimum size so they're always visible
+            var minSize = comp.ComponentType == "Numeric" ? 50 : 1;
+            var width = Math.Max(minSize, comp.Width);
+            var height = comp.ComponentType == "Numeric" ? Math.Max(20, comp.Height) : Math.Max(1, comp.Height);
             control.Width = width;
             control.Height = height;
             control.MinWidth = width;
@@ -63,6 +65,60 @@ public static class ScreenViewBuilder
             Canvas.SetLeft(control, comp.X);
             Canvas.SetTop(control, comp.Y);
             canvas.Children.Add(control);
+            
+            // For SVG components, ensure minimum size and trigger a re-render after control is added and sized
+            if (comp.ComponentType == "SVGView" && control is RuntimeSVGView svgView)
+            {
+                System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] ===== Post-processing SVG component =====");
+                System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Initial size: {width}x{height}");
+                
+                // Ensure SVG component has minimum size so it's visible
+                if (width < 50) width = 50;
+                if (height < 50) height = 50;
+                control.Width = width;
+                control.Height = height;
+                control.MinWidth = width;
+                control.MinHeight = height;
+                System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Set control size to: {width}x{height}");
+                
+                // Delay SVG loading to ensure control has proper size - use multiple attempts if needed
+                void TryLoadSvg(int attempt = 0)
+                {
+                    System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] TryLoadSvg attempt {attempt + 1}");
+                    var currentPath = svgView.GetCurrentSvgPath();
+                    System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Current SVG path: '{currentPath}'");
+                    System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Control size: {svgView.Width}x{svgView.Height}");
+                    
+                    if (!string.IsNullOrEmpty(currentPath))
+                    {
+                        if (svgView.Width > 0 && svgView.Height > 0)
+                        {
+                            // Control has size - load SVG
+                            System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] ✓ Control has size, re-loading SVG");
+                            svgView.SetSvgPath(currentPath);
+                        }
+                        else if (attempt < 5)
+                        {
+                            // Control doesn't have size yet - try again after a short delay (max 5 attempts)
+                            System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Control size is 0, retrying in next frame (attempt {attempt + 1}/5)...");
+                            Avalonia.Threading.Dispatcher.UIThread.Post(() => TryLoadSvg(attempt + 1), Avalonia.Threading.DispatcherPriority.Loaded);
+                        }
+                        else
+                        {
+                            // Load anyway with default size - SizeChanged will re-render when size is available
+                            System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Max attempts reached, loading SVG with default size");
+                            svgView.SetSvgPath(currentPath);
+                        }
+                    }
+                    else
+                    {
+                        System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] ✗ No SVG path available to load");
+                    }
+                }
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => TryLoadSvg(), Avalonia.Threading.DispatcherPriority.Loaded);
+                System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] ===== Finished post-processing SVG component =====");
+            }
+            
             if (animationManager != null && !string.IsNullOrEmpty(screenId) && !string.IsNullOrEmpty(comp.Id))
             {
                 var c = control;
@@ -315,10 +371,16 @@ public static class ScreenViewBuilder
         n.TagName = d.TagName;
         if (tagManager != null && !string.IsNullOrEmpty(d.TagName))
         {
-            n.SetValue(tagManager.GetTagValue(d.TagName));
+            var tagValue = tagManager.GetTagValue(d.TagName);
+            n.SetValue(tagValue ?? 0); // Ensure we always set a value, even if tag is null
             var sub = tagManager.Subscribe(d.TagName, (_, value, _) =>
-                Avalonia.Threading.Dispatcher.UIThread.Post(() => n.SetValue(value)));
+                Avalonia.Threading.Dispatcher.UIThread.Post(() => n.SetValue(value ?? 0)));
             subs.Add(sub);
+        }
+        else
+        {
+            // No tag assigned - show default value of 0 so component is visible
+            n.SetValue(0);
         }
         return n;
     }
@@ -509,44 +571,94 @@ public static class ScreenViewBuilder
 
     private static RuntimeSVGView CreateSVGView(ComponentDescriptor d, Func<string, string?>? resolveSvgPath)
     {
+        System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] ===== Creating SVG View Component =====");
+        System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Component ID: {d.Id}, Type: {d.ComponentType}, Visible: {d.Visible}");
+        
         var s = new RuntimeSVGView();
         s.ApplyDescriptor(d);
         
-        // Get SVG path from properties and resolve it
+        // Get SVG path from properties - runtime simplifies: just use filename and look in data/svg
         var svgPath = GetPropString(d, "svgPath", "");
-        if (!string.IsNullOrEmpty(svgPath))
+        System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] SVG path from descriptor: '{svgPath}'");
+        
+        if (string.IsNullOrEmpty(svgPath))
         {
-            string? resolvedPath = null;
-            if (resolveSvgPath != null)
+            System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] WARNING: SVG path is empty or null - component will show placeholder");
+            return s;
+        }
+        
+        // Extract just the filename (handle both full paths and just filenames)
+        var fileName = Path.GetFileName(svgPath);
+        System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Extracted filename: '{fileName}'");
+        
+        // Runtime always looks in data/svg folder relative to executable
+        var exeDir = Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location) ?? "";
+        var dataSvgDir = Path.Combine(exeDir, "data", "svg");
+        System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Executable directory: '{exeDir}'");
+        System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Data/SVG directory: '{dataSvgDir}'");
+        System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Data/SVG directory exists: {Directory.Exists(dataSvgDir)}");
+        
+        // First try direct path in data/svg
+        var dataSvgPath = Path.Combine(dataSvgDir, fileName);
+        System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Checking direct path: '{dataSvgPath}'");
+        System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Direct path exists: {File.Exists(dataSvgPath)}");
+        
+        if (File.Exists(dataSvgPath))
+        {
+            System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] ✓ Found SVG at direct path: '{dataSvgPath}'");
+            System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Calling SetSvgPath with: '{dataSvgPath}'");
+            s.SetSvgPath(dataSvgPath);
+        }
+        else
+        {
+            // Search recursively in data/svg subfolders (e.g., Containers/)
+            System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Direct path not found, searching subfolders...");
+            string? foundPath = null;
+            try
             {
-                resolvedPath = resolveSvgPath(svgPath);
-                if (resolvedPath != null)
+                if (Directory.Exists(dataSvgDir))
                 {
-                    System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Resolved SVG path '{svgPath}' to '{resolvedPath}'");
+                    System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Searching recursively in: '{dataSvgDir}'");
+                    var allSvgFiles = Directory.GetFiles(dataSvgDir, fileName, SearchOption.AllDirectories);
+                    System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Found {allSvgFiles.Length} file(s) matching '{fileName}'");
+                    
+                    foreach (var file in allSvgFiles)
+                    {
+                        System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder]   - Found: '{file}'");
+                    }
+                    
+                    if (allSvgFiles.Length > 0)
+                    {
+                        foundPath = allSvgFiles[0];
+                        System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] ✓ Using first match: '{foundPath}'");
+                    }
                 }
                 else
                 {
-                    System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Failed to resolve SVG path '{svgPath}'");
+                    System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] ERROR: Data/SVG directory does not exist: '{dataSvgDir}'");
                 }
             }
-            
-            if (!string.IsNullOrEmpty(resolvedPath))
+            catch (Exception ex)
             {
-                // Store the resolved path - it will be loaded when control size is set
-                s.SetSvgPath(resolvedPath);
+                System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] ERROR: Exception while searching for SVG '{fileName}': {ex.Message}");
+                System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Exception type: {ex.GetType().Name}");
+                System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] StackTrace: {ex.StackTrace}");
             }
-            else if (File.Exists(svgPath))
+            
+            if (foundPath != null)
             {
-                // Try direct path if resolver not available or returned null
-                System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Using direct SVG path '{svgPath}'");
-                s.SetSvgPath(svgPath);
+                System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Calling SetSvgPath with found path: '{foundPath}'");
+                s.SetSvgPath(foundPath);
             }
             else
             {
-                System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] SVG path not found: '{svgPath}'");
+                System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] ✗ SVG file not found anywhere: '{fileName}'");
+                System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder]   Checked direct path: '{dataSvgPath}'");
+                System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder]   Searched recursively in: '{dataSvgDir}'");
             }
         }
         
+        System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] ===== Finished Creating SVG View Component =====");
         return s;
     }
 

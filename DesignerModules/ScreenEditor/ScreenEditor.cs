@@ -727,7 +727,7 @@ public partial class ScreenEditor : UserControl
                         Size = svgSize,
                         SvgPath = svgPath, // Store relative path from svg/ directory
                         BorderColor = Color.Gray,
-                        BorderWidth = 1,
+                        BorderWidth = 0,
                         Visible = true,
                         Enabled = true
                     };

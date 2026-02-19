@@ -142,6 +142,21 @@ public sealed class AnimationManager
                                     if (anim.TryGetProperty("speed", out var speed))
                                         config["speed"] = speed.GetDouble();
                                     
+                                    // Load color map for ColorChange animations
+                                    if (animType == AnimationType.ColorChange && anim.TryGetProperty("colorMap", out var colorMapProp) && colorMapProp.ValueKind == JsonValueKind.Object)
+                                    {
+                                        var colorMap = new Dictionary<string, string>();
+                                        foreach (var prop in colorMapProp.EnumerateObject())
+                                        {
+                                            colorMap[prop.Name] = prop.Value.GetString() ?? "#FF0000";
+                                        }
+                                        if (colorMap.Count > 0)
+                                        {
+                                            config["colorMap"] = colorMap;
+                                            System.Diagnostics.Trace.WriteLine($"[AnimationManager] Loaded colorMap for {tagName}: {colorMap.Count} entries");
+                                        }
+                                    }
+                                    
                                     _rules.Add(new AnimationRule
                                     {
                                         ScreenId = screenId,
@@ -232,9 +247,84 @@ public sealed class AnimationManager
                     state.Visible = bitValue ? IsTrue(value) : !IsTrue(value);
                     break;
                 case AnimationType.ColorChange:
-                    var color = rule.Config != null && rule.Config.TryGetValue("color", out var c) ? c.ToString() : "#00FF00";
-                    var colorBitValue = rule.Config != null && rule.Config.TryGetValue("bitValue", out var cbv) && cbv is bool cb ? cb : true;
-                    state.BackgroundColor = (colorBitValue ? IsTrue(value) : !IsTrue(value)) ? color : null;
+                    // Check if colorMap exists (new table-based approach)
+                    Dictionary<string, string>? colorMap = null;
+                    if (rule.Config != null && rule.Config.TryGetValue("colorMap", out var cm))
+                    {
+                        // Handle both Dictionary<string, string> and object that can be cast
+                        if (cm is Dictionary<string, string> dict)
+                        {
+                            colorMap = dict;
+                            System.Diagnostics.Trace.WriteLine($"[AnimationManager] ColorChange: Found colorMap (direct), {dict.Count} entries");
+                        }
+                        else if (cm is System.Collections.IDictionary idict)
+                        {
+                            // Convert IDictionary to Dictionary<string, string>
+                            colorMap = new Dictionary<string, string>();
+                            foreach (System.Collections.DictionaryEntry entry in idict)
+                            {
+                                string mapKey = entry.Key?.ToString() ?? "";
+                                string mapVal = entry.Value?.ToString() ?? "#FF0000";
+                                if (!string.IsNullOrEmpty(mapKey))
+                                    colorMap[mapKey] = mapVal;
+                            }
+                            System.Diagnostics.Trace.WriteLine($"[AnimationManager] ColorChange: Converted IDictionary to colorMap, {colorMap.Count} entries");
+                        }
+                        else
+                        {
+                            System.Diagnostics.Trace.WriteLine($"[AnimationManager] ColorChange: colorMap found but wrong type: {cm?.GetType().Name ?? "null"}");
+                        }
+                    }
+                    
+                    if (colorMap != null && colorMap.Count > 0)
+                    {
+                        // Convert value to string for lookup (boolean true->"1", false->"0")
+                        string valueKey = ConvertValueToKey(value);
+                        System.Diagnostics.Trace.WriteLine($"[AnimationManager] ColorChange: Tag '{rule.TagName}' value '{value}' -> key '{valueKey}'");
+                        
+                        // Try exact match first
+                        if (colorMap.TryGetValue(valueKey, out var mappedColor))
+                        {
+                            state.BackgroundColor = mappedColor;
+                            System.Diagnostics.Trace.WriteLine($"[AnimationManager] ColorChange: Exact match found: '{valueKey}' -> '{mappedColor}'");
+                        }
+                        else
+                        {
+                            // Try range matching for numeric values (e.g., "< 0", "0-50", "> 100")
+                            var numericValue = ValueToStubDouble(value, 0);
+                            string? matchedKey = null;
+                            foreach (var rangeKey in colorMap.Keys)
+                            {
+                                if (MatchesRange(rangeKey, numericValue))
+                                {
+                                    matchedKey = rangeKey;
+                                    break;
+                                }
+                            }
+                            if (matchedKey != null && colorMap.TryGetValue(matchedKey, out var rangeColor))
+                            {
+                                state.BackgroundColor = rangeColor;
+                                System.Diagnostics.Trace.WriteLine($"[AnimationManager] ColorChange: Range match found: '{matchedKey}' -> '{rangeColor}'");
+                            }
+                            else if (colorMap.TryGetValue("default", out var defaultColor))
+                            {
+                                state.BackgroundColor = defaultColor;
+                                System.Diagnostics.Trace.WriteLine($"[AnimationManager] ColorChange: Using default color: '{defaultColor}'");
+                            }
+                            else
+                            {
+                                System.Diagnostics.Trace.WriteLine($"[AnimationManager] ColorChange: No match found for key '{valueKey}', available keys: {string.Join(", ", colorMap.Keys)}");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Legacy single color approach
+                        var color = rule.Config != null && rule.Config.TryGetValue("color", out var c) ? c.ToString() : "#00FF00";
+                        var colorBitValue = rule.Config != null && rule.Config.TryGetValue("bitValue", out var cbv) && cbv is bool cb ? cb : true;
+                        state.BackgroundColor = (colorBitValue ? IsTrue(value) : !IsTrue(value)) ? color : null;
+                        System.Diagnostics.Trace.WriteLine($"[AnimationManager] ColorChange: Using legacy approach, color: '{state.BackgroundColor}'");
+                    }
                     break;
                 case AnimationType.Flashing:
                     var flashColor = rule.Config != null && rule.Config.TryGetValue("color", out var fc) ? fc.ToString() : "#FF0000";
@@ -296,6 +386,59 @@ public sealed class AnimationManager
         if (value is double d) return d;
         if (value is float f) return f;
         return double.TryParse(value.ToString(), out var n) ? n : defaultVal;
+    }
+    
+    /// <summary>Converts a tag value to a string key for color map lookup. Boolean true->"1", false->"0".</summary>
+    private static string ConvertValueToKey(object? value)
+    {
+        if (value == null) return "0";
+        if (value is bool b) return b ? "1" : "0";
+        if (value is int i) return i.ToString();
+        if (value is double d) return d.ToString();
+        if (value is float f) return f.ToString();
+        var str = value.ToString()?.Trim() ?? "";
+        // Handle boolean strings
+        if (str.Equals("true", StringComparison.OrdinalIgnoreCase)) return "1";
+        if (str.Equals("false", StringComparison.OrdinalIgnoreCase)) return "0";
+        return str;
+    }
+    
+    /// <summary>Checks if a numeric value matches a range pattern (e.g., "< 0", "0-50", "> 100").</summary>
+    private static bool MatchesRange(string rangeKey, double value)
+    {
+        if (string.IsNullOrEmpty(rangeKey)) return false;
+        
+        // Handle "< value" pattern
+        if (rangeKey.StartsWith("<", StringComparison.Ordinal))
+        {
+            var numStr = rangeKey.Substring(1).Trim();
+            if (double.TryParse(numStr, out var threshold))
+                return value < threshold;
+        }
+        // Handle "> value" pattern
+        else if (rangeKey.StartsWith(">", StringComparison.Ordinal))
+        {
+            var numStr = rangeKey.Substring(1).Trim();
+            if (double.TryParse(numStr, out var threshold))
+                return value > threshold;
+        }
+        // Handle "min-max" pattern
+        else if (rangeKey.Contains("-"))
+        {
+            var parts = rangeKey.Split('-');
+            if (parts.Length == 2)
+            {
+                if (double.TryParse(parts[0].Trim(), out var min) && double.TryParse(parts[1].Trim(), out var max))
+                    return value >= min && value <= max;
+            }
+        }
+        // Exact match
+        else if (double.TryParse(rangeKey, out var exact))
+        {
+            return Math.Abs(value - exact) < 0.0001; // Small epsilon for floating point comparison
+        }
+        
+        return false;
     }
 
     /// <summary>Subscribe to animation state for a component. Callback is invoked on the thread that calls NotifyState or OnTagValueChanged; host should marshal to UI thread.</summary>

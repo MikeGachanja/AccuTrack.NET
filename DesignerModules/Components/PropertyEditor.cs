@@ -65,6 +65,12 @@ public partial class PropertyEditor : UserControl
     private CheckBox? _animationEnabledCheckBox;
     private AnimationConfig? _currentEditingAnimation;
     private List<AnimationConfig> _componentAnimations = new List<AnimationConfig>();
+    
+    // ColorChange animation table
+    private DataGridView? _colorMapTable;
+    private Button? _addColorMapRowButton;
+    private Button? _removeColorMapRowButton;
+    private Panel? _colorMapPanel;
 
     public event EventHandler? RequestAutoSave;
 
@@ -1698,11 +1704,13 @@ public partial class PropertyEditor : UserControl
         layout.Controls.Add(listGroup, 0, 0);
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 40F));
 
-        // Animation properties group
+        // Animation properties group (scrollable)
         var propsGroup = new GroupBox { Text = "Animation Properties", Dock = DockStyle.Fill };
-        var propsLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Padding = new Padding(5) };
+        var propsScrollPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        var propsLayout = new TableLayoutPanel { ColumnCount = 2, Padding = new Padding(5), AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink };
         propsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         propsLayout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        propsScrollPanel.Controls.Add(propsLayout);
 
         int propRow = 0;
 
@@ -1718,6 +1726,14 @@ public partial class PropertyEditor : UserControl
         // Tag selector
         propsLayout.Controls.Add(new Label { Text = "Tag:", AutoSize = true }, 0, propRow);
         _animationTagSelector = new TagSelectorWidget { Dock = DockStyle.Fill, Height = 25 };
+        _animationTagSelector.TagSelected += (s, tagName) => 
+        {
+            // When tag changes, update color map table if ColorChange is selected
+            if (_animationTypeCombo?.SelectedItem?.ToString() == "ColorChange")
+            {
+                UpdateColorMapTable();
+            }
+        };
         propsLayout.Controls.Add(_animationTagSelector, 1, propRow);
         propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         propRow++;
@@ -1729,7 +1745,7 @@ public partial class PropertyEditor : UserControl
         propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         propRow++;
 
-        // Color (for ColorChange/Flashing)
+        // Color (for Flashing only - ColorChange uses table below)
         propsLayout.Controls.Add(new Label { Text = "Color:", AutoSize = true }, 0, propRow);
         _animationColorButton = new Button { Text = "", Width = 50, Height = 25 };
         UpdateColorButton(_animationColorButton, Color.Red);
@@ -1745,6 +1761,57 @@ public partial class PropertyEditor : UserControl
         };
         propsLayout.Controls.Add(_animationColorButton, 1, propRow);
         propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        propRow++;
+
+        // Color Map Table (for ColorChange animations)
+        _colorMapPanel = new Panel { Dock = DockStyle.Fill, Height = 200, Visible = false };
+        var colorMapLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(0, 5, 0, 0) };
+        
+        var colorMapLabel = new Label { Text = "Value to Color Mapping:", AutoSize = true, Dock = DockStyle.Top };
+        colorMapLayout.Controls.Add(colorMapLabel, 0, 0);
+        colorMapLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        
+        _colorMapTable = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            AllowUserToAddRows = true,
+            AllowUserToDeleteRows = true,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = false,
+            ReadOnly = false,
+            ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize
+        };
+        
+        // Add columns: Value/Range, Color
+        _colorMapTable.Columns.Add("ValueRange", "Value/Range");
+        _colorMapTable.Columns.Add("Color", "Color");
+        _colorMapTable.Columns[0].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+        _colorMapTable.Columns[1].Width = 100;
+        
+        // Make color column show color picker
+        _colorMapTable.CellClick += OnColorMapCellClick;
+        _colorMapTable.CellFormatting += OnColorMapCellFormatting;
+        
+        colorMapLayout.Controls.Add(_colorMapTable, 0, 1);
+        colorMapLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+        
+        // Buttons for managing color map rows
+        var colorMapButtonPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Height = 30 };
+        _addColorMapRowButton = new Button { Text = "Add Row", Width = 80 };
+        _addColorMapRowButton.Click += OnAddColorMapRow;
+        _removeColorMapRowButton = new Button { Text = "Remove Row", Width = 90 };
+        _removeColorMapRowButton.Click += OnRemoveColorMapRow;
+        colorMapButtonPanel.Controls.Add(_addColorMapRowButton);
+        colorMapButtonPanel.Controls.Add(_removeColorMapRowButton);
+        
+        colorMapLayout.Controls.Add(colorMapButtonPanel, 0, 2);
+        colorMapLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 35F));
+        
+        _colorMapPanel.Controls.Add(colorMapLayout);
+        propsLayout.Controls.Add(_colorMapPanel, 0, propRow);
+        propsLayout.SetColumnSpan(_colorMapPanel, 2);
+        propsLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 240F));
         propRow++;
 
         // Frequency (for Flashing)
@@ -1767,7 +1834,7 @@ public partial class PropertyEditor : UserControl
         propsLayout.SetColumnSpan(_animationEnabledCheckBox, 2);
         propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        propsGroup.Controls.Add(propsLayout);
+        propsGroup.Controls.Add(propsScrollPanel);
         layout.Controls.Add(propsGroup, 0, 1);
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 60F));
 
@@ -1930,7 +1997,28 @@ public partial class PropertyEditor : UserControl
             _currentEditingAnimation.BitValue = _animationBitValueCheckBox.Checked;
         }
 
-        if (_animationColorButton != null)
+        // Handle color - for Flashing use button, for ColorChange use table
+        if (_currentEditingAnimation.Type == AnimationType.ColorChange && _colorMapTable != null)
+        {
+            // Save color map from table
+            _currentEditingAnimation.ColorMap = new Dictionary<string, string>();
+            foreach (DataGridViewRow row in _colorMapTable.Rows)
+            {
+                if (row.IsNewRow) continue;
+                string? valueRange = row.Cells[0].Value?.ToString();
+                string? color = row.Cells[1].Value?.ToString();
+                if (!string.IsNullOrEmpty(valueRange) && !string.IsNullOrEmpty(color))
+                {
+                    _currentEditingAnimation.ColorMap[valueRange] = color;
+                }
+            }
+            // Keep legacy Color property for backward compatibility (use first color or default)
+            if (_currentEditingAnimation.ColorMap.Count > 0)
+            {
+                _currentEditingAnimation.Color = _currentEditingAnimation.ColorMap.Values.First();
+            }
+        }
+        else if (_animationColorButton != null)
         {
             _currentEditingAnimation.Color = ColorToHex(_animationColorButton.BackColor);
         }
@@ -1948,6 +2036,28 @@ public partial class PropertyEditor : UserControl
         if (_animationEnabledCheckBox != null)
         {
             _currentEditingAnimation.Enabled = _animationEnabledCheckBox.Checked;
+        }
+        
+        // Save color map from table if ColorChange animation
+        if (_currentEditingAnimation.Type == AnimationType.ColorChange && _colorMapTable != null)
+        {
+            _currentEditingAnimation.ColorMap = new Dictionary<string, string>();
+            foreach (DataGridViewRow row in _colorMapTable.Rows)
+            {
+                if (row.IsNewRow) continue;
+                string? valueRange = row.Cells[0].Value?.ToString();
+                string? color = row.Cells[1].Value?.ToString();
+                if (!string.IsNullOrEmpty(valueRange) && !string.IsNullOrEmpty(color))
+                {
+                    _currentEditingAnimation.ColorMap[valueRange] = color;
+                }
+            }
+        }
+        else if (_animationColorButton != null && (_currentEditingAnimation.Type == AnimationType.Flashing || 
+                  (_currentEditingAnimation.Type == AnimationType.ColorChange && (_currentEditingAnimation.ColorMap == null || _currentEditingAnimation.ColorMap.Count == 0))))
+        {
+            // For Flashing or legacy ColorChange, use single color button
+            _currentEditingAnimation.Color = ColorTranslator.ToHtml(_animationColorButton.BackColor);
         }
 
         // Update list if name changed
@@ -2021,6 +2131,24 @@ public partial class PropertyEditor : UserControl
         }
 
         OnAnimationTypeChanged(null, EventArgs.Empty);
+        
+        // Load color map into table if ColorChange animation
+        if (config.Type == AnimationType.ColorChange && _colorMapTable != null)
+        {
+            _colorMapTable.Rows.Clear();
+            if (config.ColorMap != null && config.ColorMap.Count > 0)
+            {
+                foreach (var kvp in config.ColorMap)
+                {
+                    _colorMapTable.Rows.Add(kvp.Key, kvp.Value);
+                }
+            }
+            else
+            {
+                // No color map, populate based on tag type
+                UpdateColorMapTable();
+            }
+        }
     }
     
     private void OnAnimationTypeChanged(object? sender, EventArgs e)
@@ -2036,11 +2164,166 @@ public partial class PropertyEditor : UserControl
         if (_animationBitValueCheckBox != null)
             _animationBitValueCheckBox.Visible = isVisibility;
         if (_animationColorButton != null)
-            _animationColorButton.Visible = isColorChange || isFlashing;
+            _animationColorButton.Visible = isFlashing; // Only for Flashing, not ColorChange
         if (_animationFrequencyNumeric != null)
             _animationFrequencyNumeric.Visible = isFlashing;
         if (_animationSpeedNumeric != null)
             _animationSpeedNumeric.Visible = isTranslation;
+        if (_colorMapPanel != null)
+            _colorMapPanel.Visible = isColorChange;
+        
+        // When ColorChange is selected, populate table based on tag type
+        if (isColorChange)
+        {
+            UpdateColorMapTable();
+        }
+    }
+    
+    private void UpdateColorMapTable()
+    {
+        if (_colorMapTable == null || _animationTagSelector == null)
+            return;
+        
+        _colorMapTable.Rows.Clear();
+        
+        // Get selected tag to determine type
+        string tagName = _animationTagSelector?.SelectedTagName() ?? string.Empty;
+        Tag? selectedTag = GetTagByName(tagName);
+        
+        // Determine if tag is boolean
+        bool isBoolean = false;
+        if (selectedTag != null)
+        {
+            string? dataType = selectedTag.DataType;
+            isBoolean = dataType != null && (dataType.Equals("Bit", StringComparison.OrdinalIgnoreCase) || 
+                                             dataType.Equals("Boolean", StringComparison.OrdinalIgnoreCase) ||
+                                             dataType.Equals("Bool", StringComparison.OrdinalIgnoreCase));
+        }
+        
+        // Load existing color map from current animation if available (takes precedence)
+        if (_currentEditingAnimation != null && _currentEditingAnimation.ColorMap != null && _currentEditingAnimation.ColorMap.Count > 0)
+        {
+            foreach (var kvp in _currentEditingAnimation.ColorMap)
+            {
+                // Convert legacy "true"/"false" to "1"/"0" for boolean tags
+                string key = kvp.Key;
+                if (isBoolean)
+                {
+                    if (key.Equals("true", StringComparison.OrdinalIgnoreCase))
+                        key = "1";
+                    else if (key.Equals("false", StringComparison.OrdinalIgnoreCase))
+                        key = "0";
+                }
+                _colorMapTable.Rows.Add(key, kvp.Value);
+            }
+        }
+        else if (selectedTag != null)
+        {
+            // No existing color map, populate defaults based on tag type
+            if (isBoolean)
+            {
+                // For boolean tags, use 0 and 1 (runtime converts true->1, false->0)
+                _colorMapTable.Rows.Add("1", "#00FF00"); // Green for true (1)
+                _colorMapTable.Rows.Add("0", "#FF0000"); // Red for false (0)
+            }
+            else
+            {
+                // For numeric tags, add default range rows
+                _colorMapTable.Rows.Add("< 0", "#FF0000"); // Red for negative
+                _colorMapTable.Rows.Add("0-50", "#FFFF00"); // Yellow for low
+                _colorMapTable.Rows.Add("50-100", "#00FF00"); // Green for medium
+                _colorMapTable.Rows.Add("> 100", "#0000FF"); // Blue for high
+            }
+        }
+        else
+        {
+            // No tag selected, add default rows
+            _colorMapTable.Rows.Add("default", "#FF0000");
+        }
+    }
+    
+    private Tag? GetTagByName(string tagName)
+    {
+        if (string.IsNullOrEmpty(tagName) || _availableTagTables == null)
+            return null;
+        
+        foreach (var table in _availableTagTables)
+        {
+            if (table == null) continue;
+            var tags = table.GetTags();
+            foreach (var tag in tags)
+            {
+                if (tag.Name == tagName)
+                    return tag;
+            }
+        }
+        return null;
+    }
+    
+    private void OnColorMapCellClick(object? sender, DataGridViewCellEventArgs e)
+    {
+        if (_colorMapTable == null || e.RowIndex < 0 || e.ColumnIndex != 1)
+            return;
+        
+        // Color column clicked - show color picker
+        var cell = _colorMapTable.Rows[e.RowIndex].Cells[1];
+        string currentColor = cell.Value?.ToString() ?? "#FF0000";
+        Color currentColorObj = ParseColor(currentColor);
+        
+        using (var colorDialog = new ColorDialog { Color = currentColorObj })
+        {
+            if (colorDialog.ShowDialog() == DialogResult.OK)
+            {
+                string hexColor = ColorTranslator.ToHtml(colorDialog.Color);
+                cell.Value = hexColor;
+                _colorMapTable.InvalidateCell(e.ColumnIndex, e.RowIndex);
+            }
+        }
+    }
+    
+    private void OnColorMapCellFormatting(object? sender, DataGridViewCellFormattingEventArgs e)
+    {
+        if (_colorMapTable == null || e.ColumnIndex != 1 || e.RowIndex < 0)
+            return;
+        
+        // Format color column to show color preview
+        string? colorHex = e.Value?.ToString();
+        if (!string.IsNullOrEmpty(colorHex))
+        {
+            try
+            {
+                Color color = ParseColor(colorHex);
+                e.CellStyle.BackColor = color;
+                e.CellStyle.ForeColor = GetContrastColor(color);
+                e.Value = colorHex; // Show hex code as text
+                e.FormattingApplied = true;
+            }
+            catch
+            {
+                // Invalid color, use default
+                e.CellStyle.BackColor = Color.White;
+                e.CellStyle.ForeColor = Color.Black;
+            }
+        }
+    }
+    
+    private void OnAddColorMapRow(object? sender, EventArgs e)
+    {
+        if (_colorMapTable == null)
+            return;
+        
+        _colorMapTable.Rows.Add("new", "#FF0000");
+    }
+    
+    private void OnRemoveColorMapRow(object? sender, EventArgs e)
+    {
+        if (_colorMapTable == null || _colorMapTable.SelectedRows.Count == 0)
+            return;
+        
+        foreach (DataGridViewRow row in _colorMapTable.SelectedRows)
+        {
+            _colorMapTable.Rows.Remove(row);
+        }
     }
     
     private void SaveAnimationsToComponent()

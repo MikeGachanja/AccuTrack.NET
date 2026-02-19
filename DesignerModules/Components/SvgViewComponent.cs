@@ -16,7 +16,7 @@ public class SvgViewComponent : BaseComponent
 
     public string SvgPath { get; set; } = string.Empty;
     public Color BorderColor { get; set; } = Color.Gray;
-    public int BorderWidth { get; set; } = 1;
+    public int BorderWidth { get; set; } = 0;
 
     /// <summary>
     /// Gets the base SVG directory path (executable directory/svg/).
@@ -47,9 +47,8 @@ public class SvgViewComponent : BaseComponent
     {
         var rect = Bounds;
         
-        // Draw background
-        var backBrush = new SolidBrush(Color.White);
-        g.FillRectangle(backBrush, rect);
+        // Draw background (transparent by default)
+        // No background fill - SVG will render on transparent background
         
         // Try to render the actual SVG file
         bool svgRendered = false;
@@ -153,8 +152,6 @@ public class SvgViewComponent : BaseComponent
         var borderPen = new Pen(isSelected ? Color.Blue : BorderColor, BorderWidth);
         g.DrawRectangle(borderPen, rect);
         borderPen.Dispose();
-
-        backBrush.Dispose();
     }
 
     public override BaseComponent Clone()
@@ -192,6 +189,6 @@ public class SvgViewComponent : BaseComponent
         if (ColorTranslator.FromHtml(json["borderColor"]?.ToString() ?? "#808080") is Color borderColor)
             BorderColor = borderColor;
         
-        BorderWidth = json["borderWidth"]?.ToObject<int>() ?? 1;
+        BorderWidth = json["borderWidth"]?.ToObject<int>() ?? 0;
     }
 }

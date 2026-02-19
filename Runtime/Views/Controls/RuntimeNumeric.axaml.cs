@@ -1,6 +1,7 @@
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Runtime;
 using Runtime.Modules.Screens;
 
 namespace Runtime.Views.Controls;
@@ -13,6 +14,9 @@ public partial class RuntimeNumeric : UserControl
     public RuntimeNumeric()
     {
         InitializeComponent();
+        // Ensure component is visible by default
+        IsVisible = true;
+        Opacity = 1.0;
     }
 
     public void ApplyDescriptor(ComponentDescriptor d)
@@ -26,9 +30,9 @@ public partial class RuntimeNumeric : UserControl
 
         // Designer colors and fonts (labelColor, valueColor, labelFontSize, valueFontSize)
         var labelColor = GetProperty(d, "labelColor", "#333333");
-        LabelText.Foreground = ParseBrush(labelColor);
+        LabelText.Foreground = ColorParser.ParseBrush(labelColor);
         var valueColor = GetProperty(d, "valueColor", "#0066cc");
-        ValueText.Foreground = ParseBrush(valueColor);
+        ValueText.Foreground = ColorParser.ParseBrush(valueColor);
 
         // Font family and style from designer (different fonts per component)
         var labelFont = GetProperty(d, "labelFont", "Arial");
@@ -51,24 +55,19 @@ public partial class RuntimeNumeric : UserControl
 
         IsVisible = d.Visible;
         IsEnabled = d.Enabled;
-    }
-
-    private static IBrush ParseBrush(string hex)
-    {
-        if (string.IsNullOrEmpty(hex)) return new SolidColorBrush(Colors.Black);
-        if (!hex.StartsWith("#")) hex = "#" + hex;
-        if (hex.Length >= 7)
-        {
-            try
-            {
-                var r = System.Convert.ToInt32(hex.Substring(1, 2), 16);
-                var g = System.Convert.ToInt32(hex.Substring(3, 2), 16);
-                var b = System.Convert.ToInt32(hex.Substring(5, 2), 16);
-                return new SolidColorBrush(Color.FromRgb((byte)r, (byte)g, (byte)b));
-            }
-            catch { }
-        }
-        return new SolidColorBrush(Colors.Black);
+        Opacity = 1.0; // Ensure full opacity
+        
+        // Ensure value text is visible and shows initial value (0) if SetValue hasn't been called yet
+        ValueText.IsVisible = true;
+        ValueText.Opacity = 1.0;
+        if (string.IsNullOrEmpty(ValueText.Text))
+            ValueText.Text = "0";
+        
+        // Ensure the component has minimum size so it's always visible (even if descriptor has 0 size)
+        MinWidth = Math.Max(50, d.Width > 0 ? d.Width : 100);
+        MinHeight = Math.Max(20, d.Height > 0 ? d.Height : 30);
+        if (d.Width <= 0) Width = 100;
+        if (d.Height <= 0) Height = 30;
     }
 
     private static double GetPropDouble(ComponentDescriptor d, string key, double fallback)
@@ -87,10 +86,13 @@ public partial class RuntimeNumeric : UserControl
         else if (value is double d) v = d;
         else if (value is float f) v = f;
         else if (value != null && double.TryParse(value.ToString(), out var parsed)) v = parsed;
+        // Always display the value (including 0) so component is visible
         var numStr = _decimalPlaces > 0
             ? string.Format(System.Globalization.CultureInfo.InvariantCulture, $"{{0:F{_decimalPlaces}}}", v)
             : v.ToString(System.Globalization.CultureInfo.InvariantCulture);
         ValueText.Text = numStr + _suffix;
+        // Ensure ValueText is always visible when component is visible
+        ValueText.IsVisible = true;
     }
 
     public string? TagName { get; set; }

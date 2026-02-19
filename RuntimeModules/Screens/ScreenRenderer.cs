@@ -106,7 +106,8 @@ public static class ScreenRenderer
                 "onColor", "offColor", "faultColor", "warningColor", "errorColor", "color", "backgroundColor", "running", "faulted", "state", "direction", "shape",
                 "labelColor", "valueColor", "labelFont", "labelFontSize", "labelFontStyle", "valueFont", "valueFontSize", "valueFontStyle", "decimalPlaces", "suffix",
                 "lineColor", "lineWidth", "style", "startPoint", "endPoint", "filled",
-                "headerFont", "headerFontSize", "headerFontStyle", "rowFont", "rowFontSize", "rowFontStyle", "title", "format"
+                "headerFont", "headerFontSize", "headerFontStyle", "rowFont", "rowFontSize", "rowFontStyle", "title", "format",
+                "svgPath"
             };
             foreach (var propName in rootLevelProperties)
             {
@@ -121,10 +122,32 @@ public static class ScreenRenderer
                         _ => rootProp.ToString()
                     };
                     dict[propName] = val;
+                    
+                    // Log svgPath parsing for debugging
+                    if (propName == "svgPath" && comp.ComponentType == "SVGView")
+                    {
+                        System.Diagnostics.Trace.WriteLine($"[ScreenRenderer] Parsed svgPath for {comp.ComponentType} (ID: {comp.Id}): '{val}'");
+                    }
                 }
             }
             
             comp.Properties = dict;
+            
+            // Log all properties for SVG components to help debug
+            if (comp.ComponentType == "SVGView")
+            {
+                System.Diagnostics.Trace.WriteLine($"[ScreenRenderer] SVGView component (ID: {comp.Id}) properties count: {dict.Count}");
+                if (dict.ContainsKey("svgPath"))
+                {
+                    System.Diagnostics.Trace.WriteLine($"[ScreenRenderer] ✓ svgPath found in properties: '{dict["svgPath"]}'");
+                }
+                else
+                {
+                    System.Diagnostics.Trace.WriteLine($"[ScreenRenderer] ✗ svgPath NOT found in properties");
+                    System.Diagnostics.Trace.WriteLine($"[ScreenRenderer] Available properties: {string.Join(", ", dict.Keys)}");
+                }
+            }
+            
             return comp;
         }
         catch
