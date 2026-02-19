@@ -1828,11 +1828,12 @@ public partial class PropertyEditor : UserControl
         propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         propRow++;
 
-        // Enabled
-        _animationEnabledCheckBox = new CheckBox { Text = "Enabled", Checked = true };
+        // Enabled (always visible for all animation types)
+        _animationEnabledCheckBox = new CheckBox { Text = "Enabled", Checked = true, Visible = true };
         propsLayout.Controls.Add(_animationEnabledCheckBox, 0, propRow);
         propsLayout.SetColumnSpan(_animationEnabledCheckBox, 2);
         propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        propRow++;
 
         propsGroup.Controls.Add(propsScrollPanel);
         layout.Controls.Add(propsGroup, 0, 1);
@@ -2171,6 +2172,8 @@ public partial class PropertyEditor : UserControl
             _animationSpeedNumeric.Visible = isTranslation;
         if (_colorMapPanel != null)
             _colorMapPanel.Visible = isColorChange;
+        if (_animationEnabledCheckBox != null)
+            _animationEnabledCheckBox.Visible = true; // Always visible for all animation types
         
         // When ColorChange is selected, populate table based on tag type
         if (isColorChange)

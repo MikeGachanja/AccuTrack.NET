@@ -121,11 +121,17 @@ public sealed class AnimationManager
                                 {
                                     if (anim.ValueKind != JsonValueKind.Object) continue;
                                     
-                                    var enabled = anim.TryGetProperty("enabled", out var en) ? en.GetBoolean() : true;
-                                    if (!enabled) continue;
-                                    
+                                    // Get basic properties first (needed for logging even if disabled)
                                     var typeStr = anim.TryGetProperty("type", out var t) ? t.GetString() ?? "" : "";
                                     var tagName = anim.TryGetProperty("tagName", out var tag) ? tag.GetString() ?? "" : "";
+                                    var enabled = anim.TryGetProperty("enabled", out var en) ? en.GetBoolean() : true;
+                                    
+                                    if (!enabled)
+                                    {
+                                        string animName = anim.TryGetProperty("name", out var n) ? (n.GetString() ?? "unnamed") : "unnamed";
+                                        System.Diagnostics.Trace.WriteLine($"[AnimationManager] Skipping disabled animation '{animName}' for tag '{tagName}'");
+                                        continue;
+                                    }
                                     
                                     if (string.IsNullOrEmpty(typeStr) || string.IsNullOrEmpty(tagName)) continue;
                                     
@@ -148,7 +154,10 @@ public sealed class AnimationManager
                                         var colorMap = new Dictionary<string, string>();
                                         foreach (var prop in colorMapProp.EnumerateObject())
                                         {
-                                            colorMap[prop.Name] = prop.Value.GetString() ?? "#FF0000";
+                                            string colorValue = prop.Value.GetString() ?? "#FF0000";
+                                            // Normalize named colors to hex (e.g., "Red" -> "#FF0000")
+                                            colorValue = NormalizeColorName(colorValue);
+                                            colorMap[prop.Name] = colorValue;
                                         }
                                         if (colorMap.Count > 0)
                                         {
@@ -401,6 +410,37 @@ public sealed class AnimationManager
         if (str.Equals("true", StringComparison.OrdinalIgnoreCase)) return "1";
         if (str.Equals("false", StringComparison.OrdinalIgnoreCase)) return "0";
         return str;
+    }
+    
+    /// <summary>Normalizes color names to hex codes (e.g., "Red" -> "#FF0000").</summary>
+    private static string NormalizeColorName(string color)
+    {
+        if (string.IsNullOrWhiteSpace(color)) return "#FF0000";
+        var trimmed = color.Trim();
+        
+        // If it's already hex, return as-is
+        if (trimmed.StartsWith("#")) return trimmed;
+        
+        // Convert named colors to hex
+        return trimmed.ToLowerInvariant() switch
+        {
+            "black" => "#000000",
+            "white" => "#FFFFFF",
+            "gray" or "grey" => "#808080",
+            "red" => "#FF0000",
+            "green" => "#00FF00",
+            "blue" => "#0000FF",
+            "yellow" => "#FFFF00",
+            "cyan" => "#00FFFF",
+            "magenta" => "#FF00FF",
+            "orange" => "#FFA500",
+            "purple" => "#800080",
+            "brown" => "#A52A2A",
+            "darkgray" or "darkgrey" => "#A9A9A9",
+            "lightgray" or "lightgrey" => "#D3D3D3",
+            "transparent" => "#00000000",
+            _ => trimmed // Return as-is if not recognized (might be hex without #)
+        };
     }
     
     /// <summary>Checks if a numeric value matches a range pattern (e.g., "< 0", "0-50", "> 100").</summary>

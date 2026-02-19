@@ -787,14 +787,7 @@ public static class ScreenViewBuilder
 
     private static IBrush ParseBrush(string hex)
     {
-        if (string.IsNullOrEmpty(hex)) return Brushes.White;
-        if (hex.StartsWith("#") && hex.Length >= 7)
-        {
-            var r = Convert.ToInt32(hex.Substring(1, 2), 16);
-            var g = Convert.ToInt32(hex.Substring(3, 2), 16);
-            var b = Convert.ToInt32(hex.Substring(5, 2), 16);
-            return new SolidColorBrush(Color.FromRgb((byte)r, (byte)g, (byte)b));
-        }
-        return Brushes.White;
+        // Use ColorParser which handles both hex and named colors
+        return ColorParser.ParseBrush(hex);
     }
 }
