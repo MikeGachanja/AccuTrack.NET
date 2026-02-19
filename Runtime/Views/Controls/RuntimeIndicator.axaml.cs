@@ -50,6 +50,10 @@ public partial class RuntimeIndicator : UserControl
         var label = GetProperty(d, "label", "");
         LabelText.Text = label;
         LabelText.IsVisible = !string.IsNullOrEmpty(label);
+
+        // Font from designer (font, fontSize, fontStyle)
+        ApplyFontToText(LabelText, d, "font", "fontSize", "fontStyle", 10);
+
         IsVisible = d.Visible;
         IsEnabled = d.Enabled;
         
@@ -109,5 +113,25 @@ public partial class RuntimeIndicator : UserControl
     {
         if (d.Properties.TryGetValue(key, out var v) && v is string s) return s;
         return fallback;
+    }
+
+    private static void ApplyFontToText(Avalonia.Controls.TextBlock text, ComponentDescriptor d, string fontKey, string sizeKey, string styleKey, double defaultSize)
+    {
+        var fontName = GetProperty(d, fontKey, "Arial");
+        text.FontFamily = new FontFamily(fontName);
+        var size = GetPropDouble(d, sizeKey, defaultSize);
+        text.FontSize = size > 0 ? size : defaultSize;
+        var styleStr = GetProperty(d, styleKey, "Regular");
+        text.FontWeight = styleStr.Contains("Bold", StringComparison.OrdinalIgnoreCase) ? FontWeight.Bold : FontWeight.Normal;
+        text.FontStyle = styleStr.Contains("Italic", StringComparison.OrdinalIgnoreCase) ? FontStyle.Italic : FontStyle.Normal;
+    }
+
+    private static double GetPropDouble(ComponentDescriptor d, string key, double fallback)
+    {
+        if (!d.Properties.TryGetValue(key, out var v)) return fallback;
+        if (v is int i) return i;
+        if (v is double dbl) return dbl;
+        if (v is float f) return f;
+        return double.TryParse(v?.ToString(), out var parsed) ? parsed : fallback;
     }
 }

@@ -43,32 +43,15 @@ public partial class RuntimeTextInput : UserControl
             TheTextBox.Background = ParseBrush(backColor);
         }
         
-        // Apply font properties if available
-        var fontName = GetProperty(d, "font", "");
-        var fontSize = GetPropertyDouble(d, "fontSize", 0);
-        var fontStyleStr = GetProperty(d, "fontStyle", "");
-        
-        if (!string.IsNullOrEmpty(fontName))
-        {
-            TheTextBox.FontFamily = new FontFamily(fontName);
-        }
-        if (fontSize > 0)
-        {
-            TheTextBox.FontSize = fontSize;
-        }
-        if (!string.IsNullOrEmpty(fontStyleStr))
-        {
-            var fontWeight = FontWeight.Normal;
-            var fontStyle = FontStyle.Normal;
-            
-            if (fontStyleStr.Contains("Bold", StringComparison.OrdinalIgnoreCase))
-                fontWeight = FontWeight.Bold;
-            if (fontStyleStr.Contains("Italic", StringComparison.OrdinalIgnoreCase))
-                fontStyle = FontStyle.Italic;
-                
-            TheTextBox.FontWeight = fontWeight;
-            TheTextBox.FontStyle = fontStyle;
-        }
+        // Font from designer (font, fontSize, fontStyle) so each component can have different fonts
+        var fontName = GetProperty(d, "font", "Arial");
+        var fontSize = GetPropertyDouble(d, "fontSize", 12);
+        if (fontSize <= 0) fontSize = 12;
+        var fontStyleStr = GetProperty(d, "fontStyle", "Regular");
+        TheTextBox.FontFamily = new FontFamily(fontName);
+        TheTextBox.FontSize = fontSize;
+        TheTextBox.FontWeight = fontStyleStr.Contains("Bold", StringComparison.OrdinalIgnoreCase) ? FontWeight.Bold : FontWeight.Normal;
+        TheTextBox.FontStyle = fontStyleStr.Contains("Italic", StringComparison.OrdinalIgnoreCase) ? FontStyle.Italic : FontStyle.Normal;
         
         TheTextBox.IsEnabled = d.Enabled;
         IsVisible = d.Visible;

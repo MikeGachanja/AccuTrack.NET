@@ -1,6 +1,7 @@
 using System.Globalization;
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Runtime.Modules.Screens;
 
 namespace Runtime.Views.Controls;
@@ -21,8 +22,35 @@ public partial class RuntimeDateTime : UserControl
         LabelText.Text = label;
         LabelText.IsVisible = !string.IsNullOrEmpty(label);
         _format = GetProperty(d, "format", _format);
+
+        // Font from designer (font, fontSize, fontStyle) - main value uses full size, label uses ~70%
+        var fontName = GetProperty(d, "font", "Arial");
+        var fontSize = GetPropDouble(d, "fontSize", 12);
+        if (fontSize <= 0) fontSize = 12;
+        var fontStyleStr = GetProperty(d, "fontStyle", "Regular");
+        var fontWeight = fontStyleStr.Contains("Bold", StringComparison.OrdinalIgnoreCase) ? FontWeight.Bold : FontWeight.Normal;
+        var fontStyle = fontStyleStr.Contains("Italic", StringComparison.OrdinalIgnoreCase) ? FontStyle.Italic : FontStyle.Normal;
+
+        ValueText.FontFamily = new FontFamily(fontName);
+        ValueText.FontSize = fontSize;
+        ValueText.FontWeight = fontWeight;
+        ValueText.FontStyle = fontStyle;
+        LabelText.FontFamily = new FontFamily(fontName);
+        LabelText.FontSize = fontSize * 0.7;
+        LabelText.FontWeight = fontWeight;
+        LabelText.FontStyle = fontStyle;
+
         IsVisible = d.Visible;
         IsEnabled = d.Enabled;
+    }
+
+    private static double GetPropDouble(ComponentDescriptor d, string key, double fallback)
+    {
+        if (!d.Properties.TryGetValue(key, out var v)) return fallback;
+        if (v is int i) return i;
+        if (v is double dbl) return dbl;
+        if (v is float f) return f;
+        return double.TryParse(v?.ToString(), out var parsed) ? parsed : fallback;
     }
 
     public void SetValue(object? value)

@@ -26,10 +26,19 @@ public partial class RuntimePump : UserControl
         TheEllipse.Width = size;
         TheEllipse.Height = size;
         
-        // Scale font size proportionally
-        var fontSize = Math.Max(8, size / 2);
-        PumpText.FontSize = fontSize;
-        
+        // Font from designer (labelFont, labelFontSize, labelFontStyle)
+        var labelFontName = GetProperty(d, "labelFont", "Arial");
+        var labelFontSize = GetPropDouble(d, "labelFontSize", 12);
+        if (labelFontSize <= 0) labelFontSize = Math.Max(8, size / 2);
+        var labelFontStyleStr = GetProperty(d, "labelFontStyle", "Regular");
+        LabelText.FontFamily = new FontFamily(labelFontName);
+        LabelText.FontSize = labelFontSize;
+        LabelText.FontWeight = labelFontStyleStr.Contains("Bold", StringComparison.OrdinalIgnoreCase) ? FontWeight.Bold : FontWeight.Normal;
+        LabelText.FontStyle = labelFontStyleStr.Contains("Italic", StringComparison.OrdinalIgnoreCase) ? FontStyle.Italic : FontStyle.Normal;
+        PumpText.FontFamily = new FontFamily(labelFontName);
+        PumpText.FontSize = Math.Max(8, size / 2);
+        PumpText.FontWeight = FontWeight.Bold;
+
         // Apply label
         LabelText.Text = GetProperty(d, "label", "Pump");
         
@@ -68,6 +77,15 @@ public partial class RuntimePump : UserControl
         TheEllipse.Fill = fillBrush;
     }
     
+    private static double GetPropDouble(ComponentDescriptor d, string key, double fallback)
+    {
+        if (!d.Properties.TryGetValue(key, out var v)) return fallback;
+        if (v is int i) return i;
+        if (v is double dbl) return dbl;
+        if (v is float f) return f;
+        return double.TryParse(v?.ToString(), out var parsed) ? parsed : fallback;
+    }
+
     private static int GetPropertyInt(ComponentDescriptor d, string key, int fallback)
     {
         if (!d.Properties.TryGetValue(key, out var v)) return fallback;

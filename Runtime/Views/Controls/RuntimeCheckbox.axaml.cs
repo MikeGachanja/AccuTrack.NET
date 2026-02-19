@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
+using Avalonia.Media;
 using Runtime.Modules.Screens;
 
 namespace Runtime.Views.Controls;
@@ -16,8 +17,26 @@ public partial class RuntimeCheckbox : UserControl
     {
         if (d == null) return;
         TheCheckBox.Content = GetProperty(d, "text", d.Name);
+        // Font from designer (font, fontSize, fontStyle)
+        var fontName = GetProperty(d, "font", "Arial");
+        var fontSize = GetPropDouble(d, "fontSize", 12);
+        if (fontSize <= 0) fontSize = 12;
+        var fontStyleStr = GetProperty(d, "fontStyle", "Regular");
+        TheCheckBox.FontFamily = new FontFamily(fontName);
+        TheCheckBox.FontSize = fontSize;
+        TheCheckBox.FontWeight = fontStyleStr.Contains("Bold", StringComparison.OrdinalIgnoreCase) ? FontWeight.Bold : FontWeight.Normal;
+        TheCheckBox.FontStyle = fontStyleStr.Contains("Italic", StringComparison.OrdinalIgnoreCase) ? FontStyle.Italic : FontStyle.Normal;
         TheCheckBox.IsEnabled = d.Enabled;
         TheCheckBox.IsVisible = d.Visible;
+    }
+
+    private static double GetPropDouble(ComponentDescriptor d, string key, double fallback)
+    {
+        if (!d.Properties.TryGetValue(key, out var v)) return fallback;
+        if (v is int i) return i;
+        if (v is double dbl) return dbl;
+        if (v is float f) return f;
+        return double.TryParse(v?.ToString(), out var parsed) ? parsed : fallback;
     }
 
     public void SetValue(object? value)

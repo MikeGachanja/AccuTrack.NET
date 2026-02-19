@@ -530,6 +530,15 @@ public partial class PropertyEditor : UserControl
         layout.Controls.Add(borderWidthNumeric, 1, row);
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
+
+        // Font (family, size, style) - so components can have different fonts at runtime
+        AddFontEditorRows(layout, button.Font, (name, size, style) =>
+        {
+            var oldFont = button.Font;
+            button.Font = new Font(name, size, style);
+            oldFont?.Dispose();
+            TriggerAutoSave();
+        }, ref row);
     }
 
     private void UpdateNumericProperties(TableLayoutPanel layout, NumericComponent numeric, ref int row)
@@ -609,6 +618,32 @@ public partial class PropertyEditor : UserControl
         layout.Controls.Add(valueColorButton, 1, row);
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
+
+        // Label font (family, size, style) - so runtime can show different fonts per component
+        layout.Controls.Add(new Label { Text = "Label font:", AutoSize = true, Font = new Font(SystemFonts.DefaultFont.FontFamily, 8, FontStyle.Bold) }, 0, row);
+        layout.SetColumnSpan(layout.Controls[layout.Controls.Count - 1], 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+        AddFontEditorRows(layout, numeric.LabelFont, (name, size, style) =>
+        {
+            var oldF = numeric.LabelFont;
+            numeric.LabelFont = new Font(name, size, style);
+            oldF?.Dispose();
+            TriggerAutoSave();
+        }, ref row);
+
+        // Value font (family, size, style)
+        layout.Controls.Add(new Label { Text = "Value font:", AutoSize = true, Font = new Font(SystemFonts.DefaultFont.FontFamily, 8, FontStyle.Bold) }, 0, row);
+        layout.SetColumnSpan(layout.Controls[layout.Controls.Count - 1], 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+        AddFontEditorRows(layout, numeric.ValueFont, (name, size, style) =>
+        {
+            var oldF = numeric.ValueFont;
+            numeric.ValueFont = new Font(name, size, style);
+            oldF?.Dispose();
+            TriggerAutoSave();
+        }, ref row);
     }
 
     private void UpdateTextLabelProperties(TableLayoutPanel layout, TextLabelComponent textLabel, ref int row)
@@ -644,6 +679,15 @@ public partial class PropertyEditor : UserControl
         layout.Controls.Add(foreColorButton, 1, row);
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
+
+        // Font (family, size, style) - so components can have different fonts at runtime
+        AddFontEditorRows(layout, textLabel.Font, (name, size, style) =>
+        {
+            var oldFont = textLabel.Font;
+            textLabel.Font = new Font(name, size, style);
+            oldFont?.Dispose();
+            TriggerAutoSave();
+        }, ref row);
     }
 
     private void UpdateDateTimeProperties(TableLayoutPanel layout, DateTimeComponent dateTime, ref int row)
@@ -1107,6 +1151,49 @@ public partial class PropertyEditor : UserControl
         // Calculate relative luminance
         double luminance = (0.299 * color.R + 0.587 * color.G + 0.114 * color.B) / 255;
         return luminance > 0.5 ? Color.Black : Color.White;
+    }
+
+    private void AddFontEditorRows(TableLayoutPanel layout, Font currentFont, Action<string, float, FontStyle> onFontChanged, ref int row)
+    {
+        var fontName = currentFont?.Name ?? "Arial";
+        var fontSize = currentFont?.Size ?? 9f;
+        var fontStyle = currentFont?.Style ?? FontStyle.Regular;
+
+        layout.Controls.Add(new Label { Text = "Font:", AutoSize = true }, 0, row);
+        var fontNameBox = new TextBox { Text = fontName, Dock = DockStyle.Fill };
+        layout.Controls.Add(fontNameBox, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        layout.Controls.Add(new Label { Text = "Font Size:", AutoSize = true }, 0, row);
+        var fontSizeNumeric = new NumericUpDown { Minimum = 6, Maximum = 72, Value = (decimal)fontSize, Width = 100, DecimalPlaces = 1, Increment = 1 };
+        layout.Controls.Add(fontSizeNumeric, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        layout.Controls.Add(new Label { Text = "Font Style:", AutoSize = true }, 0, row);
+        var fontStyleCombo = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
+        fontStyleCombo.Items.AddRange(new object[] { "Regular", "Bold", "Italic", "Bold, Italic" });
+        fontStyleCombo.SelectedIndex = fontStyle switch { FontStyle.Bold => 1, FontStyle.Italic => 2, FontStyle.Bold | FontStyle.Italic => 3, _ => 0 };
+        layout.Controls.Add(fontStyleCombo, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        void ApplyFont()
+        {
+            var name = fontNameBox.Text;
+            if (string.IsNullOrWhiteSpace(name)) name = "Arial";
+            var size = (float)fontSizeNumeric.Value;
+            var style = fontStyleCombo.SelectedIndex switch { 1 => FontStyle.Bold, 2 => FontStyle.Italic, 3 => FontStyle.Bold | FontStyle.Italic, _ => FontStyle.Regular };
+            try
+            {
+                onFontChanged(name, size, style);
+            }
+            catch { /* ignore invalid font */ }
+        }
+        fontNameBox.TextChanged += (s, e) => ApplyFont();
+        fontSizeNumeric.ValueChanged += (s, e) => ApplyFont();
+        fontStyleCombo.SelectedIndexChanged += (s, e) => ApplyFont();
     }
 
     private void SetupEventsTab()

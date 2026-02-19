@@ -96,14 +96,17 @@ public static class ScreenRenderer
                 }
             }
             
-            // Also check root level for backward compatibility (e.g., "text" property for buttons, gauge properties, etc.)
+            // Also check root level for backward compatibility (designer writes many props at root, e.g. fillColor, lineColor)
             // Only add if not already in properties dict
-            var rootLevelProperties = new[] { 
+            var rootLevelProperties = new[] {
                 "text", "backColor", "foreColor", "borderColor", "borderWidth", "font", "fontSize", "fontStyle", "action",
                 "maxLines",
                 "value", "minimum", "maximum", "needleColor", "textColor", "showValue", "showMinMax", "unit",
                 "level", "tankColor", "fillColor", "lowLevelColor", "highLevelColor", "lowLevelThreshold", "highLevelThreshold", "label", "showLevel",
-                "onColor", "offColor", "faultColor", "warningColor", "errorColor", "color", "backgroundColor", "running", "faulted", "state", "direction", "shape"
+                "onColor", "offColor", "faultColor", "warningColor", "errorColor", "color", "backgroundColor", "running", "faulted", "state", "direction", "shape",
+                "labelColor", "valueColor", "labelFont", "labelFontSize", "labelFontStyle", "valueFont", "valueFontSize", "valueFontStyle", "decimalPlaces", "suffix",
+                "lineColor", "lineWidth", "style", "startPoint", "endPoint", "filled",
+                "headerFont", "headerFontSize", "headerFontStyle", "rowFont", "rowFontSize", "rowFontStyle", "title", "format"
             };
             foreach (var propName in rootLevelProperties)
             {

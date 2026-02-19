@@ -18,8 +18,10 @@ public partial class RuntimeTriangle : UserControl
     public void ApplyDescriptor(ComponentDescriptor d)
     {
         if (d == null) return;
-        var color = GetProperty(d, "color", "#808080");
-        var fill = ParseBrush(color);
+        // Designer uses fillColor; fallback to color
+        var fillColor = GetProperty(d, "fillColor", "");
+        if (string.IsNullOrEmpty(fillColor)) fillColor = GetProperty(d, "color", "#808080");
+        var fill = ParseBrush(fillColor);
         var w = d.Width > 0 ? d.Width : 50;
         var h = d.Height > 0 ? d.Height : 50;
         var pts = new List<Point> { new(w * 0.5, 0), new(w, h), new(0, h) };
@@ -40,7 +42,8 @@ public partial class RuntimeTriangle : UserControl
 
     private static IBrush ParseBrush(string hex)
     {
-        if (string.IsNullOrEmpty(hex) || !hex.StartsWith("#")) return Brushes.Gray;
+        if (string.IsNullOrEmpty(hex)) return Brushes.Gray;
+        if (!hex.StartsWith("#")) hex = "#" + hex;
         if (hex.Length >= 7)
         {
             var r = Convert.ToInt32(hex.Substring(1, 2), 16);

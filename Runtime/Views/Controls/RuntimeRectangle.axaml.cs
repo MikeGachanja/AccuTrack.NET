@@ -15,12 +15,15 @@ public partial class RuntimeRectangle : UserControl
     public void ApplyDescriptor(ComponentDescriptor d)
     {
         if (d == null) return;
-        var color = GetProperty(d, "color", "");
-        if (string.IsNullOrEmpty(color)) color = GetProperty(d, "backgroundColor", "#e0e0e0");
-        TheBorder.Background = ParseBrush(color);
-        if (GetProperty(d, "borderColor", "") is { Length: > 0 } bc)
+        // Designer uses fillColor; fallback to color / backgroundColor
+        var fillColor = GetProperty(d, "fillColor", "");
+        if (string.IsNullOrEmpty(fillColor)) fillColor = GetProperty(d, "color", "");
+        if (string.IsNullOrEmpty(fillColor)) fillColor = GetProperty(d, "backgroundColor", "#e0e0e0");
+        TheBorder.Background = ParseBrush(fillColor);
+        var borderColor = GetProperty(d, "borderColor", "");
+        if (!string.IsNullOrEmpty(borderColor))
         {
-            TheBorder.BorderBrush = ParseBrush(bc);
+            TheBorder.BorderBrush = ParseBrush(borderColor);
             var borderWidth = GetPropertyInt(d, "borderWidth", 1);
             TheBorder.BorderThickness = new Avalonia.Thickness(borderWidth);
         }
@@ -44,7 +47,8 @@ public partial class RuntimeRectangle : UserControl
 
     private static IBrush ParseBrush(string hex)
     {
-        if (string.IsNullOrEmpty(hex) || !hex.StartsWith("#")) return new SolidColorBrush(Colors.Gray);
+        if (string.IsNullOrEmpty(hex)) return new SolidColorBrush(Colors.Gray);
+        if (!hex.StartsWith("#")) hex = "#" + hex;
         if (hex.Length >= 7)
         {
             var r = Convert.ToInt32(hex.Substring(1, 2), 16);

@@ -22,10 +22,10 @@ public partial class RuntimeButton : UserControl
         var text = GetProperty(d, "text", d.Name);
         ButtonText.Text = text;
         
-        // Colors
+        // Colors (designer may use hex with or without #)
         var backColor = GetProperty(d, "backColor", "#F0F0F0");
         TheButton.Background = ParseBrush(backColor);
-        
+
         var foreColor = GetProperty(d, "foreColor", "#000000");
         TheButton.Foreground = ParseBrush(foreColor);
         ButtonText.Foreground = ParseBrush(foreColor); // Explicitly set text color
@@ -37,9 +37,9 @@ public partial class RuntimeButton : UserControl
         var borderWidth = GetPropertyInt(d, "borderWidth", 1);
         TheButton.BorderThickness = new Avalonia.Thickness(borderWidth);
         
-        // Font properties
+        // Font properties (default 12pt so text is readable at runtime)
         var fontName = GetProperty(d, "font", "Arial");
-        var fontSize = GetPropertyDouble(d, "fontSize", 9.0);
+        var fontSize = GetPropertyDouble(d, "fontSize", 12.0);
         var fontStyleStr = GetProperty(d, "fontStyle", "Regular");
         
         var fontWeight = FontWeight.Normal;

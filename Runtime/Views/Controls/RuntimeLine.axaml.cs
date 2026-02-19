@@ -15,9 +15,11 @@ public partial class RuntimeLine : UserControl
     public void ApplyDescriptor(ComponentDescriptor d)
     {
         if (d == null) return;
-        var color = GetProperty(d, "color", "#808080");
-        TheLine.Background = ParseBrush(color);
-        var thickness = Math.Max(1, GetPropDouble(d, "thickness", 1.0));
+        // Designer uses lineColor and lineWidth
+        var lineColor = GetProperty(d, "lineColor", "");
+        if (string.IsNullOrEmpty(lineColor)) lineColor = GetProperty(d, "color", "#808080");
+        TheLine.Background = ParseBrush(lineColor);
+        var thickness = Math.Max(1, GetPropDouble(d, "lineWidth", GetPropDouble(d, "thickness", 1.0)));
         var vertical = GetProperty(d, "orientation", "horizontal").Equals("vertical", StringComparison.OrdinalIgnoreCase);
         if (vertical)
         {
@@ -49,7 +51,8 @@ public partial class RuntimeLine : UserControl
 
     private static IBrush ParseBrush(string hex)
     {
-        if (string.IsNullOrEmpty(hex) || !hex.StartsWith("#")) return new SolidColorBrush(Colors.Gray);
+        if (string.IsNullOrEmpty(hex)) return new SolidColorBrush(Colors.Gray);
+        if (!hex.StartsWith("#")) hex = "#" + hex;
         if (hex.Length >= 7)
         {
             var r = Convert.ToInt32(hex.Substring(1, 2), 16);

@@ -18,11 +18,8 @@ public partial class RuntimeTextLabel : UserControl
         TheText.Text = GetProperty(d, "text", d.Name);
         
         // Apply colors if available
-        var foreColor = GetProperty(d, "foreColor", "");
-        if (!string.IsNullOrEmpty(foreColor))
-        {
-            TheText.Foreground = ParseBrush(foreColor);
-        }
+        var foreColor = GetProperty(d, "foreColor", "#000000");
+        TheText.Foreground = ParseBrush(foreColor);
         
         var backColor = GetProperty(d, "backColor", "");
         if (!string.IsNullOrEmpty(backColor))
@@ -30,32 +27,23 @@ public partial class RuntimeTextLabel : UserControl
             TheText.Background = ParseBrush(backColor);
         }
         
-        // Apply font properties if available
-        var fontName = GetProperty(d, "font", "");
-        var fontSize = GetPropertyDouble(d, "fontSize", 0);
-        var fontStyleStr = GetProperty(d, "fontStyle", "");
-        
-        if (!string.IsNullOrEmpty(fontName))
-        {
-            TheText.FontFamily = new FontFamily(fontName);
-        }
-        if (fontSize > 0)
-        {
-            TheText.FontSize = fontSize;
-        }
-        if (!string.IsNullOrEmpty(fontStyleStr))
-        {
-            var fontWeight = FontWeight.Normal;
-            var fontStyle = FontStyle.Normal;
-            
-            if (fontStyleStr.Contains("Bold", StringComparison.OrdinalIgnoreCase))
-                fontWeight = FontWeight.Bold;
-            if (fontStyleStr.Contains("Italic", StringComparison.OrdinalIgnoreCase))
-                fontStyle = FontStyle.Italic;
-                
-            TheText.FontWeight = fontWeight;
-            TheText.FontStyle = fontStyle;
-        }
+        // Apply font from designer (font, fontSize, fontStyle) so each component can have different fonts
+        var fontName = GetProperty(d, "font", "Arial");
+        var fontSize = GetPropertyDouble(d, "fontSize", 12);
+        if (fontSize <= 0) fontSize = 12;
+        var fontStyleStr = GetProperty(d, "fontStyle", "Regular");
+
+        TheText.FontFamily = new FontFamily(fontName);
+        TheText.FontSize = fontSize;
+
+        var fontWeight = FontWeight.Normal;
+        var fontStyle = FontStyle.Normal;
+        if (fontStyleStr.Contains("Bold", StringComparison.OrdinalIgnoreCase))
+            fontWeight = FontWeight.Bold;
+        if (fontStyleStr.Contains("Italic", StringComparison.OrdinalIgnoreCase))
+            fontStyle = FontStyle.Italic;
+        TheText.FontWeight = fontWeight;
+        TheText.FontStyle = fontStyle;
         
         IsVisible = d.Visible;
         IsEnabled = d.Enabled;
