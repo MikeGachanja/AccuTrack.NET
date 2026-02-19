@@ -152,20 +152,14 @@ internal static class Program
         scriptingEngine.Initialize();
         
         // Connect console to script engine for Lua print() output
-        if (engine.ModuleManager.GetModule("ConsoleModule") is IConsole consoleForLua)
+        // Use the console instance we already created (line 69)
+        scriptingEngine.SetPrintCallback(msg =>
         {
-            scriptingEngine.SetPrintCallback(msg =>
-            {
-                System.Diagnostics.Trace.WriteLine($"[Runtime] Script print callback invoked with message: '{msg}'");
-                consoleForLua.LogDebug(msg, "Lua");
-                System.Diagnostics.Trace.WriteLine($"[Runtime] Logged to console: Level=Debug, Source=Lua, Message='{msg}'");
-            });
-            System.Diagnostics.Trace.WriteLine("[Runtime] Script engine connected to console for Lua output");
-        }
-        else
-        {
-            System.Diagnostics.Trace.WriteLine("[Runtime] WARNING: Console module not found, Lua print() output will not be displayed");
-        }
+            System.Diagnostics.Trace.WriteLine($"[Runtime] Script print callback invoked with message: '{msg}'");
+            console.LogDebug(msg, "Lua");
+            System.Diagnostics.Trace.WriteLine($"[Runtime] Logged to console: Level=Debug, Source=Lua, Message='{msg}'");
+        });
+        System.Diagnostics.Trace.WriteLine("[Runtime] Script engine connected to console for Lua output");
         
         // Scripting engine: Lua read_tag(name) / write_tag(name, value) use TagManager.
         scriptingEngine.SetTagAccess(

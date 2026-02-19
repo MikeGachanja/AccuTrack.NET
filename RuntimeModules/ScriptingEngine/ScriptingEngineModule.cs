@@ -106,14 +106,23 @@ public sealed class ScriptingEngineModule : IScriptingEngine
         _script.Options.DebugPrint = s =>
         {
             string message = s ?? "";
-            System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] DebugPrint: Received message='{message}', callback={(_printCallback != null ? "set" : "null")}");
-            if (_printCallback != null)
+            bool callbackIsSet = _printCallback != null;
+            System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] DebugPrint: Received message='{message}', callback is {(callbackIsSet ? "SET" : "NULL")}");
+            if (callbackIsSet)
             {
-                _printCallback.Invoke(message);
+                try
+                {
+                    _printCallback.Invoke(message);
+                    System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] DebugPrint: Successfully invoked callback");
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] DebugPrint: ERROR invoking callback: {ex.Message}");
+                }
             }
             else
             {
-                System.Diagnostics.Trace.WriteLine("[ScriptingEngine] WARNING: Print callback is null, message will not appear in console!");
+                System.Diagnostics.Trace.WriteLine("[ScriptingEngine] DebugPrint: WARNING - Callback is null, message will NOT appear in console!");
             }
             System.Diagnostics.Trace.WriteLine("[Lua] " + message);
         };
@@ -127,11 +136,23 @@ public sealed class ScriptingEngineModule : IScriptingEngine
     
     private void PrintImpl(params DynValue[] args)
     {
+        bool callbackIsSet = _printCallback != null;
+        
         if (args == null || args.Length == 0)
         {
             var emptyMsg = "";
-            System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] PrintImpl: Empty print call, callback={(_printCallback != null ? "set" : "null")}");
-            _printCallback?.Invoke(emptyMsg);
+            System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] PrintImpl: Empty print call, callback is {(callbackIsSet ? "SET" : "NULL")}");
+            if (callbackIsSet)
+            {
+                try
+                {
+                    _printCallback.Invoke(emptyMsg);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] PrintImpl: ERROR invoking callback: {ex.Message}");
+                }
+            }
             System.Diagnostics.Trace.WriteLine("[Lua] ");
             return;
         }
@@ -153,8 +174,23 @@ public sealed class ScriptingEngineModule : IScriptingEngine
         }
         
         string message = string.Join("\t", parts);
-        System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] PrintImpl: Calling callback with message='{message}', callback={(_printCallback != null ? "set" : "null")}");
-        _printCallback?.Invoke(message);
+        System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] PrintImpl: Message='{message}', callback is {(callbackIsSet ? "SET" : "NULL")}");
+        if (callbackIsSet)
+        {
+            try
+            {
+                _printCallback.Invoke(message);
+                System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] PrintImpl: Successfully invoked callback");
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] PrintImpl: ERROR invoking callback: {ex.Message}");
+            }
+        }
+        else
+        {
+            System.Diagnostics.Trace.WriteLine("[ScriptingEngine] PrintImpl: WARNING - Callback is null, message will NOT appear in console!");
+        }
         System.Diagnostics.Trace.WriteLine("[Lua] " + message);
     }
 
@@ -206,7 +242,12 @@ public sealed class ScriptingEngineModule : IScriptingEngine
         {
             // Ensure print function is registered before execution
             RegisterPrint();
-            System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] ExecuteScript: Print callback is {(_printCallback != null ? "set" : "null")}");
+            bool callbackIsSet = _printCallback != null;
+            System.Diagnostics.Trace.WriteLine($"[ScriptingEngine] ExecuteScript: About to execute, print callback is {(callbackIsSet ? "SET" : "NULL")}");
+            if (!callbackIsSet)
+            {
+                System.Diagnostics.Trace.WriteLine("[ScriptingEngine] ExecuteScript: WARNING - Print callback is null! Lua print() output will NOT appear in console.");
+            }
             
             if (!string.IsNullOrEmpty(arguments))
                 _script!.Globals["arg"] = arguments;
