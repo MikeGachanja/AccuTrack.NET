@@ -104,18 +104,25 @@ public partial class PropertyEditor : UserControl
 
     /// <summary>
     /// Updates the editor with the selected item.
+    /// Must be called on the UI thread so that Events/Animation tabs paint correctly.
     /// </summary>
     public void UpdateEditor(object? item)
     {
+        if (InvokeRequired)
+        {
+            BeginInvoke(new Action(() => UpdateEditor(item)));
+            return;
+        }
+
         _selectedComponent = item as BaseComponent;
-        
+
         if (_selectedComponent == null)
         {
             ClearAllTabs();
             return;
         }
 
-        // Ensure EventsModule is initialized if we have a SCADA project
+        // Ensure EventsModule is initialized if we have a SCADA project (so Events tab populates)
         if (_eventsModule == null && _scadaProject != null)
         {
             SetScadaProject(_scadaProject);
@@ -125,6 +132,9 @@ public partial class PropertyEditor : UserControl
         UpdateEventsTab();
         UpdateAnimationTab();
         UpdateTagsTab();
+
+        // Force the tab control to repaint so the visible tab (and any previously invisible tabs) show updated content
+        _tabControl?.Refresh();
     }
 
     /// <summary>
@@ -1421,9 +1431,13 @@ public partial class PropertyEditor : UserControl
             {
                 _eventsList.Items.Add(new EventListItem(evt));
             }
+
+            // Force repaint so Events tab shows new data when user switches to it (fixes stale display for subsequent components)
+            _eventsList.Refresh();
+            _eventsTab.Invalidate(true);
         }
     }
-    
+
     private void ResetEventConfigurationPanel()
     {
         // Clear current editing event
@@ -1687,10 +1701,17 @@ public partial class PropertyEditor : UserControl
         {
             System.Diagnostics.Debug.WriteLine($"[PropertyEditor] No animations property found on component");
         }
-        
+
         System.Diagnostics.Debug.WriteLine($"[PropertyEditor] Loaded {_componentAnimations.Count} animation(s) total");
+
+        // Force repaint so Animation tab shows new data when user switches to it (fixes stale display for subsequent components)
+        if (_animationsList != null)
+        {
+            _animationsList.Refresh();
+        }
+        _animationTab?.Invalidate(true);
     }
-    
+
     private void OnAddAnimation(object? sender, EventArgs e)
     {
         if (_selectedComponent == null)

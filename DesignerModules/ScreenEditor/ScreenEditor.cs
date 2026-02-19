@@ -322,6 +322,11 @@ public partial class ScreenEditor : UserControl
     public Panel GetScene() => _canvas;
 
     /// <summary>
+    /// Gets the currently selected component, if any.
+    /// </summary>
+    public BaseComponent? GetSelectedComponent() => _selectedComponent;
+
+    /// <summary>
     /// Saves the screen.
     /// </summary>
     public bool SaveScreen()

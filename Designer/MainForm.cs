@@ -324,6 +324,48 @@ namespace Designer
                 var propertiesTab = bottomTabWidget.TabPages[2];
                 propertiesTab.Controls.Add(_propertyEditor);
             }
+
+            // Refresh property editor when user switches to Properties tab (fixes empty Events/Animation when tab wasn't visible during selection)
+            if (bottomTabWidget != null)
+            {
+                bottomTabWidget.SelectedIndexChanged += (s, e) =>
+                {
+                    if (bottomTabWidget.SelectedIndex == 2 && _propertyEditor != null)
+                    {
+                        RefreshPropertyEditorFromActiveScreen();
+                    }
+                };
+            }
+
+            // Refresh property editor when user switches to a different editor tab (e.g. another screen)
+            if (editorTabs != null)
+            {
+                editorTabs.SelectedIndexChanged += (s, e) =>
+                {
+                    if (_propertyEditor != null)
+                    {
+                        RefreshPropertyEditorFromActiveScreen();
+                    }
+                };
+            }
+        }
+
+        /// <summary>
+        /// Refreshes the property editor with the selected component from the currently active screen editor (if any).
+        /// Call when switching to Properties tab or when switching editor tabs so Events/Animation stay in sync.
+        /// </summary>
+        private void RefreshPropertyEditorFromActiveScreen()
+        {
+            if (_propertyEditor == null || editorTabs?.SelectedTab == null)
+                return;
+            if (editorTabs.SelectedTab.Controls.Count == 0)
+                return;
+            var activeEditor = editorTabs.SelectedTab.Controls[0];
+            if (activeEditor is ScreenEditor screenEditor)
+            {
+                var selected = screenEditor.GetSelectedComponent();
+                _propertyEditor.UpdateEditor(selected);
+            }
         }
 
         private void InitializeProjectView()
@@ -2122,27 +2164,36 @@ namespace Designer
                 editor.SetScadaResolution(scadaProject.Resolution);
                 editor.SetScadaProject(scadaProject); // Set project for event creation
             }
-            
+
             // SetTemplate now accepts object
             editor.SetTemplate(template);
-            
-            // Connect selection changes to property editor
+
+            // Connect selection changes to property editor; set project so Events/Animation tabs can load
             if (_propertyEditor != null && _projectManager != null)
             {
-                // Get current SCADA project's tag tables and screens
                 var tagTables = _projectManager.GetTagTables(scadaName).OfType<TagTable>().ToList();
                 var screens = _projectManager.GetScreens(scadaName);
-                
+
                 _propertyEditor.SetAvailableTagTables(tagTables);
                 _propertyEditor.SetAvailableScreens(screens);
-                
-                _propertyEditor.SetScadaProject(scadaProject);
+
+                if (scadaProject != null)
+                {
+                    _propertyEditor.SetScadaProject(scadaProject);
+                }
             }
             
             // Connect screen editor selection events to property editor (always connect, even if property editor setup failed)
             editor.SelectionChanged += (s, selectedComponent) =>
             {
-                if (_propertyEditor != null)
+                if (_propertyEditor == null)
+                    return;
+                // Ensure we update on the UI thread so Events/Animation tabs paint correctly
+                if (_propertyEditor.InvokeRequired)
+                {
+                    _propertyEditor.BeginInvoke(new Action(() => _propertyEditor.UpdateEditor(selectedComponent)));
+                }
+                else
                 {
                     _propertyEditor.UpdateEditor(selectedComponent);
                 }
