@@ -79,8 +79,8 @@ public class ScheduleDefinition
     /// <summary>When Recurrence is Interval, stagger: delay first run by this many seconds (stagger models).</summary>
     public int StaggerSeconds { get; set; } = 0;
     public string Time { get; set; } = "00:00"; // HH:mm format
-    public int DayOfWeek { get; set; } = 0; // 0 = Sunday, 1 = Monday, etc.
-    public int DayOfMonth { get; set; } = 1; // 1-31
+    public int DayOfWeek { get; set; } = -1; // -1 = not set, 0 = Sunday, 1 = Monday, etc.
+    public int DayOfMonth { get; set; } = -1; // -1 = not set, 1-31 = day of month
     public string CronExpression { get; set; } = string.Empty; // For custom schedules
     public bool Enabled { get; set; } = true;
     public string Description { get; set; } = string.Empty;
@@ -126,8 +126,8 @@ public class ScheduleDefinition
             IntervalSeconds = json["intervalSeconds"]?.ToObject<int>() ?? 60,
             StaggerSeconds = json["staggerSeconds"]?.ToObject<int>() ?? 0,
             Time = json["time"]?.ToString() ?? "00:00",
-            DayOfWeek = json["dayOfWeek"]?.ToObject<int>() ?? 0,
-            DayOfMonth = json["dayOfMonth"]?.ToObject<int>() ?? 1,
+            DayOfWeek = json["dayOfWeek"]?.ToObject<int>() ?? -1,
+            DayOfMonth = json["dayOfMonth"]?.ToObject<int>() ?? -1,
             CronExpression = json["cronExpression"]?.ToString() ?? string.Empty,
             Enabled = json["enabled"]?.ToObject<bool>() ?? true,
             Description = json["description"]?.ToString() ?? string.Empty

@@ -137,6 +137,7 @@ public partial class ComponentsView : UserControl
                 ("Image View", "ImageView"),
                 ("Indicator", "Indicator"),
                 ("Progress Bar", "ProgressBar"),
+                ("Console", "Console"),
                 ("Tab", "Tab"),
                 ("Popup", "Popup")
             }),
@@ -145,8 +146,7 @@ public partial class ComponentsView : UserControl
                 ("Table", "Table"),
                 ("Trend View", "TrendView"),
                 ("Alarm View", "AlarmView"),
-                ("Gauge View", "GaugeView"),
-                ("Console", "Console")
+                ("Gauge View", "GaugeView")
             }),
             new ComponentCategory("Industrial Components", new[]
             {

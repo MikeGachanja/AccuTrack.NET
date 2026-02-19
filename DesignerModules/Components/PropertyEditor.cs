@@ -419,6 +419,10 @@ public partial class PropertyEditor : UserControl
         {
             UpdateLineProperties(layout, line, ref row);
         }
+        else if (_selectedComponent is ConsoleComponent console)
+        {
+            UpdateConsoleProperties(layout, console, ref row);
+        }
         // Add other component types as needed
 
         scrollPanel.Controls.Add(layout);
@@ -1098,6 +1102,88 @@ public partial class PropertyEditor : UserControl
         layout.Controls.Add(styleCombo, 1, row);
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
+    }
+    
+    private void UpdateConsoleProperties(TableLayoutPanel layout, ConsoleComponent console, ref int row)
+    {
+        // Background Color
+        layout.Controls.Add(new Label { Text = "Background Color:", AutoSize = true }, 0, row);
+        var backColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(backColorButton, console.BackColor);
+        backColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = console.BackColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    console.BackColor = colorDialog.Color;
+                    UpdateColorButton(backColorButton, console.BackColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(backColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Foreground Color
+        layout.Controls.Add(new Label { Text = "Text Color:", AutoSize = true }, 0, row);
+        var foreColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(foreColorButton, console.ForeColor);
+        foreColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = console.ForeColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    console.ForeColor = colorDialog.Color;
+                    UpdateColorButton(foreColorButton, console.ForeColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(foreColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Border Color
+        layout.Controls.Add(new Label { Text = "Border Color:", AutoSize = true }, 0, row);
+        var borderColorButton = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(borderColorButton, console.BorderColor);
+        borderColorButton.Click += (s, e) =>
+        {
+            using (var colorDialog = new ColorDialog { Color = console.BorderColor })
+            {
+                if (colorDialog.ShowDialog() == DialogResult.OK)
+                {
+                    console.BorderColor = colorDialog.Color;
+                    UpdateColorButton(borderColorButton, console.BorderColor);
+                    TriggerAutoSave();
+                }
+            }
+        };
+        layout.Controls.Add(borderColorButton, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Max Lines
+        layout.Controls.Add(new Label { Text = "Max Lines:", AutoSize = true }, 0, row);
+        var maxLinesNumeric = new NumericUpDown { Minimum = 10, Maximum = 10000, Value = console.MaxLines, Width = 100 };
+        maxLinesNumeric.ValueChanged += (s, e) =>
+        {
+            console.MaxLines = (int)maxLinesNumeric.Value;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(maxLinesNumeric, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Font
+        AddFontEditorRows(layout, console.Font, (name, size, style) =>
+        {
+            console.Font = new Font(name, size, style);
+            TriggerAutoSave();
+        }, ref row);
     }
 
     private void UpdateSvgViewProperties(TableLayoutPanel layout, SvgViewComponent svgView, ref int row)

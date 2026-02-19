@@ -89,7 +89,7 @@ public partial class ScheduleEditor : UserControl
         _schedulesGrid.Columns.Insert(3, recurrenceColumn);
 
         var dayOfWeekColumn = new DataGridViewComboBoxColumn { Name = "DayOfWeek", HeaderText = "Day of Week", DataPropertyName = "DayOfWeek" };
-        dayOfWeekColumn.Items.AddRange(new[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" });
+        dayOfWeekColumn.Items.AddRange(new[] { "", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" });
         _schedulesGrid.Columns.Remove("DayOfWeek");
         _schedulesGrid.Columns.Insert(7, dayOfWeekColumn);
 
@@ -161,7 +161,7 @@ public partial class ScheduleEditor : UserControl
             row.Cells[5].Value = schedule.StaggerSeconds;
             row.Cells[6].Value = schedule.Time;
             row.Cells[7].Value = GetDayOfWeekName(schedule.DayOfWeek);
-            row.Cells[8].Value = schedule.DayOfMonth;
+            row.Cells[8].Value = schedule.DayOfMonth > 0 ? schedule.DayOfMonth.ToString() : "";
             row.Cells[9].Value = schedule.Enabled ? true : false;
             row.Cells[10].Value = schedule.Description;
             row.Tag = schedule;
@@ -171,14 +171,21 @@ public partial class ScheduleEditor : UserControl
 
     private string GetDayOfWeekName(int dayOfWeek)
     {
+        // -1 means not set (empty)
+        if (dayOfWeek < 0)
+            return "";
         var days = new[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
-        return dayOfWeek >= 0 && dayOfWeek < days.Length ? days[dayOfWeek] : "Sunday";
+        return dayOfWeek >= 0 && dayOfWeek < days.Length ? days[dayOfWeek] : "";
     }
 
     private int GetDayOfWeekIndex(string dayName)
     {
+        // Empty string means not set (-1)
+        if (string.IsNullOrWhiteSpace(dayName))
+            return -1;
         var days = new[] { "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday" };
-        return Array.IndexOf(days, dayName);
+        var index = Array.IndexOf(days, dayName);
+        return index >= 0 ? index : -1;
     }
 
     private void AddSchedule()
@@ -194,6 +201,8 @@ public partial class ScheduleEditor : UserControl
             Recurrence = "Daily",
             Time = DateTime.Now.ToString("HH:mm"),
             IntervalSeconds = 60,
+            DayOfWeek = -1, // Not set by default
+            DayOfMonth = -1, // Not set by default
             Enabled = true
         };
 
@@ -326,12 +335,22 @@ public partial class ScheduleEditor : UserControl
                     schedule.Time = value?.ToString() ?? "00:00";
                     break;
                 case "DayOfWeek":
-                    schedule.DayOfWeek = GetDayOfWeekIndex(value?.ToString() ?? "Sunday");
+                    schedule.DayOfWeek = GetDayOfWeekIndex(value?.ToString() ?? "");
                     break;
                 case "DayOfMonth":
-                    if (int.TryParse(value?.ToString(), out int dayOfMonth))
+                    var dayOfMonthStr = value?.ToString() ?? "";
+                    if (string.IsNullOrWhiteSpace(dayOfMonthStr))
+                    {
+                        schedule.DayOfMonth = -1; // -1 means not set
+                    }
+                    else if (int.TryParse(dayOfMonthStr, out int dayOfMonth))
+                    {
                         schedule.DayOfMonth = dayOfMonth;
-                    else System.Diagnostics.Debug.WriteLine($"[ScheduleEditor] Invalid DayOfMonth value: {value}");
+                    }
+                    else
+                    {
+                        System.Diagnostics.Debug.WriteLine($"[ScheduleEditor] Invalid DayOfMonth value: {value}");
+                    }
                     break;
                 case "Enabled":
                     if (value is bool enabled)
