@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Runtime;
@@ -47,6 +49,42 @@ public partial class RuntimeCheckbox : UserControl
     public void SetValue(object? value)
     {
         TheCheckBox.IsChecked = value is bool b ? b : (value is 1 or "1" or "true" || (value?.ToString()?.Equals("true", StringComparison.OrdinalIgnoreCase) == true));
+    }
+
+    public event EventHandler<PointerPressedEventArgs>? MouseDown
+    {
+        add => TheCheckBox.PointerPressed += value;
+        remove => TheCheckBox.PointerPressed -= value;
+    }
+
+    public event EventHandler<PointerReleasedEventArgs>? MouseUp
+    {
+        add => TheCheckBox.PointerReleased += value;
+        remove => TheCheckBox.PointerReleased -= value;
+    }
+
+    public event EventHandler<PointerEventArgs>? MouseEnter
+    {
+        add => TheCheckBox.PointerEntered += value;
+        remove => TheCheckBox.PointerEntered -= value;
+    }
+
+    public event EventHandler<PointerEventArgs>? MouseLeave
+    {
+        add => TheCheckBox.PointerExited += value;
+        remove => TheCheckBox.PointerExited -= value;
+    }
+
+    public event EventHandler<Avalonia.Input.TappedEventArgs>? DoubleClick
+    {
+        add => TheCheckBox.DoubleTapped += value;
+        remove => TheCheckBox.DoubleTapped -= value;
+    }
+
+    public event EventHandler<RoutedEventArgs>? RightClick
+    {
+        add => TheCheckBox.PointerPressed += (s, e) => { if (e.GetCurrentPoint(TheCheckBox).Properties.IsRightButtonPressed) value?.Invoke(s, new RoutedEventArgs()); };
+        remove { } // Note: Can't easily remove anonymous handlers, but this is acceptable for event forwarding
     }
 
     public event EventHandler<EventArgs>? CheckedChanged;

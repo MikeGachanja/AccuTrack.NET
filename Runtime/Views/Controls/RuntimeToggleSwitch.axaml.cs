@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Runtime.Modules.Screens;
 
@@ -25,6 +27,42 @@ public partial class RuntimeToggleSwitch : UserControl
     public void SetValue(object? value)
     {
         TheSwitch.IsChecked = value is bool b ? b : (value is 1 or "1" || (value?.ToString()?.Equals("1", StringComparison.Ordinal) == true));
+    }
+
+    public event EventHandler<PointerPressedEventArgs>? MouseDown
+    {
+        add => TheSwitch.PointerPressed += value;
+        remove => TheSwitch.PointerPressed -= value;
+    }
+
+    public event EventHandler<PointerReleasedEventArgs>? MouseUp
+    {
+        add => TheSwitch.PointerReleased += value;
+        remove => TheSwitch.PointerReleased -= value;
+    }
+
+    public event EventHandler<PointerEventArgs>? MouseEnter
+    {
+        add => TheSwitch.PointerEntered += value;
+        remove => TheSwitch.PointerEntered -= value;
+    }
+
+    public event EventHandler<PointerEventArgs>? MouseLeave
+    {
+        add => TheSwitch.PointerExited += value;
+        remove => TheSwitch.PointerExited -= value;
+    }
+
+    public event EventHandler<Avalonia.Input.TappedEventArgs>? DoubleClick
+    {
+        add => TheSwitch.DoubleTapped += value;
+        remove => TheSwitch.DoubleTapped -= value;
+    }
+
+    public event EventHandler<RoutedEventArgs>? RightClick
+    {
+        add => TheSwitch.PointerPressed += (s, e) => { if (e.GetCurrentPoint(TheSwitch).Properties.IsRightButtonPressed) value?.Invoke(s, new RoutedEventArgs()); };
+        remove { } // Note: Can't easily remove anonymous handlers, but this is acceptable for event forwarding
     }
 
     public event EventHandler<EventArgs>? Toggled;

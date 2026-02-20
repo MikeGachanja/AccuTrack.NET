@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Runtime;
@@ -47,6 +49,42 @@ public partial class RuntimeRadioButton : UserControl
     public void SetValue(object? value)
     {
         TheRadio.IsChecked = value is bool b ? b : (value is 1 or "1" || (value?.ToString()?.Equals("1", StringComparison.Ordinal) == true));
+    }
+
+    public event EventHandler<PointerPressedEventArgs>? MouseDown
+    {
+        add => TheRadio.PointerPressed += value;
+        remove => TheRadio.PointerPressed -= value;
+    }
+
+    public event EventHandler<PointerReleasedEventArgs>? MouseUp
+    {
+        add => TheRadio.PointerReleased += value;
+        remove => TheRadio.PointerReleased -= value;
+    }
+
+    public event EventHandler<PointerEventArgs>? MouseEnter
+    {
+        add => TheRadio.PointerEntered += value;
+        remove => TheRadio.PointerEntered -= value;
+    }
+
+    public event EventHandler<PointerEventArgs>? MouseLeave
+    {
+        add => TheRadio.PointerExited += value;
+        remove => TheRadio.PointerExited -= value;
+    }
+
+    public event EventHandler<Avalonia.Input.TappedEventArgs>? DoubleClick
+    {
+        add => TheRadio.DoubleTapped += value;
+        remove => TheRadio.DoubleTapped -= value;
+    }
+
+    public event EventHandler<RoutedEventArgs>? RightClick
+    {
+        add => TheRadio.PointerPressed += (s, e) => { if (e.GetCurrentPoint(TheRadio).Properties.IsRightButtonPressed) value?.Invoke(s, new RoutedEventArgs()); };
+        remove { } // Note: Can't easily remove anonymous handlers, but this is acceptable for event forwarding
     }
 
     public event EventHandler<EventArgs>? CheckedChanged;

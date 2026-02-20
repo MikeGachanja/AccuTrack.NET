@@ -1,5 +1,6 @@
 using System;
 using Avalonia.Controls;
+using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
@@ -74,6 +75,42 @@ public partial class RuntimeButton : UserControl
     {
         add => TheButton.Click += value;
         remove => TheButton.Click -= value;
+    }
+
+    public event EventHandler<PointerPressedEventArgs>? MouseDown
+    {
+        add => TheButton.AddHandler(InputElement.PointerPressedEvent, value, handledEventsToo: true);
+        remove => TheButton.RemoveHandler(InputElement.PointerPressedEvent, value);
+    }
+
+    public event EventHandler<PointerReleasedEventArgs>? MouseUp
+    {
+        add => TheButton.AddHandler(InputElement.PointerReleasedEvent, value, handledEventsToo: true);
+        remove => TheButton.RemoveHandler(InputElement.PointerReleasedEvent, value);
+    }
+
+    public event EventHandler<PointerEventArgs>? MouseEnter
+    {
+        add => TheButton.PointerEntered += value;
+        remove => TheButton.PointerEntered -= value;
+    }
+
+    public event EventHandler<PointerEventArgs>? MouseLeave
+    {
+        add => TheButton.PointerExited += value;
+        remove => TheButton.PointerExited -= value;
+    }
+
+    public event EventHandler<Avalonia.Input.TappedEventArgs>? DoubleClick
+    {
+        add => TheButton.DoubleTapped += value;
+        remove => TheButton.DoubleTapped -= value;
+    }
+
+    public event EventHandler<RoutedEventArgs>? RightClick
+    {
+        add => TheButton.PointerPressed += (s, e) => { if (e.GetCurrentPoint(TheButton).Properties.IsRightButtonPressed) value?.Invoke(s, new RoutedEventArgs()); };
+        remove { } // Note: Can't easily remove anonymous handlers, but this is acceptable for event forwarding
     }
 
     public string? ComponentId { get; set; }

@@ -1,4 +1,6 @@
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Runtime.Modules.Screens;
 
@@ -46,7 +48,44 @@ public partial class RuntimeSlider : UserControl
         remove { }
     }
 
+    public event EventHandler<PointerPressedEventArgs>? MouseDown
+    {
+        add => TheSlider.PointerPressed += value;
+        remove => TheSlider.PointerPressed -= value;
+    }
+
+    public event EventHandler<PointerReleasedEventArgs>? MouseUp
+    {
+        add => TheSlider.PointerReleased += value;
+        remove => TheSlider.PointerReleased -= value;
+    }
+
+    public event EventHandler<PointerEventArgs>? MouseEnter
+    {
+        add => TheSlider.PointerEntered += value;
+        remove => TheSlider.PointerEntered -= value;
+    }
+
+    public event EventHandler<PointerEventArgs>? MouseLeave
+    {
+        add => TheSlider.PointerExited += value;
+        remove => TheSlider.PointerExited -= value;
+    }
+
+    public event EventHandler<Avalonia.Input.TappedEventArgs>? DoubleClick
+    {
+        add => TheSlider.DoubleTapped += value;
+        remove => TheSlider.DoubleTapped -= value;
+    }
+
+    public event EventHandler<RoutedEventArgs>? RightClick
+    {
+        add => TheSlider.PointerPressed += (s, e) => { if (e.GetCurrentPoint(TheSlider).Properties.IsRightButtonPressed) value?.Invoke(s, new RoutedEventArgs()); };
+        remove { } // Note: Can't easily remove anonymous handlers, but this is acceptable for event forwarding
+    }
+
     public double Value => TheSlider.Value;
+    public string? ComponentId { get; set; }
     public string? TagName { get; set; }
 
     private static string GetProperty(ComponentDescriptor d, string key, string fallback)

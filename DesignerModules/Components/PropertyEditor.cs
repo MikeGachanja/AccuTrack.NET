@@ -1434,7 +1434,7 @@ public partial class PropertyEditor : UserControl
         // Trigger
         configLayout.Controls.Add(new Label { Text = "Trigger:", AutoSize = true }, 0, configRow);
         _eventTriggerCombo = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
-        _eventTriggerCombo.Items.AddRange(new[] { "OnClick", "OnDoubleClick", "OnRightClick", "OnMouseDown", "OnMouseUp", "OnMouseEnter", "OnMouseLeave", "OnKeyPress", "OnValueChange", "OnStateChange", "OnFocusIn", "OnFocusOut", "OnTimer", "OnTagChange", "OnCondition" });
+        _eventTriggerCombo.Items.AddRange(new[] { "OnClick", "OnDoubleClick", "OnRightClick", "OnPress", "OnRelease", "OnMouseEnter", "OnMouseLeave", "OnKeyPress", "OnValueChange", "OnStateChange", "OnFocusIn", "OnFocusOut", "OnTimer", "OnTagChange", "OnCondition" });
         configLayout.Controls.Add(_eventTriggerCombo, 1, configRow);
         configLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         configRow++;

@@ -1,5 +1,6 @@
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
 using Runtime;
@@ -65,6 +66,49 @@ public partial class RuntimeTextInput : UserControl
 
     public event EventHandler<EventArgs>? TextCommitted;
 
+    public event EventHandler<PointerPressedEventArgs>? MouseDown
+    {
+        add => TheTextBox.PointerPressed += value;
+        remove => TheTextBox.PointerPressed -= value;
+    }
+
+    public event EventHandler<PointerReleasedEventArgs>? MouseUp
+    {
+        add => TheTextBox.PointerReleased += value;
+        remove => TheTextBox.PointerReleased -= value;
+    }
+
+    public event EventHandler<PointerEventArgs>? MouseEnter
+    {
+        add => TheTextBox.PointerEntered += value;
+        remove => TheTextBox.PointerEntered -= value;
+    }
+
+    public event EventHandler<PointerEventArgs>? MouseLeave
+    {
+        add => TheTextBox.PointerExited += value;
+        remove => TheTextBox.PointerExited -= value;
+    }
+
+    public event EventHandler<KeyEventArgs>? KeyPress
+    {
+        add => TheTextBox.KeyDown += value;
+        remove => TheTextBox.KeyDown -= value;
+    }
+
+    public event EventHandler<GotFocusEventArgs>? FocusIn
+    {
+        add => TheTextBox.GotFocus += value;
+        remove => TheTextBox.GotFocus -= value;
+    }
+
+    public event EventHandler<RoutedEventArgs>? FocusOut
+    {
+        add => TheTextBox.LostFocus += value;
+        remove => TheTextBox.LostFocus -= value;
+    }
+
+    public string? ComponentId { get; set; }
     public string? TagName { get; set; }
 
     private static string GetProperty(ComponentDescriptor d, string key, string fallback)

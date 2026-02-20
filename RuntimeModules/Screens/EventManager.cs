@@ -132,14 +132,18 @@ public sealed class EventManager
         if (s == null) return "";
         // Normalize trigger types: "OnClick" -> "onclick", "click" -> "onclick", etc.
         var normalized = s.Replace(" ", "", StringComparison.Ordinal).ToLowerInvariant();
-        // Map common variations
+        // Map common variations - support both old (OnMouseDown/OnMouseUp) and new (OnPress/OnRelease) names
         return normalized switch
         {
             "click" => "onclick",
             "doubleclick" => "ondoubleclick",
             "rightclick" => "onrightclick",
-            "mousedown" => "onmousedown",
-            "mouseup" => "onmouseup",
+            "press" => "onpress",
+            "release" => "onrelease",
+            "mousedown" => "onpress",      // Backward compatibility: map old name to new name
+            "mouseup" => "onrelease",      // Backward compatibility: map old name to new name
+            "onmousedown" => "onpress",    // Backward compatibility: map old name to new name
+            "onmouseup" => "onrelease",     // Backward compatibility: map old name to new name
             "mouseenter" => "onmouseenter",
             "mouseleave" => "onmouseleave",
             "keypress" => "onkeypress",

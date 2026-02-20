@@ -150,7 +150,7 @@ public static class ScreenViewBuilder
             "ProgressBar" => CreateProgressBar(d, tagManager, subs),
             "Indicator" => CreateIndicator(d, tagManager, subs),
             "Slider" => CreateSlider(d, tagManager, tagIOHandler, eventManager, subs),
-            "TextInput" => CreateTextInput(d, tagManager, tagIOHandler, subs),
+            "TextInput" => CreateTextInput(d, tagManager, tagIOHandler, eventManager, subs),
             "Rectangle" => CreateRectangle(d),
             "Line" => CreateLine(d),
             "ToggleSwitch" => CreateToggleSwitch(d, tagManager, tagIOHandler, eventManager, subs),
@@ -195,9 +195,14 @@ public static class ScreenViewBuilder
         b.TagName = d.TagName;
         if (eventManager != null && !string.IsNullOrEmpty(d.Id))
         {
-            // Wire various trigger types
+            // Wire all trigger types
             b.Click += (_, _) => eventManager.FireTrigger(d.Id, "OnClick");
-            // Note: Double-click and right-click would need to be added to RuntimeButton if not already present
+            b.DoubleClick += (_, _) => eventManager.FireTrigger(d.Id, "OnDoubleClick");
+            b.RightClick += (_, _) => eventManager.FireTrigger(d.Id, "OnRightClick");
+            b.MouseDown += (_, _) => eventManager.FireTrigger(d.Id, "OnPress");
+            b.MouseUp += (_, _) => eventManager.FireTrigger(d.Id, "OnRelease");
+            b.MouseEnter += (_, _) => eventManager.FireTrigger(d.Id, "OnMouseEnter");
+            b.MouseLeave += (_, _) => eventManager.FireTrigger(d.Id, "OnMouseLeave");
         }
         // Wire ClearLogs action to console when on Logs screen
         var action = GetProperty(d, "action", "");
@@ -260,7 +265,16 @@ public static class ScreenViewBuilder
         if (tagIOHandler != null && !string.IsNullOrEmpty(d.TagName))
             c.CheckedChanged += (_, _) => tagIOHandler.WriteTag(d.TagName, c.IsChecked == true ? 1 : 0);
         if (eventManager != null && !string.IsNullOrEmpty(d.Id))
-            c.CheckedChanged += (_, _) => eventManager.FireTrigger(d.Id, "click");
+        {
+            c.CheckedChanged += (_, _) => eventManager.FireTrigger(d.Id, "OnClick");
+            c.CheckedChanged += (_, _) => eventManager.FireTrigger(d.Id, "OnStateChange");
+            c.MouseDown += (_, _) => eventManager.FireTrigger(d.Id, "OnPress");
+            c.MouseUp += (_, _) => eventManager.FireTrigger(d.Id, "OnRelease");
+            c.MouseEnter += (_, _) => eventManager.FireTrigger(d.Id, "OnMouseEnter");
+            c.MouseLeave += (_, _) => eventManager.FireTrigger(d.Id, "OnMouseLeave");
+            c.DoubleClick += (_, _) => eventManager.FireTrigger(d.Id, "OnDoubleClick");
+            c.RightClick += (_, _) => eventManager.FireTrigger(d.Id, "OnRightClick");
+        }
         return c;
     }
 
@@ -298,6 +312,7 @@ public static class ScreenViewBuilder
     {
         var s = new RuntimeSlider();
         s.ApplyDescriptor(d);
+        s.ComponentId = d.Id;
         s.TagName = d.TagName;
         if (tagManager != null && !string.IsNullOrEmpty(d.TagName))
         {
@@ -309,14 +324,23 @@ public static class ScreenViewBuilder
         if (tagIOHandler != null && !string.IsNullOrEmpty(d.TagName))
             s.ValueChanged += (_, _) => tagIOHandler.WriteTag(d.TagName, s.Value);
         if (eventManager != null && !string.IsNullOrEmpty(d.Id))
-            s.ValueChanged += (_, _) => eventManager.FireTrigger(d.Id, "click");
+        {
+            s.ValueChanged += (_, _) => eventManager.FireTrigger(d.Id, "OnValueChange");
+            s.MouseDown += (_, _) => eventManager.FireTrigger(d.Id, "OnPress");
+            s.MouseUp += (_, _) => eventManager.FireTrigger(d.Id, "OnRelease");
+            s.MouseEnter += (_, _) => eventManager.FireTrigger(d.Id, "OnMouseEnter");
+            s.MouseLeave += (_, _) => eventManager.FireTrigger(d.Id, "OnMouseLeave");
+            s.DoubleClick += (_, _) => eventManager.FireTrigger(d.Id, "OnDoubleClick");
+            s.RightClick += (_, _) => eventManager.FireTrigger(d.Id, "OnRightClick");
+        }
         return s;
     }
 
-    private static RuntimeTextInput CreateTextInput(ComponentDescriptor d, Runtime.Modules.TagsEngine.TagManager? tagManager, TagIOHandler? tagIOHandler, List<IDisposable> subs)
+    private static RuntimeTextInput CreateTextInput(ComponentDescriptor d, Runtime.Modules.TagsEngine.TagManager? tagManager, TagIOHandler? tagIOHandler, EventManager? eventManager, List<IDisposable> subs)
     {
         var t = new RuntimeTextInput();
         t.ApplyDescriptor(d);
+        t.ComponentId = d.Id;
         t.TagName = d.TagName;
         if (tagManager != null && !string.IsNullOrEmpty(d.TagName))
         {
@@ -327,6 +351,17 @@ public static class ScreenViewBuilder
         }
         if (tagIOHandler != null && !string.IsNullOrEmpty(d.TagName))
             t.TextCommitted += (_, _) => tagIOHandler.WriteTag(d.TagName, t.Text);
+        if (eventManager != null && !string.IsNullOrEmpty(d.Id))
+        {
+            t.TextCommitted += (_, _) => eventManager.FireTrigger(d.Id, "OnValueChange");
+            t.MouseDown += (_, _) => eventManager.FireTrigger(d.Id, "OnPress");
+            t.MouseUp += (_, _) => eventManager.FireTrigger(d.Id, "OnRelease");
+            t.MouseEnter += (_, _) => eventManager.FireTrigger(d.Id, "OnMouseEnter");
+            t.MouseLeave += (_, _) => eventManager.FireTrigger(d.Id, "OnMouseLeave");
+            t.KeyPress += (_, _) => eventManager.FireTrigger(d.Id, "OnKeyPress");
+            t.FocusIn += (_, _) => eventManager.FireTrigger(d.Id, "OnFocusIn");
+            t.FocusOut += (_, _) => eventManager.FireTrigger(d.Id, "OnFocusOut");
+        }
         return t;
     }
 
@@ -360,7 +395,16 @@ public static class ScreenViewBuilder
         if (tagIOHandler != null && !string.IsNullOrEmpty(d.TagName))
             t.Toggled += (_, _) => tagIOHandler.WriteTag(d.TagName, t.IsChecked == true ? 1 : 0);
         if (eventManager != null && !string.IsNullOrEmpty(d.Id))
-            t.Toggled += (_, _) => eventManager.FireTrigger(d.Id, "click");
+        {
+            t.Toggled += (_, _) => eventManager.FireTrigger(d.Id, "OnClick");
+            t.Toggled += (_, _) => eventManager.FireTrigger(d.Id, "OnStateChange");
+            t.MouseDown += (_, _) => eventManager.FireTrigger(d.Id, "OnPress");
+            t.MouseUp += (_, _) => eventManager.FireTrigger(d.Id, "OnRelease");
+            t.MouseEnter += (_, _) => eventManager.FireTrigger(d.Id, "OnMouseEnter");
+            t.MouseLeave += (_, _) => eventManager.FireTrigger(d.Id, "OnMouseLeave");
+            t.DoubleClick += (_, _) => eventManager.FireTrigger(d.Id, "OnDoubleClick");
+            t.RightClick += (_, _) => eventManager.FireTrigger(d.Id, "OnRightClick");
+        }
         return t;
     }
 
@@ -435,7 +479,16 @@ public static class ScreenViewBuilder
         if (tagIOHandler != null && !string.IsNullOrEmpty(d.TagName))
             r.CheckedChanged += (_, _) => tagIOHandler.WriteTag(d.TagName, r.IsChecked == true ? 1 : 0);
         if (eventManager != null && !string.IsNullOrEmpty(d.Id))
-            r.CheckedChanged += (_, _) => eventManager.FireTrigger(d.Id, "click");
+        {
+            r.CheckedChanged += (_, _) => eventManager.FireTrigger(d.Id, "OnClick");
+            r.CheckedChanged += (_, _) => eventManager.FireTrigger(d.Id, "OnStateChange");
+            r.MouseDown += (_, _) => eventManager.FireTrigger(d.Id, "OnPress");
+            r.MouseUp += (_, _) => eventManager.FireTrigger(d.Id, "OnRelease");
+            r.MouseEnter += (_, _) => eventManager.FireTrigger(d.Id, "OnMouseEnter");
+            r.MouseLeave += (_, _) => eventManager.FireTrigger(d.Id, "OnMouseLeave");
+            r.DoubleClick += (_, _) => eventManager.FireTrigger(d.Id, "OnDoubleClick");
+            r.RightClick += (_, _) => eventManager.FireTrigger(d.Id, "OnRightClick");
+        }
         return r;
     }
 

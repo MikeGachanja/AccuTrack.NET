@@ -98,8 +98,8 @@ public enum TriggerType
     OnClick = 0,
     OnDoubleClick = 1,
     OnRightClick = 2,
-    OnMouseDown = 3,
-    OnMouseUp = 4,
+    OnPress = 3,        // Touch-friendly name for OnMouseDown
+    OnRelease = 4,      // Touch-friendly name for OnMouseUp
     OnMouseEnter = 5,
     OnMouseLeave = 6,
     OnKeyPress = 7,
