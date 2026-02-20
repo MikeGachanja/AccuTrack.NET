@@ -107,9 +107,15 @@ public partial class MachineLearningEditor : UserControl
         var toolbar = new ToolStrip { Dock = DockStyle.Top };
         var addButton = new ToolStripButton("Add Model");
         addButton.Click += (s, e) => AddModel();
+        addButton.ToolTipText = "Add a new model (opens Configure Model dialog)";
         toolbar.Items.Add(addButton);
+        var configureButton = new ToolStripButton("Configure...");
+        configureButton.Click += (s, e) => ConfigureSelectedModel();
+        configureButton.ToolTipText = "Open Configure Model dialog for the selected row";
+        toolbar.Items.Add(configureButton);
         var removeButton = new ToolStripButton("Remove Model");
         removeButton.Click += (s, e) => RemoveSelectedModel();
+        toolbar.Items.Add(removeButton);
         toolbar.Items.Add(new ToolStripSeparator());
         var setTrainedDataButton = new ToolStripButton("Set trained data...");
         setTrainedDataButton.Click += (s, e) => SetTrainedDataForSelectedModel();
@@ -157,6 +163,7 @@ public partial class MachineLearningEditor : UserControl
         _modelsGrid.Columns.Add(enabledColumn);
 
         _modelsGrid.CellValueChanged += OnCellValueChanged;
+        _modelsGrid.CellDoubleClick += (s, e) => { if (e.RowIndex >= 0) ConfigureSelectedModel(); };
 
         mainLayout.Controls.Add(settingsPanel, 0, 0);
         mainLayout.Controls.Add(toolbar, 0, 1);
@@ -255,17 +262,42 @@ public partial class MachineLearningEditor : UserControl
         if (_ml == null)
             _ml = new MachineLearning();
 
-        var newModel = new MLModel
+        using var dialog = new ModelConfiguratorDialog();
+        dialog.SetModel(null);
+        dialog.SetScadaProject(_scadaProject);
+        dialog.SetTagTables(_tagTables);
+        dialog.SetHistorianTagNames(_historianTagNames);
+        if (dialog.ShowDialog(this) == DialogResult.OK && dialog.ResultModel != null)
         {
-            Name = $"Model{_ml.Models.Count + 1}",
-            ModelKindId = ModelKindCatalog.FastForestRegressionId,
-            ModelType = "Regression",
-            Enabled = true
-        };
+            _ml.Models.Add(dialog.ResultModel);
+            LoadML();
+            _isModified = true;
+        }
+    }
 
-        _ml.Models.Add(newModel);
-        LoadML();
-        _isModified = true;
+    private void ConfigureSelectedModel()
+    {
+        if (_modelsGrid.SelectedRows.Count == 0 || _modelsGrid.SelectedRows[0].Tag is not MLModel model || _ml == null)
+        {
+            MessageBox.Show("Select a model row first.", "ML Editor", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+
+        using var dialog = new ModelConfiguratorDialog();
+        dialog.SetModel(model);
+        dialog.SetScadaProject(_scadaProject);
+        dialog.SetTagTables(_tagTables);
+        dialog.SetHistorianTagNames(_historianTagNames);
+        if (dialog.ShowDialog(this) == DialogResult.OK && dialog.ResultModel != null)
+        {
+            var idx = _ml.Models.IndexOf(model);
+            if (idx >= 0)
+            {
+                _ml.Models[idx] = dialog.ResultModel;
+                LoadML();
+                _isModified = true;
+            }
+        }
     }
 
     private void SetTrainedDataForSelectedModel()
@@ -339,8 +371,7 @@ public partial class MachineLearningEditor : UserControl
         }
         using var dialog = new TagSelectorDialog();
         dialog.SetTagTables(_tagTables);
-        if (_historianTagNames.Count > 0)
-            dialog.SetAllowedTagNames(_historianTagNames);
+        // Output tag: show all tags from all tag tables (not restricted to historian)
         dialog.SetSelectedTagName(model.OutputTag);
         if (dialog.ShowDialog(this) == DialogResult.OK && !string.IsNullOrEmpty(dialog.SelectedTagName))
         {
