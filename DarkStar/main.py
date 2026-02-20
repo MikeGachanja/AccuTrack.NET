@@ -41,6 +41,26 @@ class RobotSensorOPCServer:
         self.server = Server()
         self.server.set_endpoint(endpoint)
         self.server.set_server_name(server_name)
+        
+        # Configure security policy - use NoSecurity since cryptography is disabled
+        # This allows clients to connect without certificates
+        # Note: By default, all security policies are enabled, but we explicitly set NoSecurity
+        try:
+            self.server.set_security_policy([
+                ua.SecurityPolicyType.NoSecurity
+            ])
+        except Exception as e:
+            logger.warning(f"Could not set security policy (may not be supported in this version): {e}")
+            # Continue without explicit security policy - server will use defaults
+        
+        # Allow anonymous connections (default includes Anonymous, but we make it explicit)
+        # By default all security IDs are enabled: ["Anonymous", "Basic256Sha256", "Username"]
+        try:
+            self.server.set_security_IDs(["Anonymous"])
+        except Exception as e:
+            logger.warning(f"Could not set security IDs (may not be supported in this version): {e}")
+            # Continue without explicit security IDs - server will use defaults
+        
         self.update_interval = update_interval
         
         # Register namespace
@@ -64,61 +84,57 @@ class RobotSensorOPCServer:
         Set up the 5 sensor tags in the OPC UA server.
         """
         # Sensor 1: Joint Position (writable for control)
-        self.sensors['joint_position'] = self.robot.add_variable(
+        # Sensor 1: Joint Position (writable for control)
+        # Current position of Joint 1 in degrees
+        self.sensors['robot_joint_position'] = self.robot.add_variable(
             self.idx, 
-            "Joint1_Position", 
+            "Robot_Joint1_Position", 
             0.0,
             varianttype=ua.VariantType.Float
         )
-        self.sensors['joint_position'].set_writable()
-        self.sensors['joint_position'].set_display_name("Joint 1 Position")
-        self.sensors['joint_position'].set_description("Current position of Joint 1 in degrees")
+        self.sensors['robot_joint_position'].set_writable()
         
         # Sensor 2: Motor Temperature
-        self.sensors['motor_temperature'] = self.robot.add_variable(
+        # Motor temperature in Celsius
+        self.sensors['robot_motor_temperature'] = self.robot.add_variable(
             self.idx,
-            "Motor_Temperature",
+            "Robot_Motor_Temperature",
             25.0,
             varianttype=ua.VariantType.Float
         )
-        self.sensors['motor_temperature'].set_display_name("Motor Temperature")
-        self.sensors['motor_temperature'].set_description("Motor temperature in Celsius")
         
         # Sensor 3: Velocity
-        self.sensors['velocity'] = self.robot.add_variable(
+        # Current robot_velocity in m/s
+        self.sensors['robot_velocity'] = self.robot.add_variable(
             self.idx,
-            "Velocity",
+            "Robot_Velocity",
             0.0,
             varianttype=ua.VariantType.Float
         )
-        self.sensors['velocity'].set_display_name("Robot Velocity")
-        self.sensors['velocity'].set_description("Current velocity in m/s")
         
         # Sensor 4: Force/Torque
-        self.sensors['force'] = self.robot.add_variable(
+        # Force reading in Newtons
+        self.sensors['robot_force'] = self.robot.add_variable(
             self.idx,
-            "Force",
+            "Robot_Force",
             0.0,
             varianttype=ua.VariantType.Float
         )
-        self.sensors['force'].set_display_name("Force Sensor")
-        self.sensors['force'].set_description("Force reading in Newtons")
         
         # Sensor 5: Status (Boolean)
-        self.sensors['status'] = self.robot.add_variable(
+        # Robot operational robot_status (True=Ready, False=Error)
+        self.sensors['robot_status'] = self.robot.add_variable(
             self.idx,
             "Robot_Status",
             True,
             varianttype=ua.VariantType.Boolean
         )
-        self.sensors['status'].set_display_name("Robot Status")
-        self.sensors['status'].set_description("Robot operational status (True=Ready, False=Error)")
         
         logger.info("5 sensor tags configured:")
-        logger.info("  - Joint1_Position (Float, writable)")
-        logger.info("  - Motor_Temperature (Float)")
-        logger.info("  - Velocity (Float)")
-        logger.info("  - Force (Float)")
+        logger.info("  - Robot_Joint1_Position (Float, writable)")
+        logger.info("  - Robot_Motor_Temperature (Float)")
+        logger.info("  - Robot_Velocity (Float)")
+        logger.info("  - Robot_Force (Float)")
         logger.info("  - Robot_Status (Boolean)")
     
     def register_sensor_reader(self, sensor_name: str, reader_func: Callable[[], any]):
@@ -126,7 +142,7 @@ class RobotSensorOPCServer:
         Register a custom function to read sensor data.
         
         Args:
-            sensor_name: Name of the sensor (e.g., 'joint_position', 'motor_temperature')
+            sensor_name: Name of the sensor (e.g., 'robot_joint_position', 'robot_motor_temperature')
             reader_func: Function that returns the sensor value
         """
         if sensor_name in self.sensors:
@@ -143,8 +159,8 @@ class RobotSensorOPCServer:
         Returns:
             Joint position in degrees
         """
-        if 'joint_position' in self.sensor_readers:
-            return self.sensor_readers['joint_position']()
+        if 'robot_joint_position' in self.sensor_readers:
+            return self.sensor_readers['robot_joint_position']()
         # Placeholder: Replace with actual hardware read
         return 0.0
     
@@ -156,47 +172,47 @@ class RobotSensorOPCServer:
         Returns:
             Temperature in Celsius
         """
-        if 'motor_temperature' in self.sensor_readers:
-            return self.sensor_readers['motor_temperature']()
+        if 'robot_motor_temperature' in self.sensor_readers:
+            return self.sensor_readers['robot_motor_temperature']()
         # Placeholder: Replace with actual hardware read
         return 25.0
     
     def read_velocity(self) -> float:
         """
-        Read velocity from robot hardware.
+        Read robot_velocity from robot hardware.
         Override this method or register a custom reader.
         
         Returns:
             Velocity in m/s
         """
-        if 'velocity' in self.sensor_readers:
-            return self.sensor_readers['velocity']()
+        if 'robot_velocity' in self.sensor_readers:
+            return self.sensor_readers['robot_velocity']()
         # Placeholder: Replace with actual hardware read
         return 0.0
     
     def read_force(self) -> float:
         """
-        Read force/torque from robot hardware.
+        Read robot_force/torque from robot hardware.
         Override this method or register a custom reader.
         
         Returns:
             Force in Newtons
         """
-        if 'force' in self.sensor_readers:
-            return self.sensor_readers['force']()
+        if 'robot_force' in self.sensor_readers:
+            return self.sensor_readers['robot_force']()
         # Placeholder: Replace with actual hardware read
         return 0.0
     
     def read_status(self) -> bool:
         """
-        Read robot status from hardware.
+        Read robot robot_status from hardware.
         Override this method or register a custom reader.
         
         Returns:
             True if robot is ready, False if error
         """
-        if 'status' in self.sensor_readers:
-            return self.sensor_readers['status']()
+        if 'robot_status' in self.sensor_readers:
+            return self.sensor_readers['robot_status']()
         # Placeholder: Replace with actual hardware read
         return True
     
@@ -205,11 +221,11 @@ class RobotSensorOPCServer:
         Update all sensor values from hardware readings.
         """
         try:
-            self.sensors['joint_position'].set_value(self.read_joint_position())
-            self.sensors['motor_temperature'].set_value(self.read_motor_temperature())
-            self.sensors['velocity'].set_value(self.read_velocity())
-            self.sensors['force'].set_value(self.read_force())
-            self.sensors['status'].set_value(self.read_status())
+            self.sensors['robot_joint_position'].set_value(self.read_joint_position())
+            self.sensors['robot_motor_temperature'].set_value(self.read_motor_temperature())
+            self.sensors['robot_velocity'].set_value(self.read_velocity())
+            self.sensors['robot_force'].set_value(self.read_force())
+            self.sensors['robot_status'].set_value(self.read_status())
         except Exception as e:
             logger.error(f"Error updating sensor values: {e}", exc_info=True)
     
@@ -218,8 +234,11 @@ class RobotSensorOPCServer:
         Start the OPC UA server.
         """
         try:
+            logger.info("Starting OPC UA server...")
             self.server.start()
             logger.info("OPC UA Server started successfully")
+            logger.info("Server is ready to accept connections")
+                
         except Exception as e:
             logger.error(f"Failed to start OPC UA server: {e}", exc_info=True)
             raise
@@ -265,8 +284,8 @@ def main():
     )
     
     # Example: Register custom sensor readers if you have hardware interfaces
-    # server.register_sensor_reader('joint_position', your_hardware.read_joint)
-    # server.register_sensor_reader('motor_temperature', your_hardware.read_temp)
+    # server.register_sensor_reader('robot_joint_position', your_hardware.read_joint)
+    # server.register_sensor_reader('robot_motor_temperature', your_hardware.read_temp)
     # etc.
     
     # Run the server
