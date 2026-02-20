@@ -639,7 +639,7 @@ public class CompilerModule
 
         var mlConfigPath = Path.Combine(_currentProject.Paths.MachineLearningPath, "machine_learning.json");
         var buildMlJsonPath = Path.Combine(jsonPath, "machine_learning.json");
-        var mlDataBuildPath = Path.Combine(buildPath, "ml_data");
+        var mlDataBuildPath = Path.Combine(buildPath, "mlmodels");
 
         if (!File.Exists(mlConfigPath))
         {
@@ -667,6 +667,30 @@ public class CompilerModule
                 if (!Directory.Exists(mlDataBuildPath))
                     Directory.CreateDirectory(mlDataBuildPath);
 
+                var mlPluginsSource = Path.Combine(_currentProject.Paths.MachineLearningPath, "mlmodels", "plugins");
+                var mlPluginsBuild = Path.Combine(mlDataBuildPath, "plugins");
+                if (Directory.Exists(mlPluginsSource))
+                {
+                    try
+                    {
+                        if (!Directory.Exists(mlPluginsBuild))
+                            Directory.CreateDirectory(mlPluginsBuild);
+                        foreach (var file in Directory.EnumerateFiles(mlPluginsSource, "*.*", SearchOption.TopDirectoryOnly))
+                        {
+                            var ext = Path.GetExtension(file);
+                            if (string.Equals(ext, ".dll", StringComparison.OrdinalIgnoreCase) || string.Equals(ext, ".pdb", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var dest = Path.Combine(mlPluginsBuild, Path.GetFileName(file));
+                                File.Copy(file, dest, true);
+                            }
+                        }
+                    }
+                    catch (Exception exPlugins)
+                    {
+                        EmitWarning($"Could not copy ML plugins: {exPlugins.Message}");
+                    }
+                }
+
                 var rootPath = _currentProject.Paths.RootPath;
                 for (int i = 0; i < modelsArray.Count; i++)
                 {
@@ -691,7 +715,7 @@ public class CompilerModule
                         : $"model_{i}{ext}";
                     var destPath = Path.Combine(mlDataBuildPath, stableName);
                     File.Copy(fullPath, destPath, true);
-                    modelObj["trainedDataPath"] = $"ml_data/{stableName}";
+                    modelObj["trainedDataPath"] = $"mlmodels/{stableName}";
                 }
                 EmitMessage("Copied ML config and trained data to build");
             }

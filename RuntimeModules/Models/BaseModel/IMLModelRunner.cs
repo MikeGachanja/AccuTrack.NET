@@ -1,6 +1,6 @@
-namespace Runtime.Modules.MLEngine;
+namespace Runtime.Modules.Models;
 
-/// <summary>Runs inference for a single loaded ML model instance.</summary>
+/// <summary>Runs inference for a single loaded ML model instance. Implement this in model DLLs for discovery and loading by MLEngine.</summary>
 public interface IMLModelRunner
 {
     string ModelId { get; }

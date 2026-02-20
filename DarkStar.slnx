@@ -19,6 +19,11 @@
     <Project Path="DesignerModules/Tools/Tools.csproj" />
     <Project Path="DesignerModules/Workspace/Workspace.csproj" />
   </Folder>
+  <Folder Name="/Models/">
+    <Project Path="RuntimeModules/Models/BaseModel/BaseModel.csproj" />
+    <Project Path="RuntimeModules/Models/FastForest/FastForest.csproj" />
+    <Project Path="RuntimeModules/Models/LightGBM/LightGBM.csproj" />
+  </Folder>
   <Folder Name="/RuntimeModules/">
     <Project Path="RuntimeModules/Alarms/Alarms.csproj" />
     <Project Path="RuntimeModules/Communication/Communication.csproj" />

@@ -152,8 +152,11 @@ public class ModelConfiguratorDialog : Form
         _trainedDataPathTextBox = new TextBox { ReadOnly = true, Width = 320 };
         _selectTrainedDataButton = new Button { Text = "Select...", AutoSize = true };
         _selectTrainedDataButton.Click += OnSelectTrainedData;
+        var importModelButton = new Button { Text = "Import model...", AutoSize = true };
+        importModelButton.Click += OnImportModel;
         pathPanel.Controls.Add(_trainedDataPathTextBox);
         pathPanel.Controls.Add(_selectTrainedDataButton);
+        pathPanel.Controls.Add(importModelButton);
         layout.Controls.Add(pathPanel, 1, 3);
 
         RefreshModelKindList();
@@ -188,6 +191,87 @@ public class ModelConfiguratorDialog : Form
         {
             EnsureModel().TrainedDataPath = dialog.SelectedProjectRelativePath;
             _trainedDataPathTextBox.Text = dialog.SelectedProjectRelativePath;
+        }
+    }
+
+    private void OnImportModel(object? sender, EventArgs e)
+    {
+        var projectPath = _scadaProject?.Paths.MachineLearningPath;
+        if (string.IsNullOrEmpty(projectPath))
+        {
+            MessageBox.Show(this, "No project set. Cannot import model.", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        using var dlg = new OpenFileDialog
+        {
+            Title = "Select model runner DLL and/or model data to import",
+            Filter = "Model files (*.dll;*.zip;*.mlnet)|*.dll;*.zip;*.mlnet|Model runner (*.dll)|*.dll|ML model data (*.zip;*.mlnet)|*.zip;*.mlnet|All files (*.*)|*.*",
+            Multiselect = true
+        };
+        if (dlg.ShowDialog(this) != DialogResult.OK || dlg.FileNames == null || dlg.FileNames.Length == 0)
+            return;
+
+        string? lastImportedDataPath = null;
+        var systemDataFolder = ModelKindCatalog.SystemTrainedModelsFolder;
+        var systemPluginsFolder = ModelKindCatalog.SystemModelPluginsFolder;
+        var projectDataPath = Path.Combine(projectPath, "data");
+        var projectPluginsPath = Path.Combine(projectPath, "mlmodels", "plugins");
+
+        try
+        {
+            if (!Directory.Exists(systemDataFolder)) Directory.CreateDirectory(systemDataFolder);
+            if (!Directory.Exists(systemPluginsFolder)) Directory.CreateDirectory(systemPluginsFolder);
+            if (!Directory.Exists(projectDataPath)) Directory.CreateDirectory(projectDataPath);
+            if (!Directory.Exists(projectPluginsPath)) Directory.CreateDirectory(projectPluginsPath);
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show(this, $"Could not create folders: {ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+
+        foreach (var filePath in dlg.FileNames)
+        {
+            if (string.IsNullOrEmpty(filePath) || !File.Exists(filePath)) continue;
+            var ext = Path.GetExtension(filePath);
+            var fileName = Path.GetFileName(filePath);
+            if (string.IsNullOrEmpty(fileName)) continue;
+
+            if (string.Equals(ext, ".dll", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var destSystem = Path.Combine(systemPluginsFolder, fileName);
+                    var destProject = Path.Combine(projectPluginsPath, fileName);
+                    File.Copy(filePath, destSystem, true);
+                    File.Copy(filePath, destProject, true);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, $"Could not import DLL {fileName}: {ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+            else if (string.Equals(ext, ".zip", StringComparison.OrdinalIgnoreCase) || string.Equals(ext, ".mlnet", StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    var destSystem = Path.Combine(systemDataFolder, fileName);
+                    var destProject = Path.Combine(projectDataPath, fileName);
+                    File.Copy(filePath, destSystem, true);
+                    File.Copy(filePath, destProject, true);
+                    lastImportedDataPath = Path.Combine("machine_learning", "data", fileName).Replace('\\', '/');
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(this, $"Could not import model data {fileName}: {ex.Message}", Text, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                }
+            }
+        }
+
+        if (!string.IsNullOrEmpty(lastImportedDataPath))
+        {
+            EnsureModel().TrainedDataPath = lastImportedDataPath;
+            _trainedDataPathTextBox.Text = lastImportedDataPath;
         }
     }
 

@@ -10,6 +10,7 @@ namespace Designer.Modules.MachineLearning;
 public static class ModelKindCatalog
 {
     public const string FastForestRegressionId = "FastForestRegression";
+    public const string LightGBMId = "LightGBM";
 
     /// <summary>Folder where installed ML model kind manifests are stored (e.g. from Package Manager).</summary>
     public static string InstalledKindsFolder =>
@@ -18,6 +19,10 @@ public static class ModelKindCatalog
     /// <summary>Folder where imported trained model data (.zip etc.) is stored so it is always available for future use.</summary>
     public static string SystemTrainedModelsFolder =>
         Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "DarkStar", "MLModels");
+
+    /// <summary>Folder where imported model runner DLLs are stored so they are always available for future use.</summary>
+    public static string SystemModelPluginsFolder =>
+        Path.Combine(System.Environment.GetFolderPath(System.Environment.SpecialFolder.LocalApplicationData), "DarkStar", "MLModels", "plugins");
 
     private static List<ModelKind>? _builtInKinds;
 
@@ -38,6 +43,18 @@ public static class ModelKindCatalog
                 InputSchema = -1,
                 OutputSchema = "SingleNumeric",
                 TrainedDataFormat = "ML.NET.zip",
+                Source = "BuiltIn",
+                ParameterSchema = GetDefaultParameterSchema()
+            },
+            new ModelKind
+            {
+                Id = LightGBMId,
+                DisplayName = "LightGBM",
+                Description = "Gradient boosting (LightGBM); N numeric inputs, 1 numeric output. System default model.",
+                Category = "General",
+                InputSchema = -1,
+                OutputSchema = "SingleNumeric",
+                TrainedDataFormat = "LightGBM",
                 Source = "BuiltIn",
                 ParameterSchema = GetDefaultParameterSchema()
             }

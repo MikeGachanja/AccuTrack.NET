@@ -2,10 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.Json.Nodes;
 using System.Threading;
 using Runtime.Modules.ExecutionEngine;
 using Runtime.Modules.Historian;
+using Runtime.Modules.Models;
 using Runtime.Modules.TagsEngine;
 
 namespace Runtime.Modules.MLEngine;
@@ -143,6 +145,9 @@ public sealed class MLEngineModule : ModuleBase, IMLEngine
         _mlResultStore.SetDatabasePath(_projectPath);
         _mlResultStore.EnsureInitialized();
 
+        var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+        var runnerTypesByKind = ModelLoader.LoadRunnerTypes(_projectPath, baseDir);
+
         foreach (var cfg in _modelConfigs)
         {
             var dataPath = Path.Combine(_projectPath, cfg.TrainedDataPath.Replace('/', Path.DirectorySeparatorChar));
@@ -152,12 +157,7 @@ public sealed class MLEngineModule : ModuleBase, IMLEngine
                 continue;
             }
 
-            IMLModelRunner? runner = null;
-            if (string.Equals(cfg.ModelKindId, FastForestRegressionId, StringComparison.OrdinalIgnoreCase))
-            {
-                runner = FastForestRegressionRunner.TryLoad(dataPath, cfg.Id, cfg.OutputTagName, cfg.InputTagNames);
-            }
-
+            IMLModelRunner? runner = TryCreateRunner(runnerTypesByKind, cfg.ModelKindId, dataPath, cfg.Id, cfg.OutputTagName, cfg.InputTagNames);
             if (runner != null)
                 _runners.Add(runner);
         }
@@ -177,6 +177,29 @@ public sealed class MLEngineModule : ModuleBase, IMLEngine
 
         SetRunning(true);
         return true;
+    }
+
+    private static IMLModelRunner? TryCreateRunner(
+        Dictionary<string, Type> runnerTypesByKind,
+        string modelKindId,
+        string dataPath,
+        string modelId,
+        string outputTagName,
+        IReadOnlyList<string> inputTagNames)
+    {
+        if (!runnerTypesByKind.TryGetValue(modelKindId, out var type))
+            return null;
+        var method = type.GetMethod("TryLoad", BindingFlags.Public | BindingFlags.Static);
+        if (method == null) return null;
+        try
+        {
+            var result = method.Invoke(null, new object[] { dataPath, modelId, outputTagName, inputTagNames });
+            return result as IMLModelRunner;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     public override void Stop()

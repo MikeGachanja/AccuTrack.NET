@@ -1,20 +1,17 @@
 using Microsoft.ML;
 using Microsoft.ML.Data;
 
-namespace Runtime.Modules.MLEngine;
+namespace Runtime.Modules.Models;
 
 /// <summary>Loads and runs an ML.NET Fast Forest regression model (zip).</summary>
-public sealed class FastForestRegressionRunner : IMLModelRunner
+public sealed class FastForestRegressionRunner : MLModelRunnerBase
 {
-    private readonly MLContext _mlContext = new(0);
-    private readonly Microsoft.ML.PredictionEngine<MLInput, MLOutput> _engine;
+    private readonly PredictionEngine<MLInput, MLOutput> _engine;
 
-    public string ModelId { get; }
-    public string OutputTagName { get; }
-    public IReadOnlyList<string> InputTagNames { get; }
+    public const string KindId = "FastForestRegression";
 
     private FastForestRegressionRunner(string modelId, string outputTagName, IReadOnlyList<string> inputTagNames,
-        Microsoft.ML.PredictionEngine<MLInput, MLOutput> engine)
+        PredictionEngine<MLInput, MLOutput> engine)
     {
         ModelId = modelId;
         OutputTagName = outputTagName;
@@ -22,7 +19,7 @@ public sealed class FastForestRegressionRunner : IMLModelRunner
         _engine = engine;
     }
 
-    public float Predict(IReadOnlyList<float> inputValues)
+    public override float Predict(IReadOnlyList<float> inputValues)
     {
         var input = new MLInput { Features = inputValues.ToArray() };
         var output = _engine.Predict(input);
