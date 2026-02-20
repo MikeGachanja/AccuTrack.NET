@@ -13,6 +13,8 @@ public class MachineLearning
     public bool Enabled { get; set; } = false;
     public string TrainingDataPath { get; set; } = string.Empty;
     public int TrainingIntervalHours { get; set; } = 24;
+    /// <summary>Interval in seconds for time-series model runs when using historian (default 60).</summary>
+    public int HistorianTimeSeriesIntervalSeconds { get; set; } = 60;
 
     public JObject ToJson()
     {
@@ -28,6 +30,8 @@ public class MachineLearning
         obj["enabled"] = Enabled;
         obj["trainingDataPath"] = TrainingDataPath;
         obj["trainingIntervalHours"] = TrainingIntervalHours;
+        if (HistorianTimeSeriesIntervalSeconds != 60)
+            obj["historianTimeSeriesIntervalSeconds"] = HistorianTimeSeriesIntervalSeconds;
 
         return obj;
     }
@@ -38,7 +42,8 @@ public class MachineLearning
         {
             Enabled = json["enabled"]?.ToObject<bool>() ?? false,
             TrainingDataPath = json["trainingDataPath"]?.ToString() ?? string.Empty,
-            TrainingIntervalHours = json["trainingIntervalHours"]?.ToObject<int>() ?? 24
+            TrainingIntervalHours = json["trainingIntervalHours"]?.ToObject<int>() ?? 24,
+            HistorianTimeSeriesIntervalSeconds = json["historianTimeSeriesIntervalSeconds"]?.ToObject<int>() ?? 60
         };
 
         var modelsArray = json["models"] as JArray;
@@ -74,6 +79,14 @@ public class MLModel
     public string OutputTag { get; set; } = string.Empty;
     public Dictionary<string, object> Parameters { get; set; } = new Dictionary<string, object>();
     public bool Enabled { get; set; } = true;
+    /// <summary>When true, run this model from historian time-series data on a timer (in addition to or instead of live tags).</summary>
+    public bool UseHistorianTimeSeries { get; set; }
+    /// <summary>Time range in minutes for historian queries when using time-series mode (e.g. 60 = last hour).</summary>
+    public int HistorianTimeRangeMinutes { get; set; } = 60;
+    /// <summary>Max rows per tag when querying historian (e.g. 500).</summary>
+    public int HistorianMaxRowsPerTag { get; set; } = 500;
+    /// <summary>When true, write prediction results to ml.db.</summary>
+    public bool SaveResultsToDb { get; set; }
 
     public JObject ToJson()
     {
@@ -103,6 +116,14 @@ public class MLModel
             obj["modelKindId"] = ModelKindId;
         if (!string.IsNullOrEmpty(TrainedDataPath))
             obj["trainedDataPath"] = TrainedDataPath;
+        if (UseHistorianTimeSeries)
+            obj["useHistorianTimeSeries"] = true;
+        if (HistorianTimeRangeMinutes != 60)
+            obj["historianTimeRangeMinutes"] = HistorianTimeRangeMinutes;
+        if (HistorianMaxRowsPerTag != 500)
+            obj["historianMaxRowsPerTag"] = HistorianMaxRowsPerTag;
+        if (SaveResultsToDb)
+            obj["saveResultsToDb"] = true;
         return obj;
     }
 
@@ -115,7 +136,11 @@ public class MLModel
             ModelKindId = json["modelKindId"]?.ToString() ?? string.Empty,
             TrainedDataPath = json["trainedDataPath"]?.ToString() ?? string.Empty,
             OutputTag = json["outputTag"]?.ToString() ?? string.Empty,
-            Enabled = json["enabled"]?.ToObject<bool>() ?? true
+            Enabled = json["enabled"]?.ToObject<bool>() ?? true,
+            UseHistorianTimeSeries = json["useHistorianTimeSeries"]?.ToObject<bool>() ?? false,
+            HistorianTimeRangeMinutes = json["historianTimeRangeMinutes"]?.ToObject<int>() ?? 60,
+            HistorianMaxRowsPerTag = json["historianMaxRowsPerTag"]?.ToObject<int>() ?? 500,
+            SaveResultsToDb = json["saveResultsToDb"]?.ToObject<bool>() ?? false
         };
 
         if (Guid.TryParse(json["id"]?.ToString(), out Guid id))

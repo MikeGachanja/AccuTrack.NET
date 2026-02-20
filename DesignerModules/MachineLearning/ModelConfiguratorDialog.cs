@@ -41,6 +41,10 @@ public class ModelConfiguratorDialog : Form
     private ComboBox _templateCombo = null!;
     private Button _loadTemplateButton = null!;
     private Button _saveAsTemplateButton = null!;
+    private CheckBox _useHistorianTimeSeriesCheck = null!;
+    private NumericUpDown _historianTimeRangeMinutesNum = null!;
+    private NumericUpDown _historianMaxRowsPerTagNum = null!;
+    private CheckBox _saveResultsToDbCheck = null!;
     private Dictionary<string, Control> _paramControls = new Dictionary<string, Control>(StringComparer.OrdinalIgnoreCase);
     private List<MLTemplate?> _templateListForCombo = new List<MLTemplate?>();
 
@@ -276,9 +280,10 @@ public class ModelConfiguratorDialog : Form
 
     private void BuildTab3ModelConfigurations()
     {
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4, Padding = new Padding(8) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 5, Padding = new Padding(8) };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 28));
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 80));
         layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
 
@@ -296,11 +301,28 @@ public class ModelConfiguratorDialog : Form
         _saveAsTemplateButton.Click += OnSaveAsTemplate;
         layout.Controls.Add(_saveAsTemplateButton, 1, 1);
 
-        layout.Controls.Add(new Label { Text = "Parameters:", AutoSize = true }, 0, 2);
-        _tab3ParametersPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
-        layout.Controls.Add(_tab3ParametersPanel, 1, 2);
+        var historianGroup = new GroupBox { Text = "Historian & storage", Dock = DockStyle.Fill, Padding = new Padding(6) };
+        var historianLayout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 4 };
+        historianLayout.Controls.Add(new Label { Text = "Use historian time-series:", AutoSize = true }, 0, 0);
+        _useHistorianTimeSeriesCheck = new CheckBox { Text = "Run model from historian data on a timer", AutoSize = true };
+        historianLayout.Controls.Add(_useHistorianTimeSeriesCheck, 1, 0);
+        historianLayout.Controls.Add(new Label { Text = "Time range (minutes):", AutoSize = true }, 0, 1);
+        _historianTimeRangeMinutesNum = new NumericUpDown { Minimum = 1, Maximum = 10080, Value = 60, Width = 80 };
+        historianLayout.Controls.Add(_historianTimeRangeMinutesNum, 1, 1);
+        historianLayout.Controls.Add(new Label { Text = "Max rows per tag:", AutoSize = true }, 0, 2);
+        _historianMaxRowsPerTagNum = new NumericUpDown { Minimum = 10, Maximum = 10000, Value = 500, Width = 80 };
+        historianLayout.Controls.Add(_historianMaxRowsPerTagNum, 1, 2);
+        historianLayout.Controls.Add(new Label { Text = "Save results to ml.db:", AutoSize = true }, 0, 3);
+        _saveResultsToDbCheck = new CheckBox { Text = "Write predictions to database", AutoSize = true };
+        historianLayout.Controls.Add(_saveResultsToDbCheck, 1, 3);
+        historianGroup.Controls.Add(historianLayout);
+        layout.SetColumnSpan(historianGroup, 2);
+        layout.Controls.Add(historianGroup, 0, 2);
 
-        layout.SetColumnSpan(_tab3ParametersPanel, 1);
+        layout.Controls.Add(new Label { Text = "Parameters:", AutoSize = true }, 0, 3);
+        _tab3ParametersPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        layout.Controls.Add(_tab3ParametersPanel, 1, 3);
+
         _tabModelConfigurations.Controls.Add(layout);
     }
 
@@ -501,6 +523,10 @@ public class ModelConfiguratorDialog : Form
             _outputTagTextBox.Text = _model.OutputTag ?? "";
         }
         // Tab 3
+        _useHistorianTimeSeriesCheck.Checked = _model?.UseHistorianTimeSeries ?? false;
+        _historianTimeRangeMinutesNum.Value = Math.Max(1, Math.Min(10080, _model?.HistorianTimeRangeMinutes ?? 60));
+        _historianMaxRowsPerTagNum.Value = Math.Max(10, Math.Min(10000, _model?.HistorianMaxRowsPerTag ?? 500));
+        _saveResultsToDbCheck.Checked = _model?.SaveResultsToDb ?? false;
         RefreshTab3Parameters();
     }
 
@@ -573,6 +599,10 @@ public class ModelConfiguratorDialog : Form
         if (_modelKindListBox.SelectedItem is ModelKind kind)
             m.ModelKindId = kind.Id;
         m.TrainedDataPath = _trainedDataPathTextBox.Text?.Trim() ?? "";
+        m.UseHistorianTimeSeries = _useHistorianTimeSeriesCheck.Checked;
+        m.HistorianTimeRangeMinutes = (int)_historianTimeRangeMinutesNum.Value;
+        m.HistorianMaxRowsPerTag = (int)_historianMaxRowsPerTagNum.Value;
+        m.SaveResultsToDb = _saveResultsToDbCheck.Checked;
         CollectTab2();
         CollectTab3();
         return true;

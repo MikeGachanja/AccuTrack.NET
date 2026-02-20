@@ -5,9 +5,15 @@ using Runtime.Modules.TagsEngine;
 
 namespace Runtime.Modules.Historian;
 
-/// <summary>Historian manager: SQLite database storage, tag subscription, query API.</summary>
+/// <summary>Pending write item for the historian write queue.</summary>
+internal sealed record HistorianWriteItem(string TagName, object? Value, int Quality, DateTime Timestamp);
+
+/// <summary>Historian manager: SQLite database storage, tag subscription, query API. Writes are queued and drained by a background thread.</summary>
 public sealed class HistorianManager
 {
+    private const int WriteBatchSize = 50;
+    private const int WriterSleepMs = 50;
+
     private string _databasePath = "";
     private volatile bool _running;
     private TagManager? _tagManager;
@@ -16,6 +22,11 @@ public sealed class HistorianManager
     private readonly ConcurrentDictionary<string, int> _tagLoggingIntervals = new(); // Per-tag logging intervals
     private int _loggingIntervalSeconds = 60;
     private readonly object _dbLock = new();
+
+    private readonly ConcurrentQueue<HistorianWriteItem> _writeQueue = new();
+    private Thread? _writerThread;
+    private volatile bool _writerRunning;
+    private readonly AutoResetEvent _writerWake = new(false);
 
     public string DatabasePath => _databasePath;
     public bool IsRunning => _running;
@@ -258,8 +269,103 @@ public sealed class HistorianManager
         }
     }
 
-    public void Start() => _running = true;
-    public void Stop() => _running = false;
+    public void Start()
+    {
+        _running = true;
+        _writerRunning = true;
+        _writerThread = new Thread(WriterLoop) { IsBackground = true, Name = "HistorianWriter" };
+        _writerThread.Start();
+    }
+
+    public void Stop()
+    {
+        _running = false;
+        _writerRunning = false;
+        _writerWake.Set();
+        _writerThread?.Join(TimeSpan.FromSeconds(5));
+        _writerThread = null;
+        DrainQueueOnStop();
+    }
+
+    private void WriterLoop()
+    {
+        while (_writerRunning)
+        {
+            _writerWake.WaitOne(WriterSleepMs);
+            DrainWriteQueue();
+        }
+    }
+
+    private void DrainWriteQueue()
+    {
+        var batch = new List<HistorianWriteItem>();
+        while (batch.Count < WriteBatchSize && _writeQueue.TryDequeue(out var item))
+            batch.Add(item);
+        if (batch.Count == 0) return;
+
+        lock (_dbLock)
+        {
+            if (string.IsNullOrEmpty(_databasePath) || !_running) return;
+            try
+            {
+                using var connection = new SqliteConnection($"Data Source={_databasePath}");
+                connection.Open();
+                var insert = @"
+                    INSERT INTO tag_history (tag_name, timestamp, value, quality)
+                    VALUES (@tagName, @timestamp, @value, @quality)";
+                foreach (var item in batch)
+                {
+                    using var command = new SqliteCommand(insert, connection);
+                    command.Parameters.AddWithValue("@tagName", item.TagName);
+                    command.Parameters.AddWithValue("@timestamp", item.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff"));
+                    command.Parameters.AddWithValue("@value", item.Value?.ToString() ?? (object)DBNull.Value);
+                    command.Parameters.AddWithValue("@quality", item.Quality);
+                    command.ExecuteNonQuery();
+                    _lastRecordedTime[item.TagName] = item.Timestamp;
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[HistorianManager] Writer batch error: {ex.Message}");
+            }
+        }
+    }
+
+    private void DrainQueueOnStop()
+    {
+        while (true)
+        {
+            var batch = new List<HistorianWriteItem>();
+            while (batch.Count < WriteBatchSize && _writeQueue.TryDequeue(out var item))
+                batch.Add(item);
+            if (batch.Count == 0) break;
+            lock (_dbLock)
+            {
+                if (string.IsNullOrEmpty(_databasePath)) break;
+                try
+                {
+                    using var connection = new SqliteConnection($"Data Source={_databasePath}");
+                    connection.Open();
+                    var insert = @"
+                        INSERT INTO tag_history (tag_name, timestamp, value, quality)
+                        VALUES (@tagName, @timestamp, @value, @quality)";
+                    foreach (var item in batch)
+                    {
+                        using var command = new SqliteCommand(insert, connection);
+                        command.Parameters.AddWithValue("@tagName", item.TagName);
+                        command.Parameters.AddWithValue("@timestamp", item.Timestamp.ToString("yyyy-MM-dd HH:mm:ss.fff"));
+                        command.Parameters.AddWithValue("@value", item.Value?.ToString() ?? (object)DBNull.Value);
+                        command.Parameters.AddWithValue("@quality", item.Quality);
+                        command.ExecuteNonQuery();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine($"[HistorianManager] Drain on stop error: {ex.Message}");
+                }
+            }
+        }
+    }
 
     /// <summary>Query tag values from SQLite database.</summary>
     public IReadOnlyList<(DateTime Timestamp, object? Value, int Quality)> QueryTagValues(string tagName, long startTimeMs, long endTimeMs, int maxRows = 0)
@@ -330,22 +436,19 @@ public sealed class HistorianManager
         return results;
     }
 
-    /// <summary>Record a tag value to SQLite database.</summary>
+    /// <summary>Record a tag value: enqueues for background write so the caller is not blocked by SQLite.</summary>
     public void RecordTagValue(string tagName, object? value, int quality)
     {
         if (!_running || string.IsNullOrEmpty(_databasePath))
             return;
 
-        // Check if tag is enabled
         if (_enabledTags.Count > 0 && !_enabledTags.Contains(tagName))
             return;
 
-        // Get per-tag logging interval or use global default
-        var tagLoggingInterval = _tagLoggingIntervals.TryGetValue(tagName, out var interval) 
-            ? interval 
+        var tagLoggingInterval = _tagLoggingIntervals.TryGetValue(tagName, out var interval)
+            ? interval
             : _loggingIntervalSeconds;
 
-        // Check logging interval
         if (_lastRecordedTime.TryGetValue(tagName, out var lastTime))
         {
             var elapsed = (DateTime.UtcNow - lastTime).TotalSeconds;
@@ -353,30 +456,9 @@ public sealed class HistorianManager
                 return;
         }
 
-        lock (_dbLock)
-        {
-            try
-            {
-                using var connection = new SqliteConnection($"Data Source={_databasePath}");
-                connection.Open();
-
-                var insert = @"
-                    INSERT INTO tag_history (tag_name, timestamp, value, quality)
-                    VALUES (@tagName, @timestamp, @value, @quality)";
-
-                using var command = new SqliteCommand(insert, connection);
-                command.Parameters.AddWithValue("@tagName", tagName);
-                command.Parameters.AddWithValue("@timestamp", DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss.fff"));
-                command.Parameters.AddWithValue("@value", value?.ToString() ?? (object)DBNull.Value);
-                command.Parameters.AddWithValue("@quality", quality);
-
-                command.ExecuteNonQuery();
-                _lastRecordedTime[tagName] = DateTime.UtcNow;
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine($"[HistorianManager] Record error: {ex.Message}");
-            }
-        }
+        var now = DateTime.UtcNow;
+        _lastRecordedTime[tagName] = now;
+        _writeQueue.Enqueue(new HistorianWriteItem(tagName, value, quality, now));
+        _writerWake.Set();
     }
 }
