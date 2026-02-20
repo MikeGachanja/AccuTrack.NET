@@ -47,15 +47,32 @@ public partial class RuntimeRectangle : UserControl
 
     private static IBrush ParseBrush(string hex)
     {
-        if (string.IsNullOrEmpty(hex)) return new SolidColorBrush(Colors.Gray);
+        if (string.IsNullOrWhiteSpace(hex)) return new SolidColorBrush(Colors.Gray);
+        hex = hex.Trim();
+        if (hex.Equals("null", StringComparison.OrdinalIgnoreCase)) return new SolidColorBrush(Colors.Gray);
         if (!hex.StartsWith("#")) hex = "#" + hex;
         if (hex.Length >= 7)
         {
-            var r = Convert.ToInt32(hex.Substring(1, 2), 16);
-            var g = Convert.ToInt32(hex.Substring(3, 2), 16);
-            var b = Convert.ToInt32(hex.Substring(5, 2), 16);
-            return new SolidColorBrush(Color.FromRgb((byte)r, (byte)g, (byte)b));
+            var hexPart = hex.Length >= 7 ? hex.Substring(1, 6) : "";
+            if (hexPart.Length == 6 && IsHexDigits(hexPart))
+            {
+                var r = Convert.ToInt32(hexPart.Substring(0, 2), 16);
+                var g = Convert.ToInt32(hexPart.Substring(2, 2), 16);
+                var b = Convert.ToInt32(hexPart.Substring(4, 2), 16);
+                return new SolidColorBrush(Color.FromRgb((byte)r, (byte)g, (byte)b));
+            }
         }
         return new SolidColorBrush(Colors.Gray);
+    }
+
+    private static bool IsHexDigits(ReadOnlySpan<char> s)
+    {
+        foreach (var c in s)
+        {
+            if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))
+                continue;
+            return false;
+        }
+        return true;
     }
 }

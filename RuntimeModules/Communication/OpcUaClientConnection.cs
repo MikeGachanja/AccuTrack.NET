@@ -45,7 +45,8 @@ public sealed class OpcUaClientConnection : IConnectionStub
         _status.Type = "OPC UA";
         _config = config;
         _onTagValue = onTagValue;
-        var cfg = config?["config"] as JsonObject ?? config;
+        // Prefer config, then settings (Designer uses "settings"), then node itself
+        var cfg = config?["config"] as JsonObject ?? config?["settings"] as JsonObject ?? config;
         EndpointUrl = cfg?["endpointUrl"]?.GetValue<string>()
             ?? cfg?["EndpointUrl"]?.GetValue<string>()
             ?? cfg?["endpoint"]?.GetValue<string>()
@@ -58,7 +59,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
 
     public void Start()
     {
-        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Start: Starting OPC UA client connection '{Name}' to endpoint '{EndpointUrl}'");
+        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Start: Starting OPC UA client connection '{Name}' to endpoint '{EndpointUrl}'");
         _running = true;
         _status.Running = true;
         _status.Connected = false;
@@ -68,30 +69,30 @@ public sealed class OpcUaClientConnection : IConnectionStub
 
     public void Stop()
     {
-        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Stop: Stopping OPC UA client connection '{Name}'");
+        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Stop: Stopping OPC UA client connection '{Name}'");
         _running = false;
         try
         {
             if (_subscription != null)
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Stop: Deleting subscription (ID: {_subscription.Id})");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Stop: Deleting subscription (ID: {_subscription.Id})");
                 _subscription.Delete(true);
                 _subscription = null;
             }
             
             if (_session != null)
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Stop: Closing session (ID: {_session.SessionId})");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Stop: Closing session (ID: {_session.SessionId})");
                 _session.Close();
                 _session.Dispose();
                 _session = null;
             }
             
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Stop: Successfully stopped OPC UA client connection");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Stop: Successfully stopped OPC UA client connection");
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Stop: Error during stop: {ex.GetType().Name} - {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Stop: Error during stop: {ex.GetType().Name} - {ex.Message}");
         }
         _status.Connected = false;
         _status.Running = false;
@@ -106,14 +107,14 @@ public sealed class OpcUaClientConnection : IConnectionStub
             
             // Discover endpoints from the server
             _status.Status = "Discovering endpoints...";
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Discovering endpoints from '{EndpointUrl}'");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Discovering endpoints from '{EndpointUrl}'");
             var endpointConfiguration = EndpointConfiguration.Create(_appConfig);
             
             // Use DiscoveryClient to discover endpoints
             EndpointDescriptionCollection? endpoints = null;
             using (var discoveryClient = DiscoveryClient.Create(new Uri(EndpointUrl), endpointConfiguration))
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Calling GetEndpointsAsync...");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Calling GetEndpointsAsync...");
                 endpoints = await discoveryClient.GetEndpointsAsync(null).ConfigureAwait(false);
             }
             
@@ -121,15 +122,15 @@ public sealed class OpcUaClientConnection : IConnectionStub
             {
                 _status.Status = "Error: Could not discover endpoints from server";
                 _status.Connected = false;
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: ERROR - No endpoints discovered from server");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: ERROR - No endpoints discovered from server");
                 return;
             }
             
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Discovered {endpoints.Count} endpoint(s)");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Discovered {endpoints.Count} endpoint(s)");
             for (int i = 0; i < endpoints.Count; i++)
             {
                 var ep = endpoints[i];
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Endpoint {i + 1}: SecurityMode={ep.SecurityMode}, SecurityPolicyUri={ep.SecurityPolicyUri}, EndpointUrl={ep.EndpointUrl}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Endpoint {i + 1}: SecurityMode={ep.SecurityMode}, SecurityPolicyUri={ep.SecurityPolicyUri}, EndpointUrl={ep.EndpointUrl}");
             }
 
             // Find an endpoint that supports anonymous authentication
@@ -143,7 +144,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                         if (token.TokenType == UserTokenType.Anonymous)
                         {
                             anonymousEndpoint = endpoint;
-                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Found anonymous endpoint: {endpoint.EndpointUrl}");
+                            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Found anonymous endpoint: {endpoint.EndpointUrl}");
                             break;
                         }
                     }
@@ -157,19 +158,19 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 anonymousEndpoint = endpoints.FirstOrDefault(e => e.SecurityMode == MessageSecurityMode.None);
                 if (anonymousEndpoint != null)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Using endpoint with None security mode: {anonymousEndpoint.EndpointUrl}");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Using endpoint with None security mode: {anonymousEndpoint.EndpointUrl}");
                 }
                 else
                 {
                     anonymousEndpoint = endpoints[0];
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Using first available endpoint: {anonymousEndpoint.EndpointUrl}");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Using first available endpoint: {anonymousEndpoint.EndpointUrl}");
                 }
             }
 
             var configuredEndpoint = new ConfiguredEndpoint(null, anonymousEndpoint, endpointConfiguration);
 
             _status.Status = "Connecting to server...";
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Creating session to endpoint '{anonymousEndpoint.EndpointUrl}'...");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Creating session to endpoint '{anonymousEndpoint.EndpointUrl}'...");
             _session = await Session.Create(
                 _appConfig,
                 configuredEndpoint,
@@ -179,14 +180,14 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 new UserIdentity(), // Anonymous identity (empty constructor)
                 null).ConfigureAwait(false);
             
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Session created successfully");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Session created successfully");
 
             // Set up KeepAlive handler to maintain connection and process subscriptions
             _session.KeepAlive += (session, e) =>
             {
                 if (e.CurrentState == ServerState.Unknown || e.CurrentState == ServerState.Shutdown)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] KeepAlive: Server state changed to {e.CurrentState}, connection may be lost");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] KeepAlive: Server state changed to {e.CurrentState}, connection may be lost");
                     _status.Connected = false;
                     _status.Status = $"Disconnected (Server state: {e.CurrentState})";
                 }
@@ -198,14 +199,14 @@ public sealed class OpcUaClientConnection : IConnectionStub
 
             _status.Connected = true;
             _status.Status = "Connected";
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully connected to OPC UA server at {EndpointUrl}");
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Session ID: {_session.SessionId}, Session Name: {_session.SessionName}");
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Endpoint URL: {_session.Endpoint?.EndpointUrl ?? EndpointUrl}");
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Server Description: {_session.Endpoint?.Server?.ApplicationName?.Text ?? "Unknown"}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully connected to OPC UA server at {EndpointUrl}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Session ID: {_session.SessionId}, Session Name: {_session.SessionName}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Endpoint URL: {_session.Endpoint?.EndpointUrl ?? EndpointUrl}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Server Description: {_session.Endpoint?.Server?.ApplicationName?.Text ?? "Unknown"}");
 
             // Fetch all nodes from the server
             _status.Status = "Browsing nodes...";
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Starting to browse all nodes from server...");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Starting to browse all nodes from server...");
             try
             {
                 var allNodes = BrowseAllNodes();
@@ -215,33 +216,33 @@ public sealed class OpcUaClientConnection : IConnectionStub
                     _allNodes.AddRange(allNodes);
                 }
                 _status.Status = $"Connected ({_allNodes.Count} nodes discovered)";
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully browsed {_allNodes.Count} nodes from server");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully browsed {_allNodes.Count} nodes from server");
                 
                 // Log first 20 nodes for debugging (to help identify available NodeIds)
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Sample of available nodes (first 20):");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Sample of available nodes (first 20):");
                 foreach (var node in _allNodes.Take(20))
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection]   - NodeId: {node.NodeId}, DisplayName: {node.DisplayName}");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection]   - NodeId: {node.NodeId}, DisplayName: {node.DisplayName}");
                 }
                 if (_allNodes.Count > 20)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection]   ... and {_allNodes.Count - 20} more nodes");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection]   ... and {_allNodes.Count - 20} more nodes");
                 }
             }
             catch (Exception ex)
             {
                 _status.Status = $"Connected (node browsing failed: {ex.Message})";
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Node browsing failed: {ex.GetType().Name} - {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: StackTrace: {ex.StackTrace}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Node browsing failed: {ex.GetType().Name} - {ex.Message}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: StackTrace: {ex.StackTrace}");
             }
 
             // Subscribe to tag-mapped nodes (only those that exist in Tags)
             var tagMappings = GetTagMappings();
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Found {tagMappings.Count} tag mappings to subscribe to");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Found {tagMappings.Count} tag mappings to subscribe to");
             
             if (tagMappings.Count > 0 && _onTagValue != null)
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Creating subscription with PublishingInterval=1000ms");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Creating subscription with PublishingInterval=1000ms");
                 _subscription = new Subscription(_session.DefaultSubscription)
                 {
                     PublishingInterval = 1000,
@@ -257,13 +258,13 @@ public sealed class OpcUaClientConnection : IConnectionStub
                     .Select(g => g.First())
                     .ToList();
                 
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Processing {uniqueTagMappings.Count} unique tag mappings (from {tagMappings.Count} total)");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Processing {uniqueTagMappings.Count} unique tag mappings (from {tagMappings.Count} total)");
                 
                 foreach (var (tagName, nodeIdStr) in uniqueTagMappings)
                 {
                     if (string.IsNullOrWhiteSpace(nodeIdStr))
                     {
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Skipping tag '{tagName}' - empty nodeId");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Skipping tag '{tagName}' - empty nodeId");
                         continue;
                     }
                     
@@ -273,28 +274,28 @@ public sealed class OpcUaClientConnection : IConnectionStub
                     string? resolvedNodeIdStr = null;
                     
                     // Strategy 1: Try tag name directly as NodeId (since tag name == tag address)
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Attempting to subscribe to tag '{tagName}' - trying tag name as NodeId first");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Attempting to subscribe to tag '{tagName}' - trying tag name as NodeId first");
                     nodeId = TryResolveNodeId(tagName);
                     if (nodeId != null && !nodeId.IsNullNodeId)
                     {
                         resolvedNodeIdStr = tagName;
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully resolved tag name '{tagName}' as NodeId: {nodeId}");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully resolved tag name '{tagName}' as NodeId: {nodeId}");
                     }
                     else
                     {
                         // Strategy 2: Try the provided nodeIdStr
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Tag name resolution failed, trying provided NodeId '{nodeIdStr}'");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Tag name resolution failed, trying provided NodeId '{nodeIdStr}'");
                         nodeId = TryResolveNodeId(nodeIdStr);
                         if (nodeId != null && !nodeId.IsNullNodeId)
                         {
                             resolvedNodeIdStr = nodeIdStr;
-                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully resolved NodeId '{nodeIdStr}' to {nodeId}");
+                            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully resolved NodeId '{nodeIdStr}' to {nodeId}");
                         }
                     }
                     
                     if (nodeId == null || nodeId.IsNullNodeId)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Failed to resolve NodeId for tag '{tagName}' (tried '{tagName}' and '{nodeIdStr}')");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Failed to resolve NodeId for tag '{tagName}' (tried '{tagName}' and '{nodeIdStr}')");
                         failedCount++;
                         continue;
                     }
@@ -311,11 +312,11 @@ public sealed class OpcUaClientConnection : IConnectionStub
                     
                     if (!nodeExists)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Node '{resolvedNodeIdStr}' (tag: '{tagName}') not found in browsed nodes, but will attempt subscription anyway");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Node '{resolvedNodeIdStr}' (tag: '{tagName}') not found in browsed nodes, but will attempt subscription anyway");
                     }
                     else
                     {
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Node '{resolvedNodeIdStr}' (tag: '{tagName}') found in browsed nodes");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Node '{resolvedNodeIdStr}' (tag: '{tagName}') found in browsed nodes");
                     }
                     
                     // Verify the node exists and is readable before subscribing
@@ -329,30 +330,30 @@ public sealed class OpcUaClientConnection : IConnectionStub
                             var sourceTimestamp = testRead.SourceTimestamp;
                             var serverTimestamp = testRead.ServerTimestamp;
                             
-                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Test read for tag '{tagName}' (NodeId: {nodeId}, resolved from '{resolvedNodeIdStr}'):");
-                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync:   StatusCode: 0x{(uint)statusCode:X8} ({(Opc.Ua.StatusCode.IsGood(statusCode) ? "Good" : "Bad")})");
-                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync:   Value: '{readValue}' (Type: {readValue?.GetType().Name ?? "null"})");
-                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync:   SourceTimestamp: {sourceTimestamp}");
-                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync:   ServerTimestamp: {serverTimestamp}");
+                            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Test read for tag '{tagName}' (NodeId: {nodeId}, resolved from '{resolvedNodeIdStr}'):");
+                            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync:   StatusCode: 0x{(uint)statusCode:X8} ({(Opc.Ua.StatusCode.IsGood(statusCode) ? "Good" : "Bad")})");
+                            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync:   Value: '{readValue}' (Type: {readValue?.GetType().Name ?? "null"})");
+                            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync:   SourceTimestamp: {sourceTimestamp}");
+                            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync:   ServerTimestamp: {serverTimestamp}");
                             
                             if (Opc.Ua.StatusCode.IsGood(statusCode))
                             {
-                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Verified node '{nodeId}' (resolved from '{resolvedNodeIdStr}') is readable. Current value: {readValue}");
+                                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Verified node '{nodeId}' (resolved from '{resolvedNodeIdStr}') is readable. Current value: {readValue}");
                             }
                             else
                             {
-                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Node '{nodeId}' (resolved from '{resolvedNodeIdStr}') is not readable. StatusCode: 0x{(uint)statusCode:X8}. Subscription may fail.");
+                                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Node '{nodeId}' (resolved from '{resolvedNodeIdStr}') is not readable. StatusCode: 0x{(uint)statusCode:X8}. Subscription may fail.");
                             }
                         }
                         else
                         {
-                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Test read returned null for node '{nodeId}' (resolved from '{resolvedNodeIdStr}')");
+                            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Test read returned null for node '{nodeId}' (resolved from '{resolvedNodeIdStr}')");
                         }
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Failed to verify node '{nodeId}' (resolved from '{resolvedNodeIdStr}') before subscribing: {ex.GetType().Name} - {ex.Message}");
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Exception StackTrace: {ex.StackTrace}");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: WARNING - Failed to verify node '{nodeId}' (resolved from '{resolvedNodeIdStr}') before subscribing: {ex.GetType().Name} - {ex.Message}");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Exception StackTrace: {ex.StackTrace}");
                     }
                     
                     try
@@ -382,7 +383,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                                         var statusCode = n.Value.StatusCode;
                                         var sourceTimestamp = n.Value.SourceTimestamp;
                                         
-                                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification (Background Thread): Tag '{capturedTagName}' (NodeId: {monitoredItem.StartNodeId}) changed to '{value}' (Type: {value.GetType().Name}, StatusCode: 0x{(uint)statusCode:X8}, Timestamp: {sourceTimestamp})");
+                                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Subscription Notification (Background Thread): Tag '{capturedTagName}' (NodeId: {monitoredItem.StartNodeId}) changed to '{value}' (Type: {value.GetType().Name}, StatusCode: 0x{(uint)statusCode:X8}, Timestamp: {sourceTimestamp})");
                                         
                                         if (Opc.Ua.StatusCode.IsGood(statusCode))
                                         {
@@ -409,13 +410,13 @@ public sealed class OpcUaClientConnection : IConnectionStub
                                                         if (!string.IsNullOrEmpty(matchingTag.tagName))
                                                         {
                                                             resolvedTagName = matchingTag.tagName;
-                                                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Resolved tag by address/NodeId '{capturedNodeIdStr}' to tag name '{resolvedTagName}'");
+                                                            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Subscription Notification: Resolved tag by address/NodeId '{capturedNodeIdStr}' to tag name '{resolvedTagName}'");
                                                         }
                                                     }
                                                 }
                                                 catch (Exception ex)
                                                 {
-                                                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Error resolving tag: {ex.Message}");
+                                                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Subscription Notification: Error resolving tag: {ex.Message}");
                                                 }
                                             }
                                             
@@ -425,32 +426,32 @@ public sealed class OpcUaClientConnection : IConnectionStub
                                                 try
                                                 {
                                                     _onTagValue?.Invoke(resolvedTagName, value);
-                                                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Successfully invoked callback for tag '{resolvedTagName}' with value '{value}'");
+                                                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Subscription Notification: Successfully invoked callback for tag '{resolvedTagName}' with value '{value}'");
                                                 }
                                                 catch (Exception ex)
                                                 {
-                                                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Error invoking callback for tag '{resolvedTagName}': {ex.GetType().Name} - {ex.Message}");
+                                                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Subscription Notification: Error invoking callback for tag '{resolvedTagName}': {ex.GetType().Name} - {ex.Message}");
                                                 }
                                             }
                                             else
                                             {
-                                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Could not resolve tag name for NodeId '{capturedNodeIdStr}', tag name '{capturedTagName}'");
+                                                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Subscription Notification: Could not resolve tag name for NodeId '{capturedNodeIdStr}', tag name '{capturedTagName}'");
                                             }
                                         }
                                         else
                                         {
-                                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Tag '{capturedTagName}' has bad status code 0x{(uint)statusCode:X8}, not invoking callback");
+                                            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Subscription Notification: Tag '{capturedTagName}' has bad status code 0x{(uint)statusCode:X8}, not invoking callback");
                                         }
                                     }
                                     else
                                     {
-                                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Tag '{capturedTagName}' received notification but value is null or invalid");
+                                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Subscription Notification: Tag '{capturedTagName}' received notification but value is null or invalid");
                                     }
                                 }
                                 catch (Exception ex)
                                 {
-                                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: Exception processing notification for tag '{capturedTagName}': {ex.GetType().Name} - {ex.Message}");
-                                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] Subscription Notification: StackTrace: {ex.StackTrace}");
+                                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Subscription Notification: Exception processing notification for tag '{capturedTagName}': {ex.GetType().Name} - {ex.Message}");
+                                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Subscription Notification: StackTrace: {ex.StackTrace}");
                                 }
                             });
                         };
@@ -458,41 +459,41 @@ public sealed class OpcUaClientConnection : IConnectionStub
                         _subscription.AddItem(item);
                         _monitoredItems.Add(item);
                         subscribedCount++;
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully added subscription for tag '{tagName}'");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Successfully added subscription for tag '{tagName}'");
                     }
                     catch (Exception ex)
                     {
                         failedCount++;
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Failed to subscribe to tag '{tagName}' with NodeId '{nodeIdStr}': {ex.GetType().Name} - {ex.Message}");
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: StackTrace: {ex.StackTrace}");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Failed to subscribe to tag '{tagName}' with NodeId '{nodeIdStr}': {ex.GetType().Name} - {ex.Message}");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: StackTrace: {ex.StackTrace}");
                     }
                 }
                 
                 if (subscribedCount > 0)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Adding subscription to session ({subscribedCount} items, {failedCount} failed)");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Adding subscription to session ({subscribedCount} items, {failedCount} failed)");
                     _session.AddSubscription(_subscription);
                     _subscription.Create();
                     
                     // Log subscription creation details
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Subscription created successfully. Subscription ID: {_subscription.Id}, PublishingInterval: {_subscription.PublishingInterval}ms");
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Created {_monitoredItems.Count} monitored items. Status will be determined by notification callbacks.");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Subscription created successfully. Subscription ID: {_subscription.Id}, PublishingInterval: {_subscription.PublishingInterval}ms");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Created {_monitoredItems.Count} monitored items. Status will be determined by notification callbacks.");
                     
                     // Log each monitored item for debugging
                     foreach (var item in _monitoredItems)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: MonitoredItem '{item.DisplayName}' (NodeId: {item.StartNodeId}, ClientHandle: {item.ClientHandle})");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: MonitoredItem '{item.DisplayName}' (NodeId: {item.StartNodeId}, ClientHandle: {item.ClientHandle})");
                     }
                     
                     _status.Status = $"Connected ({_allNodes.Count} nodes, {subscribedCount} tags subscribed)";
                     
                     // After setting up subscriptions, do an initial scan to read all mapped tag values
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Starting initial scan of all mapped tag values...");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Starting initial scan of all mapped tag values...");
                     ScanAndReadAllTagValues(uniqueTagMappings);
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: No tags successfully subscribed ({failedCount} failed)");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: No tags successfully subscribed ({failedCount} failed)");
                     _status.Status = $"Connected ({_allNodes.Count} nodes discovered, {failedCount} subscription failures)";
                 }
             }
@@ -500,12 +501,12 @@ public sealed class OpcUaClientConnection : IConnectionStub
             {
                 if (tagMappings.Count == 0)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: No tag mappings found in configuration");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: No tag mappings found in configuration");
                 }
                 else if (_onTagValue != null)
                 {
                     // Even if subscriptions failed, try to read initial values
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Subscriptions not set up, but scanning initial tag values anyway...");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Subscriptions not set up, but scanning initial tag values anyway...");
                     var uniqueTagMappings = tagMappings
                         .GroupBy(m => m.tagName)
                         .Select(g => g.First())
@@ -514,22 +515,22 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 }
                 if (_onTagValue == null)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Tag update callback is null - subscriptions disabled");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Tag update callback is null - subscriptions disabled");
                 }
                 _status.Status = $"Connected ({_allNodes.Count} nodes discovered)";
             }
             
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Connection setup complete. Connected: {_status.Connected}, Status: {_status.Status}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Connection setup complete. Connected: {_status.Connected}, Status: {_status.Status}");
         }
         catch (Exception ex)
         {
             _status.Connected = false;
             _status.Status = "Error: " + ex.Message;
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Connection failed with exception: {ex.GetType().Name} - {ex.Message}");
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: StackTrace: {ex.StackTrace}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Connection failed with exception: {ex.GetType().Name} - {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: StackTrace: {ex.StackTrace}");
             if (ex.InnerException != null)
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: InnerException: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: InnerException: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}");
             }
         }
     }
@@ -594,7 +595,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
         // First, try to get tag mappings from config (legacy/explicit mappings)
         if (_config?["tagMappings"] is JsonArray configArr)
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: Found {configArr.Count} tag mappings in config");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] GetTagMappings: Found {configArr.Count} tag mappings in config");
             foreach (var node in configArr)
             {
                 if (node is not JsonObject obj) continue;
@@ -603,7 +604,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 if (!string.IsNullOrEmpty(tagName) && !string.IsNullOrEmpty(address))
                 {
                     list.Add((tagName, address));
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: Added mapping from config - Tag: '{tagName}', Address: '{address}'");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] GetTagMappings: Added mapping from config - Tag: '{tagName}', Address: '{address}'");
                 }
             }
         }
@@ -614,11 +615,11 @@ public sealed class OpcUaClientConnection : IConnectionStub
             try
             {
                 var tags = _getTagsFunc();
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: TagProvider returned {tags.Count} tags");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] GetTagMappings: TagProvider returned {tags.Count} tags");
                 
                 if (tags.Count == 0)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: WARNING - TagProvider returned 0 tags. Tags may not be loaded yet.");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] GetTagMappings: WARNING - TagProvider returned 0 tags. Tags may not be loaded yet.");
                 }
                 
                 foreach (var (tagName, address) in tags)
@@ -626,7 +627,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                     // Skip if already in list (from config)
                     if (list.Any(m => m.tagName == tagName))
                     {
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: Tag '{tagName}' already mapped from config, skipping");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] GetTagMappings: Tag '{tagName}' already mapped from config, skipping");
                         continue;
                     }
                     
@@ -640,26 +641,26 @@ public sealed class OpcUaClientConnection : IConnectionStub
                     if (!string.IsNullOrEmpty(address) && !address.Equals(tagName, StringComparison.OrdinalIgnoreCase))
                     {
                         list.Add((tagName, address)); // Add address-based mapping
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: Added mapping from TagProvider - Tag: '{tagName}', NodeId: '{address}' (by address)");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] GetTagMappings: Added mapping from TagProvider - Tag: '{tagName}', NodeId: '{address}' (by address)");
                     }
                     
                     // Always add tag name-based mapping (tag name == tag address)
                     list.Add((tagName, nodeId));
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: Added mapping from TagProvider - Tag: '{tagName}', NodeId: '{nodeId}' (by tag name)");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] GetTagMappings: Added mapping from TagProvider - Tag: '{tagName}', NodeId: '{nodeId}' (by tag name)");
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: Error getting tags from TagProvider: {ex.GetType().Name} - {ex.Message}");
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: StackTrace: {ex.StackTrace}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] GetTagMappings: Error getting tags from TagProvider: {ex.GetType().Name} - {ex.Message}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] GetTagMappings: StackTrace: {ex.StackTrace}");
             }
         }
         else
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: TagProvider is null - cannot get tags from TagProvider");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] GetTagMappings: TagProvider is null - cannot get tags from TagProvider");
         }
         
-        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] GetTagMappings: Total mappings: {list.Count}");
+        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] GetTagMappings: Total mappings: {list.Count}");
         return list;
     }
 
@@ -668,17 +669,17 @@ public sealed class OpcUaClientConnection : IConnectionStub
     {
         if (_session == null || !_session.Connected || _onTagValue == null)
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Cannot scan - session is null or not connected, or callback is null");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Cannot scan - session is null or not connected, or callback is null");
             return;
         }
 
         if (tagMappings.Count == 0)
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: No tag mappings to scan");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: No tag mappings to scan");
             return;
         }
 
-        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Starting scan of {tagMappings.Count} mapped tags...");
+        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Starting scan of {tagMappings.Count} mapped tags...");
         
         int successCount = 0;
         int failedCount = 0;
@@ -694,7 +695,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
             {
                 if (string.IsNullOrWhiteSpace(nodeIdStr))
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Skipping tag '{tagName}' - nodeId is empty");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Skipping tag '{tagName}' - nodeId is empty");
                     failedCount++;
                     continue;
                 }
@@ -704,7 +705,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                     var resolvedNodeId = TryResolveNodeId(nodeIdStr);
                     if (resolvedNodeId == null || resolvedNodeId.IsNullNodeId)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Could not resolve NodeId for tag '{tagName}' (nodeId: '{nodeIdStr}')");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Could not resolve NodeId for tag '{tagName}' (nodeId: '{nodeIdStr}')");
                         failedCount++;
                         continue;
                     }
@@ -714,19 +715,19 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Error resolving NodeId for tag '{tagName}' (nodeId: '{nodeIdStr}'): {ex.Message}");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Error resolving NodeId for tag '{tagName}' (nodeId: '{nodeIdStr}'): {ex.Message}");
                     failedCount++;
                 }
             }
 
             if (nodeIdsToRead.Count == 0)
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: No valid node IDs to read");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: No valid node IDs to read");
                 return;
             }
 
             // Read values individually (can be optimized to batch read later if needed)
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Reading {nodeIdsToRead.Count} nodes...");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Reading {nodeIdsToRead.Count} nodes...");
             
             for (int i = 0; i < nodeIdsToRead.Count; i++)
             {
@@ -739,7 +740,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                     if (dataValue != null && Opc.Ua.StatusCode.IsGood(dataValue.StatusCode))
                     {
                         var value = dataValue.WrappedValue.Value;
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Successfully read tag '{tagName}' (NodeId: {nodeId}) = '{value}'");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Successfully read tag '{tagName}' (NodeId: {nodeId}) = '{value}'");
                         
                         try
                         {
@@ -748,27 +749,27 @@ public sealed class OpcUaClientConnection : IConnectionStub
                         }
                         catch (Exception ex)
                         {
-                            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Error invoking callback for tag '{tagName}': {ex.Message}");
+                            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Error invoking callback for tag '{tagName}': {ex.Message}");
                             failedCount++;
                         }
                     }
                     else
                     {
                         var statusCode = dataValue?.StatusCode ?? StatusCodes.Bad;
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Failed to read tag '{tagName}' (NodeId: {nodeId}) - StatusCode: 0x{(uint)statusCode:X8}");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Failed to read tag '{tagName}' (NodeId: {nodeId}) - StatusCode: 0x{(uint)statusCode:X8}");
                         failedCount++;
                     }
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Exception reading tag '{tagName}' (NodeId: {nodeId}): {ex.Message}");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Exception reading tag '{tagName}' (NodeId: {nodeId}): {ex.Message}");
                     failedCount++;
                 }
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Exception during batch read, falling back to individual reads: {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Exception during batch read, falling back to individual reads: {ex.Message}");
             
             // Fallback to individual reads
             foreach (var (tagName, nodeIdStr) in tagMappings)
@@ -779,25 +780,25 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 {
                     if (ReadTag(nodeIdStr, out var value))
                     {
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Successfully read tag '{tagName}' = '{value}'");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Successfully read tag '{tagName}' = '{value}'");
                         _onTagValue(tagName, value);
                         successCount++;
                     }
                     else
                     {
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Failed to read tag '{tagName}' (nodeId: '{nodeIdStr}')");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Failed to read tag '{tagName}' (nodeId: '{nodeIdStr}')");
                         failedCount++;
                     }
                 }
                 catch (Exception ex2)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Exception reading tag '{tagName}': {ex2.Message}");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Exception reading tag '{tagName}': {ex2.Message}");
                     failedCount++;
                 }
             }
         }
 
-        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Scan complete - {successCount} succeeded, {failedCount} failed out of {tagMappings.Count} total tags");
+        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ScanAndReadAllTagValues: Scan complete - {successCount} succeeded, {failedCount} failed out of {tagMappings.Count} total tags");
     }
 
     /// <summary>Find tag name by NodeId/address - used for resolving notifications that come with NodeId instead of tag name.</summary>
@@ -819,7 +820,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] FindTagNameByNodeId: Error finding tag for NodeId '{nodeId}': {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] FindTagNameByNodeId: Error finding tag for NodeId '{nodeId}': {ex.Message}");
         }
         
         return null;
@@ -830,27 +831,27 @@ public sealed class OpcUaClientConnection : IConnectionStub
         value = null;
         if (_session == null || !_session.Connected)
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag failed: Session is null or not connected. NodeId: {nodeIdOrTagName}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag failed: Session is null or not connected. NodeId: {nodeIdOrTagName}");
             return false;
         }
         
         if (string.IsNullOrWhiteSpace(nodeIdOrTagName))
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag failed: NodeId is null or empty");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag failed: NodeId is null or empty");
             return false;
         }
         
         try
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: Attempting to read NodeId='{nodeIdOrTagName}'");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag: Attempting to read NodeId='{nodeIdOrTagName}'");
             
             NodeId nodeId = TryResolveNodeId(nodeIdOrTagName);
             if (nodeId == null || nodeId.IsNullNodeId)
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: Could not resolve NodeId for '{nodeIdOrTagName}'. Returning false.");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag: Could not resolve NodeId for '{nodeIdOrTagName}'. Returning false.");
                 return false;
             }
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: NodeId resolved: {nodeId}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag: NodeId resolved: {nodeId}");
             
             var dataValue = _session.ReadValue(nodeId);
             if (dataValue != null)
@@ -860,45 +861,45 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 var sourceTimestamp = dataValue.SourceTimestamp;
                 var serverTimestamp = dataValue.ServerTimestamp;
                 
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: Read result for NodeId '{nodeIdOrTagName}' (resolved: {nodeId}):");
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag:   StatusCode: 0x{(uint)statusCode:X8} ({(Opc.Ua.StatusCode.IsGood(statusCode) ? "Good" : "Bad")})");
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag:   Value: '{readValue}' (Type: {readValue?.GetType().Name ?? "null"})");
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag:   SourceTimestamp: {sourceTimestamp}");
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag:   ServerTimestamp: {serverTimestamp}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag: Read result for NodeId '{nodeIdOrTagName}' (resolved: {nodeId}):");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag:   StatusCode: 0x{(uint)statusCode:X8} ({(Opc.Ua.StatusCode.IsGood(statusCode) ? "Good" : "Bad")})");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag:   Value: '{readValue}' (Type: {readValue?.GetType().Name ?? "null"})");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag:   SourceTimestamp: {sourceTimestamp}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag:   ServerTimestamp: {serverTimestamp}");
                 
                 if (Opc.Ua.StatusCode.IsGood(statusCode))
                 {
                     value = readValue;
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: Successfully read value '{value}' from NodeId '{nodeIdOrTagName}'");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag: Successfully read value '{value}' from NodeId '{nodeIdOrTagName}'");
                     return true;
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: Read failed with StatusCode: 0x{(uint)statusCode:X8} for NodeId '{nodeIdOrTagName}'");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag: Read failed with StatusCode: 0x{(uint)statusCode:X8} for NodeId '{nodeIdOrTagName}'");
                 }
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag: Read returned null DataValue for NodeId '{nodeIdOrTagName}'");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag: Read returned null DataValue for NodeId '{nodeIdOrTagName}'");
             }
         }
         catch (ArgumentException ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag ArgumentException: {ex.GetType().Name} - {ex.Message}");
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag ArgumentException ParamName: {ex.ParamName}");
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag ArgumentException StackTrace: {ex.StackTrace}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag ArgumentException: {ex.GetType().Name} - {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag ArgumentException ParamName: {ex.ParamName}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag ArgumentException StackTrace: {ex.StackTrace}");
             if (ex.InnerException != null)
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag ArgumentException InnerException: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag ArgumentException InnerException: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}");
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag Exception: {ex.GetType().Name} - {ex.Message}");
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag Exception StackTrace: {ex.StackTrace}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag Exception: {ex.GetType().Name} - {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag Exception StackTrace: {ex.StackTrace}");
             if (ex.InnerException != null)
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] ReadTag Exception InnerException: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ReadTag Exception InnerException: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}");
             }
         }
         return false;
@@ -908,32 +909,32 @@ public sealed class OpcUaClientConnection : IConnectionStub
     {
         if (_session == null || !_session.Connected)
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag failed: Session is null or not connected. NodeId: {nodeIdOrTagName}, Value: {value}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag failed: Session is null or not connected. NodeId: {nodeIdOrTagName}, Value: {value}");
             return false;
         }
         
         if (string.IsNullOrWhiteSpace(nodeIdOrTagName))
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag failed: NodeId is null or empty. Value: {value}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag failed: NodeId is null or empty. Value: {value}");
             return false;
         }
         
         try
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Attempting to write NodeId='{nodeIdOrTagName}', Value='{value}' (Type: {value?.GetType().Name ?? "null"})");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: Attempting to write NodeId='{nodeIdOrTagName}', Value='{value}' (Type: {value?.GetType().Name ?? "null"})");
             
             NodeId nodeId = TryResolveNodeId(nodeIdOrTagName);
             if (nodeId == null || nodeId.IsNullNodeId)
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Could not resolve NodeId for '{nodeIdOrTagName}'. Returning false.");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: Could not resolve NodeId for '{nodeIdOrTagName}'. Returning false.");
                 return false;
             }
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: NodeId resolved: {nodeId}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: NodeId resolved: {nodeId}");
             
             Variant variant;
             if (value != null)
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Creating Variant from value type {value.GetType().Name}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: Creating Variant from value type {value.GetType().Name}");
                 
                 // Convert value to a type that OPC UA supports
                 object? convertedValue = value;
@@ -942,7 +943,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 if (value is bool boolValue)
                 {
                     convertedValue = boolValue;
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Preserving boolean value: {boolValue}");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: Preserving boolean value: {boolValue}");
                 }
                 else if (value is string strValue)
                 {
@@ -958,7 +959,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                     if (longValue >= int.MinValue && longValue <= int.MaxValue)
                     {
                         convertedValue = (int)longValue;
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Converted long to int: {longValue} -> {convertedValue}");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: Converted long to int: {longValue} -> {convertedValue}");
                     }
                     else
                     {
@@ -977,7 +978,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 {
                     // Convert decimal to double
                     convertedValue = (double)decimalValue;
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Converted decimal to double: {decimalValue} -> {convertedValue}");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: Converted decimal to double: {decimalValue} -> {convertedValue}");
                 }
                 else if (value is DateTime dateTimeValue)
                 {
@@ -986,22 +987,22 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 else
                 {
                     // Try to convert to string as fallback
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Unsupported type {value.GetType().Name}, converting to string");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: Unsupported type {value.GetType().Name}, converting to string");
                     convertedValue = value.ToString();
                 }
                 
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Creating Variant with converted value type {convertedValue?.GetType().Name}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: Creating Variant with converted value type {convertedValue?.GetType().Name}");
                 variant = new Variant(convertedValue);
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Variant created successfully. Type: {variant.TypeInfo?.BuiltInType}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: Variant created successfully. Type: {variant.TypeInfo?.BuiltInType}");
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Creating default Variant for null value");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: Creating default Variant for null value");
                 variant = default;
             }
             
             var dataValue = new DataValue(variant);
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: DataValue created successfully");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: DataValue created successfully");
             
             var writeValue = new WriteValue 
             { 
@@ -1009,10 +1010,10 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 AttributeId = Attributes.Value, 
                 Value = dataValue 
             };
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: WriteValue created successfully");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: WriteValue created successfully");
             
             var writeValues = new WriteValueCollection { writeValue };
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Calling session.Write...");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: Calling session.Write...");
             
             _session.Write(null, writeValues, out var results, out var diagnosticInfos);
             
@@ -1021,40 +1022,40 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 var statusCode = results[0];
                 if (Opc.Ua.StatusCode.IsGood(statusCode))
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Successfully wrote value '{value}' to NodeId '{nodeIdOrTagName}'");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: Successfully wrote value '{value}' to NodeId '{nodeIdOrTagName}'");
                     return true;
                 }
                 else
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Write failed with StatusCode: 0x{(uint)statusCode:X8} for NodeId '{nodeIdOrTagName}'");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: Write failed with StatusCode: 0x{(uint)statusCode:X8} for NodeId '{nodeIdOrTagName}'");
                 }
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag: Write returned no results");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag: Write returned no results");
             }
         }
         catch (ArgumentException ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag ArgumentException: {ex.GetType().Name} - {ex.Message}");
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag ArgumentException ParamName: {ex.ParamName}");
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag ArgumentException StackTrace: {ex.StackTrace}");
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag ArgumentException Details - NodeId: '{nodeIdOrTagName}', Value: '{value}', ValueType: {value?.GetType().Name ?? "null"}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag ArgumentException: {ex.GetType().Name} - {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag ArgumentException ParamName: {ex.ParamName}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag ArgumentException StackTrace: {ex.StackTrace}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag ArgumentException Details - NodeId: '{nodeIdOrTagName}', Value: '{value}', ValueType: {value?.GetType().Name ?? "null"}");
             if (ex.InnerException != null)
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag ArgumentException InnerException: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}");
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag ArgumentException InnerException StackTrace: {ex.InnerException.StackTrace}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag ArgumentException InnerException: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag ArgumentException InnerException StackTrace: {ex.InnerException.StackTrace}");
             }
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag Exception: {ex.GetType().Name} - {ex.Message}");
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag Exception StackTrace: {ex.StackTrace}");
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag Exception Details - NodeId: '{nodeIdOrTagName}', Value: '{value}', ValueType: {value?.GetType().Name ?? "null"}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag Exception: {ex.GetType().Name} - {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag Exception StackTrace: {ex.StackTrace}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag Exception Details - NodeId: '{nodeIdOrTagName}', Value: '{value}', ValueType: {value?.GetType().Name ?? "null"}");
             if (ex.InnerException != null)
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag Exception InnerException: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}");
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] WriteTag Exception InnerException StackTrace: {ex.InnerException.StackTrace}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag Exception InnerException: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] WriteTag Exception InnerException StackTrace: {ex.InnerException.StackTrace}");
             }
         }
         return false;
@@ -1119,12 +1120,12 @@ public sealed class OpcUaClientConnection : IConnectionStub
         try
         {
             var nodeId = new NodeId(identifier);
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Successfully parsed as NodeId: {nodeId}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Successfully parsed as NodeId: {nodeId}");
             return nodeId;
         }
         catch (ArgumentException)
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to parse '{identifier}' as NodeId, trying alternatives...");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to parse '{identifier}' as NodeId, trying alternatives...");
         }
 
         // Strategy 2: Search browsed nodes by DisplayName (case-insensitive)
@@ -1138,12 +1139,12 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 try
                 {
                     var nodeId = new NodeId(matchingNode.NodeId);
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found node by DisplayName '{identifier}' -> NodeId: {nodeId}");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found node by DisplayName '{identifier}' -> NodeId: {nodeId}");
                     return nodeId;
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to parse found NodeId '{matchingNode.NodeId}': {ex.Message}");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to parse found NodeId '{matchingNode.NodeId}': {ex.Message}");
                 }
             }
             
@@ -1176,12 +1177,12 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 try
                 {
                     var nodeId = new NodeId(matchingNode.NodeId);
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found node by DisplayName partial match '{identifier}' (core: '{coreIdentifier}') -> NodeId: {nodeId} (DisplayName: {matchingNode.DisplayName})");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found node by DisplayName partial match '{identifier}' (core: '{coreIdentifier}') -> NodeId: {nodeId} (DisplayName: {matchingNode.DisplayName})");
                     return nodeId;
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to parse found NodeId '{matchingNode.NodeId}': {ex.Message}");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to parse found NodeId '{matchingNode.NodeId}': {ex.Message}");
                 }
             }
             
@@ -1195,12 +1196,12 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 try
                 {
                     var nodeId = new NodeId(matchingNode.NodeId);
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found node by NodeId partial match '{identifier}' -> NodeId: {nodeId} (DisplayName: {matchingNode.DisplayName})");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found node by NodeId partial match '{identifier}' -> NodeId: {nodeId} (DisplayName: {matchingNode.DisplayName})");
                     return nodeId;
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to parse found NodeId '{matchingNode.NodeId}': {ex.Message}");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to parse found NodeId '{matchingNode.NodeId}': {ex.Message}");
                 }
             }
         }
@@ -1209,12 +1210,12 @@ public sealed class OpcUaClientConnection : IConnectionStub
         try
         {
             var nodeId = new NodeId(identifier, 0);
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Created string NodeId in namespace 0: {nodeId} (no browsed node match found)");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Created string NodeId in namespace 0: {nodeId} (no browsed node match found)");
             return nodeId;
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to create string NodeId in namespace 0: {ex.Message}");
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to create string NodeId in namespace 0: {ex.Message}");
         }
 
         // Strategy 4: Check if identifier matches a tag name or address from TagProvider
@@ -1231,7 +1232,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 {
                     // Use the tag's address if available, otherwise use the tag name
                     var nodeIdStr = !string.IsNullOrEmpty(matchingTag.address) ? matchingTag.address : matchingTag.tagName;
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching tag '{matchingTag.tagName}' with address '{matchingTag.address}', using NodeId: '{nodeIdStr}'");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching tag '{matchingTag.tagName}' with address '{matchingTag.address}', using NodeId: '{nodeIdStr}'");
                     
                     // First try to find matching node in browsed nodes by DisplayName or NodeId
                     lock (_nodesLock)
@@ -1268,7 +1269,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                             
                             if (!string.IsNullOrEmpty(matchingNode.NodeId))
                             {
-                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching browsed node by core name - Tag: '{matchingTag.tagName}' (core: '{tagCoreName}'), DisplayName: '{matchingNode.DisplayName}', NodeId: '{matchingNode.NodeId}'");
+                                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching browsed node by core name - Tag: '{matchingTag.tagName}' (core: '{tagCoreName}'), DisplayName: '{matchingNode.DisplayName}', NodeId: '{matchingNode.NodeId}'");
                             }
                         }
                         
@@ -1277,12 +1278,12 @@ public sealed class OpcUaClientConnection : IConnectionStub
                             try
                             {
                                 var nodeId = new NodeId(matchingNode.NodeId);
-                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching browsed node '{matchingNode.DisplayName}' with NodeId '{matchingNode.NodeId}'");
+                                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching browsed node '{matchingNode.DisplayName}' with NodeId '{matchingNode.NodeId}'");
                                 return nodeId;
                             }
                             catch (Exception ex)
                             {
-                                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching node but failed to parse NodeId '{matchingNode.NodeId}': {ex.Message}");
+                                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching node but failed to parse NodeId '{matchingNode.NodeId}': {ex.Message}");
                             }
                         }
                     }
@@ -1294,25 +1295,25 @@ public sealed class OpcUaClientConnection : IConnectionStub
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to parse tag address '{nodeIdStr}' as NodeId: {ex.Message}");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to parse tag address '{nodeIdStr}' as NodeId: {ex.Message}");
                     }
                     
                     // Try as string NodeId in namespace 0
                     try
                     {
                         var nodeId = new NodeId(nodeIdStr, 0);
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Created NodeId from tag address in namespace 0: {nodeId}");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Created NodeId from tag address in namespace 0: {nodeId}");
                         return nodeId;
                     }
                     catch (Exception ex)
                     {
-                        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to create NodeId from tag address in namespace 0: {ex.Message}");
+                        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Failed to create NodeId from tag address in namespace 0: {ex.Message}");
                     }
                 }
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Error checking TagProvider: {ex.Message}");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Error checking TagProvider: {ex.Message}");
             }
         }
 
@@ -1360,7 +1361,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 
                 if (!string.IsNullOrEmpty(matchingNode.NodeId))
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching browsed node by core name - Identifier: '{identifier}' (core: '{coreName}'), DisplayName: '{matchingNode.DisplayName}', NodeId: '{matchingNode.NodeId}'");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching browsed node by core name - Identifier: '{identifier}' (core: '{coreName}'), DisplayName: '{matchingNode.DisplayName}', NodeId: '{matchingNode.NodeId}'");
                 }
             }
             
@@ -1369,21 +1370,21 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 try
                 {
                     var nodeId = new NodeId(matchingNode.NodeId);
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching browsed node - DisplayName: '{matchingNode.DisplayName}', NodeId: '{matchingNode.NodeId}' -> {nodeId}");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching browsed node - DisplayName: '{matchingNode.DisplayName}', NodeId: '{matchingNode.NodeId}' -> {nodeId}");
                     return nodeId;
                 }
                 catch (Exception ex)
                 {
-                    System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching node but failed to parse NodeId '{matchingNode.NodeId}': {ex.Message}");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Found matching node but failed to parse NodeId '{matchingNode.NodeId}': {ex.Message}");
                 }
             }
             else
             {
-                System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: No matching browsed node found for identifier '{identifier}'. Searched {_allNodes.Count} nodes.");
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: No matching browsed node found for identifier '{identifier}'. Searched {_allNodes.Count} nodes.");
             }
         }
 
-        System.Diagnostics.Debug.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Could not resolve '{identifier}' using any method");
+        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] TryResolveNodeId: Could not resolve '{identifier}' using any method");
         return null;
     }
 

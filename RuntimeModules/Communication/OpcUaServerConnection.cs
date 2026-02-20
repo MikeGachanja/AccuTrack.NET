@@ -33,7 +33,7 @@ public sealed class OpcUaServerConnection : IConnectionStub
         _status = status;
         _status.Type = "OPC UA Server";
         _config = config;
-        var cfg = config?["config"] as JsonObject ?? config;
+        var cfg = config?["config"] as JsonObject ?? config?["settings"] as JsonObject ?? config;
         EndpointUrl = cfg?["endpointUrl"]?.GetValue<string>()
             ?? cfg?["EndpointUrl"]?.GetValue<string>()
             ?? cfg?["endpoint"]?.GetValue<string>()
@@ -105,6 +105,7 @@ public sealed class OpcUaServerConnection : IConnectionStub
             {
                 _status.Status += $" Inner: {sre.InnerException.Message}";
             }
+            System.Diagnostics.Trace.WriteLine($"[OpcUaServerConnection] Connection error: {_status.Status}");
         }
         catch (Exception ex)
         {
@@ -116,6 +117,7 @@ public sealed class OpcUaServerConnection : IConnectionStub
                 errorMsg += $" Inner: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}";
             }
             _status.Status = errorMsg;
+            System.Diagnostics.Trace.WriteLine($"[OpcUaServerConnection] Connection error: {errorMsg}");
         }
     }
 

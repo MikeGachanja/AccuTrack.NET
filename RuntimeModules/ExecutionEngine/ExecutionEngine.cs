@@ -155,6 +155,11 @@ public sealed class ExecutionEngine
             {
                 path = Path.Combine(jsonDirectory, "tag_tables.json");
             }
+            // For CommunicationModule, also try communication_modules.json (Designer export path)
+            else if ((moduleName == "CommunicationModule") && File.Exists(Path.Combine(jsonDirectory, "communication_modules.json")))
+            {
+                path = Path.Combine(jsonDirectory, "communication_modules.json");
+            }
             else
             {
                 return null;

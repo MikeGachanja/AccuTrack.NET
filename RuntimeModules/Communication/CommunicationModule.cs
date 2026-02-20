@@ -58,7 +58,8 @@ public sealed class CommunicationModule : ModuleBase, ICommunication
             Running = false
         };
         _statuses[name] = status;
-        var config = node["config"] as JsonObject ?? node;
+        // Prefer config, then settings (Designer uses "settings" for endpointUrl etc.), then full node
+        var config = node["config"] as JsonObject ?? node["settings"] as JsonObject ?? node;
         var typeNorm = type.Trim();
         var mode = config["mode"]?.GetValue<string>() ?? node["mode"]?.GetValue<string>() ?? "client";
         
@@ -144,27 +145,27 @@ public sealed class CommunicationModule : ModuleBase, ICommunication
         value = null;
         if (string.IsNullOrEmpty(address))
         {
-            System.Diagnostics.Debug.WriteLine($"[CommunicationModule] ReadTagByAddress failed: Address is null or empty");
+            System.Diagnostics.Trace.WriteLine($"[CommunicationModule] ReadTagByAddress failed: Address is null or empty");
             return false;
         }
         
-        System.Diagnostics.Debug.WriteLine($"[CommunicationModule] ReadTagByAddress: Attempting to read address '{address}'");
+        System.Diagnostics.Trace.WriteLine($"[CommunicationModule] ReadTagByAddress: Attempting to read address '{address}'");
         
         // Try OPC UA clients first
         foreach (var stub in _stubs)
         {
             if (stub is OpcUaClientConnection opcClient)
             {
-                System.Diagnostics.Debug.WriteLine($"[CommunicationModule] ReadTagByAddress: Trying OPC UA client '{opcClient.Name}'");
+                System.Diagnostics.Trace.WriteLine($"[CommunicationModule] ReadTagByAddress: Trying OPC UA client '{opcClient.Name}'");
                 if (opcClient.ReadTag(address, out value))
                 {
-                    System.Diagnostics.Debug.WriteLine($"[CommunicationModule] ReadTagByAddress: Successfully read value '{value}' from address '{address}'");
+                    System.Diagnostics.Trace.WriteLine($"[CommunicationModule] ReadTagByAddress: Successfully read value '{value}' from address '{address}'");
                     return true;
                 }
             }
         }
         
-        System.Diagnostics.Debug.WriteLine($"[CommunicationModule] ReadTagByAddress: Failed to read address '{address}' - no suitable client found or read failed");
+        System.Diagnostics.Trace.WriteLine($"[CommunicationModule] ReadTagByAddress: Failed to read address '{address}' - no suitable client found or read failed");
         // TODO: Add Modbus support here when needed
         return false;
     }
@@ -174,27 +175,27 @@ public sealed class CommunicationModule : ModuleBase, ICommunication
     {
         if (string.IsNullOrEmpty(address))
         {
-            System.Diagnostics.Debug.WriteLine($"[CommunicationModule] WriteTagByAddress failed: Address is null or empty. Value: {value}");
+            System.Diagnostics.Trace.WriteLine($"[CommunicationModule] WriteTagByAddress failed: Address is null or empty. Value: {value}");
             return false;
         }
         
-        System.Diagnostics.Debug.WriteLine($"[CommunicationModule] WriteTagByAddress: Attempting to write address '{address}', Value: '{value}' (Type: {value?.GetType().Name ?? "null"})");
+        System.Diagnostics.Trace.WriteLine($"[CommunicationModule] WriteTagByAddress: Attempting to write address '{address}', Value: '{value}' (Type: {value?.GetType().Name ?? "null"})");
         
         // Try OPC UA clients first
         foreach (var stub in _stubs)
         {
             if (stub is OpcUaClientConnection opcClient)
             {
-                System.Diagnostics.Debug.WriteLine($"[CommunicationModule] WriteTagByAddress: Trying OPC UA client '{opcClient.Name}'");
+                System.Diagnostics.Trace.WriteLine($"[CommunicationModule] WriteTagByAddress: Trying OPC UA client '{opcClient.Name}'");
                 if (opcClient.WriteTag(address, value))
                 {
-                    System.Diagnostics.Debug.WriteLine($"[CommunicationModule] WriteTagByAddress: Successfully wrote value '{value}' to address '{address}'");
+                    System.Diagnostics.Trace.WriteLine($"[CommunicationModule] WriteTagByAddress: Successfully wrote value '{value}' to address '{address}'");
                     return true;
                 }
             }
         }
         
-        System.Diagnostics.Debug.WriteLine($"[CommunicationModule] WriteTagByAddress: Failed to write address '{address}' - no suitable client found or write failed");
+        System.Diagnostics.Trace.WriteLine($"[CommunicationModule] WriteTagByAddress: Failed to write address '{address}' - no suitable client found or write failed");
         // TODO: Add Modbus support here when needed
         return false;
     }

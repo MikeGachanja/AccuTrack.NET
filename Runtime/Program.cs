@@ -69,10 +69,13 @@ internal static class Program
         var console = new ConsoleModule();
         engine.ModuleManager.RegisterModule(console);
 
-        // Route Trace output to the console (visible on the Logs screen). In .NET Core, Debug.Listeners
-        // does not exist; the codebase uses Trace.WriteLine so all such messages appear on the Logs screen.
+        // Route Trace output to the in-app Logs screen and to the terminal (stdout) so OPC/connection
+        // messages are visible when running from a shell (e.g. on a Linux board).
         var consoleListener = new ConsoleTraceListener(console, "Runtime");
         System.Diagnostics.Trace.Listeners.Add(consoleListener);
+        var terminalListener = new System.Diagnostics.TextWriterTraceListener(Console.Out) { Name = "Terminal" };
+        System.Diagnostics.Trace.Listeners.Add(terminalListener);
+        System.Diagnostics.Trace.AutoFlush = true;
 
         engine.ModuleManager.RegisterModule(new SecurityModule());
 
