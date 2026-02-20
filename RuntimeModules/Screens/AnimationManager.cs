@@ -31,6 +31,9 @@ public sealed class AnimationRule
     public AnimationType Type { get; set; }
     /// <summary>Optional JSON-like config (e.g. color map, thresholds). Stub: unused.</summary>
     public IReadOnlyDictionary<string, object>? Config { get; set; }
+    /// <summary>Component base position (X, Y) - used for translation animations to calculate offset.</summary>
+    public double ComponentX { get; set; } = 0.0;
+    public double ComponentY { get; set; } = 0.0;
 }
 
 public enum AnimationType
@@ -145,8 +148,47 @@ public sealed class AnimationManager
                                         config["bitValue"] = bitVal.GetBoolean();
                                     if (anim.TryGetProperty("frequency", out var freq))
                                         config["frequency"] = freq.GetDouble();
+                                    if (anim.TryGetProperty("duration", out var duration))
+                                        config["duration"] = duration.GetDouble();
                                     if (anim.TryGetProperty("speed", out var speed))
-                                        config["speed"] = speed.GetDouble();
+                                        config["speed"] = speed.GetDouble(); // Legacy: kept for backward compatibility
+                                    if (anim.TryGetProperty("startX", out var startX))
+                                        config["startX"] = startX.GetDouble();
+                                    if (anim.TryGetProperty("startY", out var startY))
+                                        config["startY"] = startY.GetDouble();
+                                    if (anim.TryGetProperty("endX", out var endX))
+                                        config["endX"] = endX.GetDouble();
+                                    if (anim.TryGetProperty("endY", out var endY))
+                                        config["endY"] = endY.GetDouble();
+                                    
+                                    // Get component position for translation animations
+                                    double compX = comp.TryGetProperty("x", out var xProp) ? xProp.GetDouble() : 0.0;
+                                    double compY = comp.TryGetProperty("y", out var yProp) ? yProp.GetDouble() : 0.0;
+                                    
+                                    // Try to get location from location object
+                                    if (comp.TryGetProperty("location", out var loc))
+                                    {
+                                        if (loc.TryGetProperty("x", out var locX))
+                                            compX = locX.GetDouble();
+                                        if (loc.TryGetProperty("y", out var locY))
+                                            compY = locY.GetDouble();
+                                    }
+                                    
+                                    // For translation animations, use startX/startY as the component's base position
+                                    // This ensures the component is positioned at StartX/StartY and translation is relative to that
+                                    if (animType == AnimationType.Translation && config != null)
+                                    {
+                                        if (config.TryGetValue("startX", out var sxVal) && sxVal != null)
+                                        {
+                                            if (double.TryParse(sxVal.ToString(), out var startXVal))
+                                                compX = startXVal;
+                                        }
+                                        if (config.TryGetValue("startY", out var syVal) && syVal != null)
+                                        {
+                                            if (double.TryParse(syVal.ToString(), out var startYVal))
+                                                compY = startYVal;
+                                        }
+                                    }
                                     
                                     // Load color map for ColorChange animations
                                     if (animType == AnimationType.ColorChange && anim.TryGetProperty("colorMap", out var colorMapProp) && colorMapProp.ValueKind == JsonValueKind.Object)
@@ -172,7 +214,9 @@ public sealed class AnimationManager
                                         ComponentId = componentId,
                                         TagName = tagName,
                                         Type = animType,
-                                        Config = config
+                                        Config = config,
+                                        ComponentX = compX,
+                                        ComponentY = compY
                                     });
                                 }
                             }
@@ -351,10 +395,60 @@ public sealed class AnimationManager
                     }
                     break;
                 case AnimationType.Translation:
-                    var speed = rule.Config != null && rule.Config.TryGetValue("speed", out var sp) ? Convert.ToDouble(sp) : 1.0;
-                    var translationValue = ValueToStubDouble(value, 0);
-                    state.TranslationX = translationValue * speed;
-                    state.TranslationY = translationValue * speed;
+                    // Get start and end points
+                    var startX = rule.Config != null && rule.Config.TryGetValue("startX", out var sx) ? Convert.ToDouble(sx) : rule.ComponentX;
+                    var startY = rule.Config != null && rule.Config.TryGetValue("startY", out var sy) ? Convert.ToDouble(sy) : rule.ComponentY;
+                    var endX = rule.Config != null && rule.Config.TryGetValue("endX", out var ex) ? Convert.ToDouble(ex) : rule.ComponentX;
+                    var endY = rule.Config != null && rule.Config.TryGetValue("endY", out var ey) ? Convert.ToDouble(ey) : rule.ComponentY;
+                    
+                    System.Diagnostics.Trace.WriteLine($"[AnimationManager] Translation: Component {rule.ComponentId}, Tag '{rule.TagName}' = {value}");
+                    System.Diagnostics.Trace.WriteLine($"[AnimationManager] Translation: Component pos=({rule.ComponentX}, {rule.ComponentY}), Start=({startX}, {startY}), End=({endX}, {endY})");
+                    
+                    // Get tag value and normalize to 0-1 range for interpolation
+                    // If tag is boolean: true = 1.0, false = 0.0
+                    // If tag is numeric: normalize to 0-1 (clamp to 0-1 range)
+                    double interpolationFactor = 0.0;
+                    if (value is bool boolVal)
+                    {
+                        interpolationFactor = boolVal ? 1.0 : 0.0;
+                    }
+                    else
+                    {
+                        var tagValue = ValueToStubDouble(value, 0);
+                        // Normalize: assume tag value of 0 = start point, 1 = end point
+                        // For other ranges, user can scale their tag values accordingly
+                        interpolationFactor = Math.Max(0.0, Math.Min(1.0, tagValue));
+                    }
+                    
+                    // Get duration from config (total animation time in seconds) - default to 1.0 if not specified
+                    // Backward compatibility: if duration not found, try to calculate from speed
+                    double duration = 1.0;
+                    if (rule.Config != null && rule.Config.TryGetValue("duration", out var dur))
+                    {
+                        duration = Convert.ToDouble(dur);
+                    }
+                    else if (rule.Config != null && rule.Config.TryGetValue("speed", out var sp))
+                    {
+                        // Legacy: calculate duration from speed and distance
+                        double distance = Math.Sqrt(Math.Pow(endX - startX, 2) + Math.Pow(endY - startY, 2));
+                        double speed = Convert.ToDouble(sp);
+                        if (distance > 0 && speed > 0)
+                        {
+                            duration = distance / speed;
+                        }
+                    }
+                    
+                    System.Diagnostics.Trace.WriteLine($"[AnimationManager] Translation: Interpolation factor = {interpolationFactor}, Duration = {duration} seconds");
+                    
+                    // Calculate translation offset from component's base position (which should be at StartX/StartY)
+                    // When interpolationFactor = 0: component should be at StartX/StartY (offset = 0)
+                    // When interpolationFactor = 1: component should be at EndX/EndY (offset = End - Start)
+                    // TranslationX/Y is the offset from component's base position (which is StartX/StartY)
+                    // Note: Duration is stored for future smooth animation implementation (currently instant)
+                    state.TranslationX = (endX - startX) * interpolationFactor;
+                    state.TranslationY = (endY - startY) * interpolationFactor;
+                    
+                    System.Diagnostics.Trace.WriteLine($"[AnimationManager] Translation: Calculated offset = ({state.TranslationX}, {state.TranslationY}), Duration = {duration} seconds");
                     break;
             }
         }

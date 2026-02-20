@@ -61,7 +61,11 @@ public partial class PropertyEditor : UserControl
     private CheckBox? _animationBitValueCheckBox;
     private Button? _animationColorButton;
     private NumericUpDown? _animationFrequencyNumeric;
-    private NumericUpDown? _animationSpeedNumeric;
+    private NumericUpDown? _animationDurationNumeric;
+    private NumericUpDown? _animationStartXNumeric;
+    private NumericUpDown? _animationStartYNumeric;
+    private NumericUpDown? _animationEndXNumeric;
+    private NumericUpDown? _animationEndYNumeric;
     private CheckBox? _animationEnabledCheckBox;
     private AnimationConfig? _currentEditingAnimation;
     private List<AnimationConfig> _componentAnimations = new List<AnimationConfig>();
@@ -1907,10 +1911,36 @@ public partial class PropertyEditor : UserControl
         propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         propRow++;
 
-        // Speed (for Translation)
-        propsLayout.Controls.Add(new Label { Text = "Speed (px/s):", AutoSize = true }, 0, propRow);
-        _animationSpeedNumeric = new NumericUpDown { Minimum = 0.1m, Maximum = 1000m, DecimalPlaces = 1, Value = 1.0m, Width = 100 };
-        propsLayout.Controls.Add(_animationSpeedNumeric, 1, propRow);
+        // Duration (for Translation - total animation time in seconds)
+        propsLayout.Controls.Add(new Label { Text = "Duration (seconds):", AutoSize = true }, 0, propRow);
+        _animationDurationNumeric = new NumericUpDown { Minimum = 0.1m, Maximum = 60m, DecimalPlaces = 1, Value = 1.0m, Width = 100 };
+        propsLayout.Controls.Add(_animationDurationNumeric, 1, propRow);
+        propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        propRow++;
+
+        // Start Point (for Translation)
+        propsLayout.Controls.Add(new Label { Text = "Start Point:", AutoSize = true }, 0, propRow);
+        var startPointPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Height = 25 };
+        _animationStartXNumeric = new NumericUpDown { Minimum = -10000m, Maximum = 10000m, DecimalPlaces = 0, Value = 0m, Width = 80 };
+        _animationStartYNumeric = new NumericUpDown { Minimum = -10000m, Maximum = 10000m, DecimalPlaces = 0, Value = 0m, Width = 80 };
+        startPointPanel.Controls.Add(new Label { Text = "X:", AutoSize = true });
+        startPointPanel.Controls.Add(_animationStartXNumeric);
+        startPointPanel.Controls.Add(new Label { Text = "Y:", AutoSize = true, Margin = new Padding(5, 0, 0, 0) });
+        startPointPanel.Controls.Add(_animationStartYNumeric);
+        propsLayout.Controls.Add(startPointPanel, 1, propRow);
+        propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        propRow++;
+
+        // End Point (for Translation)
+        propsLayout.Controls.Add(new Label { Text = "End Point:", AutoSize = true }, 0, propRow);
+        var endPointPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, Height = 25 };
+        _animationEndXNumeric = new NumericUpDown { Minimum = -10000m, Maximum = 10000m, DecimalPlaces = 0, Value = 0m, Width = 80 };
+        _animationEndYNumeric = new NumericUpDown { Minimum = -10000m, Maximum = 10000m, DecimalPlaces = 0, Value = 0m, Width = 80 };
+        endPointPanel.Controls.Add(new Label { Text = "X:", AutoSize = true });
+        endPointPanel.Controls.Add(_animationEndXNumeric);
+        endPointPanel.Controls.Add(new Label { Text = "Y:", AutoSize = true, Margin = new Padding(5, 0, 0, 0) });
+        endPointPanel.Controls.Add(_animationEndYNumeric);
+        propsLayout.Controls.Add(endPointPanel, 1, propRow);
         propsLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         propRow++;
 
@@ -2029,7 +2059,12 @@ public partial class PropertyEditor : UserControl
             BitValue = true,
             Color = "#FF0000",
             Frequency = 1.0,
-            Speed = 1.0,
+            Duration = 1.0,
+            Speed = 1.0, // Legacy: kept for backward compatibility
+            StartX = _selectedComponent?.Location.X ?? 0.0,
+            StartY = _selectedComponent?.Location.Y ?? 0.0,
+            EndX = (_selectedComponent?.Location.X ?? 0.0) + 100.0, // Default end point is 100 pixels to the right
+            EndY = _selectedComponent?.Location.Y ?? 0.0,
             Enabled = true
         };
 
@@ -2115,9 +2150,29 @@ public partial class PropertyEditor : UserControl
             _currentEditingAnimation.Frequency = (double)_animationFrequencyNumeric.Value;
         }
 
-        if (_animationSpeedNumeric != null)
+        if (_animationDurationNumeric != null)
         {
-            _currentEditingAnimation.Speed = (double)_animationSpeedNumeric.Value;
+            _currentEditingAnimation.Duration = (double)_animationDurationNumeric.Value;
+        }
+
+        if (_animationStartXNumeric != null)
+        {
+            _currentEditingAnimation.StartX = (double)_animationStartXNumeric.Value;
+        }
+
+        if (_animationStartYNumeric != null)
+        {
+            _currentEditingAnimation.StartY = (double)_animationStartYNumeric.Value;
+        }
+
+        if (_animationEndXNumeric != null)
+        {
+            _currentEditingAnimation.EndX = (double)_animationEndXNumeric.Value;
+        }
+
+        if (_animationEndYNumeric != null)
+        {
+            _currentEditingAnimation.EndY = (double)_animationEndYNumeric.Value;
         }
 
         if (_animationEnabledCheckBox != null)
@@ -2207,9 +2262,29 @@ public partial class PropertyEditor : UserControl
             _animationFrequencyNumeric.Value = (decimal)config.Frequency;
         }
 
-        if (_animationSpeedNumeric != null)
+        if (_animationDurationNumeric != null)
         {
-            _animationSpeedNumeric.Value = (decimal)config.Speed;
+            _animationDurationNumeric.Value = (decimal)config.Duration;
+        }
+
+        if (_animationStartXNumeric != null)
+        {
+            _animationStartXNumeric.Value = (decimal)config.StartX;
+        }
+
+        if (_animationStartYNumeric != null)
+        {
+            _animationStartYNumeric.Value = (decimal)config.StartY;
+        }
+
+        if (_animationEndXNumeric != null)
+        {
+            _animationEndXNumeric.Value = (decimal)config.EndX;
+        }
+
+        if (_animationEndYNumeric != null)
+        {
+            _animationEndYNumeric.Value = (decimal)config.EndY;
         }
 
         if (_animationEnabledCheckBox != null)
@@ -2254,8 +2329,16 @@ public partial class PropertyEditor : UserControl
             _animationColorButton.Visible = isFlashing; // Only for Flashing, not ColorChange
         if (_animationFrequencyNumeric != null)
             _animationFrequencyNumeric.Visible = isFlashing;
-        if (_animationSpeedNumeric != null)
-            _animationSpeedNumeric.Visible = isTranslation;
+        if (_animationDurationNumeric != null)
+            _animationDurationNumeric.Visible = isTranslation;
+        if (_animationStartXNumeric != null)
+            _animationStartXNumeric.Visible = isTranslation;
+        if (_animationStartYNumeric != null)
+            _animationStartYNumeric.Visible = isTranslation;
+        if (_animationEndXNumeric != null)
+            _animationEndXNumeric.Visible = isTranslation;
+        if (_animationEndYNumeric != null)
+            _animationEndYNumeric.Visible = isTranslation;
         if (_colorMapPanel != null)
             _colorMapPanel.Visible = isColorChange;
         if (_animationEnabledCheckBox != null)

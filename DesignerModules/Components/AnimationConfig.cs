@@ -20,7 +20,13 @@ public class AnimationConfig
     public Dictionary<string, string> ColorMap { get; set; } = new Dictionary<string, string>();
     
     public double Frequency { get; set; } = 1.0; // For Flashing (Hz)
-    public double Speed { get; set; } = 1.0; // For Translation (pixels/second)
+    public double Duration { get; set; } = 1.0; // For Translation: total animation duration in seconds
+    [System.Obsolete("Use Duration instead. Speed is kept for backward compatibility only.")]
+    public double Speed { get; set; } = 1.0; // Legacy: kept for backward compatibility, will be converted to Duration
+    public double StartX { get; set; } = 0.0; // For Translation: starting X position
+    public double StartY { get; set; } = 0.0; // For Translation: starting Y position
+    public double EndX { get; set; } = 0.0; // For Translation: ending X position
+    public double EndY { get; set; } = 0.0; // For Translation: ending Y position
     public bool Enabled { get; set; } = true;
 
     public JObject ToJson()
@@ -33,7 +39,12 @@ public class AnimationConfig
             ["bitValue"] = BitValue,
             ["color"] = Color, // Keep for backward compatibility
             ["frequency"] = Frequency,
-            ["speed"] = Speed,
+            ["duration"] = Duration, // Total animation duration in seconds
+            ["speed"] = Speed, // Legacy: kept for backward compatibility
+            ["startX"] = StartX,
+            ["startY"] = StartY,
+            ["endX"] = EndX,
+            ["endY"] = EndY,
             ["enabled"] = Enabled
         };
         
@@ -60,13 +71,29 @@ public class AnimationConfig
             BitValue = json["bitValue"]?.ToObject<bool>() ?? true,
             Color = json["color"]?.ToString() ?? "#FF0000",
             Frequency = json["frequency"]?.ToObject<double>() ?? 1.0,
-            Speed = json["speed"]?.ToObject<double>() ?? 1.0,
+            Duration = json["duration"]?.ToObject<double>() ?? 1.0, // Default 1 second
+            Speed = json["speed"]?.ToObject<double>() ?? 1.0, // Legacy: kept for backward compatibility
+            StartX = json["startX"]?.ToObject<double>() ?? 0.0,
+            StartY = json["startY"]?.ToObject<double>() ?? 0.0,
+            EndX = json["endX"]?.ToObject<double>() ?? 0.0,
+            EndY = json["endY"]?.ToObject<double>() ?? 0.0,
             Enabled = json["enabled"]?.ToObject<bool>() ?? true
         };
 
         if (Enum.TryParse<AnimationType>(json["type"]?.ToString(), out AnimationType type))
         {
             config.Type = type;
+        }
+        
+        // Backward compatibility: if duration is not set but speed is, calculate duration from speed and distance
+        if (config.Duration == 1.0 && config.Speed != 1.0 && config.Type == AnimationType.Translation)
+        {
+            // Calculate distance
+            double distance = Math.Sqrt(Math.Pow(config.EndX - config.StartX, 2) + Math.Pow(config.EndY - config.StartY, 2));
+            if (distance > 0 && config.Speed > 0)
+            {
+                config.Duration = distance / config.Speed; // Convert speed (px/s) to duration (seconds)
+            }
         }
         
         // Load color map if it exists (for ColorChange animations)

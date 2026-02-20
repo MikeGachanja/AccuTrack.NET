@@ -62,8 +62,62 @@ public static class ScreenViewBuilder
             control.MaxWidth = width;
             control.MaxHeight = height;
             
-            Canvas.SetLeft(control, comp.X);
-            Canvas.SetTop(control, comp.Y);
+            // Check if component has a translation animation - if so, position at start point
+            // Note: AnimationManager will handle the actual animation, but we position component at start point
+            double componentX = comp.X;
+            double componentY = comp.Y;
+            if (animationManager != null && comp.Properties != null && comp.Properties.TryGetValue("animations", out var animsObj))
+            {
+                try
+                {
+                    // Properties stores animations as a string (JSON) or object
+                    string? animsJsonStr = null;
+                    if (animsObj is string str)
+                        animsJsonStr = str;
+                    else if (animsObj != null)
+                        animsJsonStr = animsObj.ToString();
+                    
+                    if (!string.IsNullOrEmpty(animsJsonStr))
+                    {
+                        using var doc = System.Text.Json.JsonDocument.Parse(animsJsonStr);
+                        var root = doc.RootElement;
+                        System.Text.Json.JsonElement? animsArray = null;
+                        if (root.ValueKind == System.Text.Json.JsonValueKind.Object && root.TryGetProperty("animations", out var nestedAnims))
+                            animsArray = nestedAnims;
+                        else if (root.ValueKind == System.Text.Json.JsonValueKind.Array)
+                            animsArray = root;
+                        
+                        if (animsArray.HasValue)
+                        {
+                            foreach (var anim in animsArray.Value.EnumerateArray())
+                            {
+                                if (anim.ValueKind == System.Text.Json.JsonValueKind.Object)
+                                {
+                                    var animType = anim.TryGetProperty("type", out var t) ? t.GetString() : "";
+                                    var enabled = anim.TryGetProperty("enabled", out var en) ? en.GetBoolean() : true;
+                                    if (animType == "Translation" && enabled)
+                                    {
+                                        // Found translation animation - use start point as component position
+                                        if (anim.TryGetProperty("startX", out var startX))
+                                            componentX = startX.GetDouble();
+                                        if (anim.TryGetProperty("startY", out var startY))
+                                            componentY = startY.GetDouble();
+                                        System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Translation animation found for component {comp.Id}, positioning at ({componentX}, {componentY})");
+                                        break; // Use first translation animation's start point
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Error parsing animations for component {comp.Id}: {ex.Message}");
+                }
+            }
+            
+            Canvas.SetLeft(control, componentX);
+            Canvas.SetTop(control, componentY);
             canvas.Children.Add(control);
             
             // For SVG components, ensure minimum size and trigger a re-render after control is added and sized
@@ -770,12 +824,21 @@ public static class ScreenViewBuilder
                 }
                 else
                 {
-                    // For other controls, try border background
-                    var border = uc.FindControl<Avalonia.Controls.Border>("TheBorder");
-                    if (border != null)
-                        border.Background = brush;
-                    else if (control is Avalonia.Controls.Border b)
-                        b.Background = brush;
+                    // For buttons, apply to TheButton
+                    var button = uc.FindControl<Avalonia.Controls.Button>("TheButton");
+                    if (button != null)
+                    {
+                        button.Background = brush;
+                    }
+                    else
+                    {
+                        // For other controls, try border background
+                        var border = uc.FindControl<Avalonia.Controls.Border>("TheBorder");
+                        if (border != null)
+                            border.Background = brush;
+                        else if (control is Avalonia.Controls.Border b)
+                            b.Background = brush;
+                    }
                 }
             }
             else if (control is Avalonia.Controls.Border b)
@@ -811,11 +874,18 @@ public static class ScreenViewBuilder
             }
         }
         
+        // Apply translation transform
         if (state.TranslationX.HasValue || state.TranslationY.HasValue)
         {
             var tx = state.TranslationX ?? 0;
             var ty = state.TranslationY ?? 0;
             control.RenderTransform = new Avalonia.Media.TranslateTransform(tx, ty);
+            System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Applied translation: X={tx}, Y={ty} to control");
+        }
+        else
+        {
+            // Clear translation if not set (reset to no transform)
+            control.RenderTransform = null;
         }
     }
 
