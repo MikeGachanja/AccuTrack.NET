@@ -20,6 +20,16 @@ public sealed class AnimationState
     public double? TranslationX { get; set; }
     /// <summary>Translation offset Y (stub). View layer can apply render transform.</summary>
     public double? TranslationY { get; set; }
+    /// <summary>Translation animation duration in seconds (for smooth interpolation).</summary>
+    public double? TranslationDuration { get; set; }
+    /// <summary>Translation start position X (for looping animations).</summary>
+    public double? TranslationStartX { get; set; }
+    /// <summary>Translation start position Y (for looping animations).</summary>
+    public double? TranslationStartY { get; set; }
+    /// <summary>Translation end position X (for looping animations).</summary>
+    public double? TranslationEndX { get; set; }
+    /// <summary>Translation end position Y (for looping animations).</summary>
+    public double? TranslationEndY { get; set; }
 }
 
 /// <summary>Animation rule: which tag drives which component and how (Visibility, ColorChange, Flashing, Translation).</summary>
@@ -447,6 +457,13 @@ public sealed class AnimationManager
                     // Note: Duration is stored for future smooth animation implementation (currently instant)
                     state.TranslationX = (endX - startX) * interpolationFactor;
                     state.TranslationY = (endY - startY) * interpolationFactor;
+                    
+                    // Store duration and positions in state for smooth animation and looping
+                    state.TranslationDuration = duration;
+                    state.TranslationStartX = startX;
+                    state.TranslationStartY = startY;
+                    state.TranslationEndX = endX;
+                    state.TranslationEndY = endY;
                     
                     System.Diagnostics.Trace.WriteLine($"[AnimationManager] Translation: Calculated offset = ({state.TranslationX}, {state.TranslationY}), Duration = {duration} seconds");
                     break;

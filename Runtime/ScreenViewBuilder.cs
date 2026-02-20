@@ -13,9 +13,29 @@ using Runtime.Views.Controls;
 
 namespace Runtime;
 
+/// <summary>Tracks translation animation state for smooth interpolation.</summary>
+internal sealed class TranslationAnimationTracker
+{
+    public double StartX { get; set; } // Position when animation started (point A)
+    public double StartY { get; set; }
+    public double EndX { get; set; } // End position (point B) - for looping
+    public double EndY { get; set; }
+    public double CurrentX { get; set; } // Current position (updated each frame)
+    public double CurrentY { get; set; }
+    public double TargetX { get; set; }
+    public double TargetY { get; set; }
+    public DateTime StartTime { get; set; }
+    public double Duration { get; set; } = 1.0; // seconds
+    public bool IsAnimating { get; set; }
+    public bool ShouldLoop { get; set; } // Whether to loop back to start when reaching end
+}
+
 /// <summary>Builds an Avalonia view from a screen descriptor (parsed JSON).</summary>
 public static class ScreenViewBuilder
 {
+    // Track translation animations for smooth interpolation
+    private static readonly Dictionary<Control, TranslationAnimationTracker> _translationTrackers = new();
+    private static Avalonia.Threading.DispatcherTimer? _animationTimer;
     public static Control? Build(ScreenRenderer.ScreenDescriptor? screen)
         => Build(screen, null, null, null, null, null, null, null);
 
@@ -188,7 +208,80 @@ public static class ScreenViewBuilder
             VerticalScrollBarVisibility = Avalonia.Controls.Primitives.ScrollBarVisibility.Auto
         };
         scroll.Tag = subs;
+        
+        // Start animation timer if not already running
+        if (_animationTimer == null)
+        {
+            _animationTimer = new Avalonia.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromMilliseconds(16) // ~60 FPS
+            };
+            _animationTimer.Tick += (s, e) => UpdateTranslationAnimations();
+            _animationTimer.Start();
+        }
+        
         return scroll;
+    }
+    
+    private static void UpdateTranslationAnimations()
+    {
+        var now = DateTime.Now;
+        var controlsToRemove = new List<Control>();
+        
+        lock (_translationTrackers)
+        {
+            foreach (var kvp in _translationTrackers)
+            {
+                var control = kvp.Key;
+                var tracker = kvp.Value;
+                
+                if (!tracker.IsAnimating)
+                {
+                    continue;
+                }
+                
+                var elapsed = (now - tracker.StartTime).TotalSeconds;
+                var progress = Math.Min(1.0, elapsed / tracker.Duration);
+                
+                // Linear interpolation from start position to target
+                var currentX = tracker.StartX + (tracker.TargetX - tracker.StartX) * progress;
+                var currentY = tracker.StartY + (tracker.TargetY - tracker.StartY) * progress;
+                
+                // Update control position
+                control.RenderTransform = new Avalonia.Media.TranslateTransform(currentX, currentY);
+                
+                // Update tracker current position
+                tracker.CurrentX = currentX;
+                tracker.CurrentY = currentY;
+                
+                // Check if animation is complete
+                if (progress >= 1.0)
+                {
+                    tracker.CurrentX = tracker.TargetX;
+                    tracker.CurrentY = tracker.TargetY;
+                    control.RenderTransform = new Avalonia.Media.TranslateTransform(tracker.TargetX, tracker.TargetY);
+                    
+                    // If looping and we've reached the end, reset to start and begin again
+                    if (tracker.ShouldLoop && Math.Abs(tracker.CurrentX - tracker.EndX) < 0.01 && Math.Abs(tracker.CurrentY - tracker.EndY) < 0.01)
+                    {
+                        // Immediately reset to start position
+                        tracker.CurrentX = tracker.StartX;
+                        tracker.CurrentY = tracker.StartY;
+                        tracker.TargetX = tracker.EndX;
+                        tracker.TargetY = tracker.EndY;
+                        tracker.StartTime = DateTime.Now; // Restart timer
+                        tracker.IsAnimating = true; // Continue animating
+                        control.RenderTransform = new Avalonia.Media.TranslateTransform(tracker.StartX, tracker.StartY);
+                        System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Translation loop: Reset to start ({tracker.StartX}, {tracker.StartY}), restarting animation");
+                    }
+                    else
+                    {
+                        // Animation complete, stop
+                        tracker.IsAnimating = false;
+                    }
+                }
+            }
+        }
     }
 
     private static Control? CreateControl(ComponentDescriptor d, Runtime.Modules.TagsEngine.TagManager? tagManager, EventManager? eventManager, TagIOHandler? tagIOHandler, Func<string, string?>? resolveImagePath, Func<string, string?>? resolveSvgPath, List<IDisposable> subs, IConsole? console = null)
@@ -874,17 +967,99 @@ public static class ScreenViewBuilder
             }
         }
         
-        // Apply translation transform
+        // Apply translation transform with smooth animation
         if (state.TranslationX.HasValue || state.TranslationY.HasValue)
         {
-            var tx = state.TranslationX ?? 0;
-            var ty = state.TranslationY ?? 0;
-            control.RenderTransform = new Avalonia.Media.TranslateTransform(tx, ty);
-            System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Applied translation: X={tx}, Y={ty} to control");
+            var targetX = state.TranslationX ?? 0;
+            var targetY = state.TranslationY ?? 0;
+            
+            lock (_translationTrackers)
+            {
+                if (!_translationTrackers.TryGetValue(control, out var tracker))
+                {
+                    // Initialize tracker - get current position from transform if it exists
+                    double currentX = 0, currentY = 0;
+                    if (control.RenderTransform is Avalonia.Media.TranslateTransform currentTransform)
+                    {
+                        currentX = currentTransform.X;
+                        currentY = currentTransform.Y;
+                    }
+                    
+                    tracker = new TranslationAnimationTracker
+                    {
+                        CurrentX = currentX,
+                        CurrentY = currentY
+                    };
+                    _translationTrackers[control] = tracker;
+                }
+                
+                // Get duration and positions from state
+                var duration = state.TranslationDuration ?? 1.0;
+                var startX = state.TranslationStartX ?? 0.0;
+                var startY = state.TranslationStartY ?? 0.0;
+                var endX = state.TranslationEndX ?? targetX;
+                var endY = state.TranslationEndY ?? targetY;
+                
+                // Store start and end positions for looping
+                tracker.StartX = startX;
+                tracker.StartY = startY;
+                tracker.EndX = endX;
+                tracker.EndY = endY;
+                
+                // Determine if we should loop (when tag value indicates animation should be active)
+                // If target is at end position, we should loop; if at start, don't loop
+                bool shouldLoop = Math.Abs(targetX - endX) < 0.01 && Math.Abs(targetY - endY) < 0.01;
+                tracker.ShouldLoop = shouldLoop;
+                
+                // If target is same as current, skip animation (unless we need to start looping)
+                if (Math.Abs(tracker.CurrentX - targetX) < 0.01 && Math.Abs(tracker.CurrentY - targetY) < 0.01 && !shouldLoop)
+                {
+                    tracker.IsAnimating = false;
+                    tracker.TargetX = targetX;
+                    tracker.TargetY = targetY;
+                    control.RenderTransform = new Avalonia.Media.TranslateTransform(targetX, targetY);
+                }
+                else
+                {
+                    // Store start position (current position when animation begins)
+                    // If starting a new loop, use the actual start position
+                    if (shouldLoop && Math.Abs(tracker.CurrentX - endX) < 0.01 && Math.Abs(tracker.CurrentY - endY) < 0.01)
+                    {
+                        // We're at end, reset to start for new loop
+                        tracker.CurrentX = startX;
+                        tracker.CurrentY = startY;
+                        tracker.StartX = startX;
+                        tracker.StartY = startY;
+                    }
+                    else
+                    {
+                        tracker.StartX = tracker.CurrentX;
+                        tracker.StartY = tracker.CurrentY;
+                    }
+                    
+                    // Update target and start animation from current position
+                    tracker.TargetX = targetX;
+                    tracker.TargetY = targetY;
+                    tracker.Duration = duration;
+                    tracker.StartTime = DateTime.Now;
+                    tracker.IsAnimating = true;
+                }
+            }
+            
+            System.Diagnostics.Trace.WriteLine($"[ScreenViewBuilder] Set translation target: X={targetX}, Y={targetY} to control");
         }
         else
         {
             // Clear translation if not set (reset to no transform)
+            lock (_translationTrackers)
+            {
+                if (_translationTrackers.TryGetValue(control, out var tracker))
+                {
+                    tracker.IsAnimating = false;
+                    tracker.TargetX = 0;
+                    tracker.TargetY = 0;
+                }
+            }
             control.RenderTransform = null;
         }
     }
