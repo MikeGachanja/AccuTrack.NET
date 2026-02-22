@@ -81,21 +81,44 @@ public sealed class OpcUaClientConnection : IConnectionStub
         _disconnectedTcs?.TrySetResult(); // unblock connection loop if it is waiting for disconnect
         try
         {
-            if (_subscription != null)
+            var subscription = _subscription;
+            _subscription = null;
+            if (subscription != null)
             {
-                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Stop: Deleting subscription (ID: {_subscription.Id})");
-                _subscription.Delete(true);
-                _subscription = null;
+                try
+                {
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Stop: Deleting subscription (ID: {subscription.Id})");
+                    subscription.Delete(true);
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Stop: Error deleting subscription: {ex.GetType().Name} - {ex.Message}");
+                }
             }
-            
-            if (_session != null)
+
+            var session = _session;
+            _session = null;
+            if (session != null)
             {
-                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Stop: Closing session (ID: {_session.SessionId})");
-                _session.Close();
-                _session.Dispose();
-                _session = null;
+                try
+                {
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Stop: Closing session (ID: {session.SessionId})");
+                    session.Close();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Stop: Error closing session: {ex.GetType().Name} - {ex.Message}");
+                }
+                try
+                {
+                    session.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Stop: Error disposing session: {ex.GetType().Name} - {ex.Message}");
+                }
             }
-            
+
             System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Stop: Successfully stopped OPC UA client connection");
         }
         catch (Exception ex)
@@ -112,16 +135,21 @@ public sealed class OpcUaClientConnection : IConnectionStub
     {
         try
         {
-            if (_subscription != null)
+            var subscription = _subscription;
+            _subscription = null;
+            if (subscription != null)
             {
-                _subscription.Delete(true);
-                _subscription = null;
+                try { subscription.Delete(true); }
+                catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] CloseSessionAndSubscription: Delete subscription: {ex.Message}"); }
             }
-            if (_session != null)
+            var session = _session;
+            _session = null;
+            if (session != null)
             {
-                _session.Close();
-                _session.Dispose();
-                _session = null;
+                try { session.Close(); }
+                catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] CloseSessionAndSubscription: Close session: {ex.Message}"); }
+                try { session.Dispose(); }
+                catch (Exception ex) { System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] CloseSessionAndSubscription: Dispose session: {ex.Message}"); }
             }
             _monitoredItems.Clear();
             _subscribedNodes.Clear();

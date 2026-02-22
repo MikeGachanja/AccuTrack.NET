@@ -28,6 +28,15 @@ public class TableComponent : BaseComponent
     public Font HeaderFont { get; set; } = new Font("Arial", 9, FontStyle.Bold);
     public Font RowFont { get; set; } = new Font("Arial", 8);
 
+    /// <summary>Data source: "TagData" = live tag table, "Historian" = historical query.</summary>
+    public string DataSource { get; set; } = "TagData";
+    /// <summary>When DataSource is TagData: name of the tag table to bind (rows/columns from tags).</summary>
+    public string TagTableName { get; set; } = string.Empty;
+    /// <summary>When DataSource is Historian: tag name to query history for.</summary>
+    public string HistorianTagName { get; set; } = string.Empty;
+    /// <summary>When DataSource is Historian: time range in minutes to query.</summary>
+    public int HistorianTimeRangeMinutes { get; set; } = 60;
+
     public override void Draw(Graphics g, bool isSelected = false)
     {
         var rect = Bounds;
@@ -184,7 +193,11 @@ public class TableComponent : BaseComponent
             ShowGrid = ShowGrid,
             AlternateRows = AlternateRows,
             HeaderFont = new Font(HeaderFont.FontFamily, HeaderFont.Size, HeaderFont.Style),
-            RowFont = new Font(RowFont.FontFamily, RowFont.Size, RowFont.Style)
+            RowFont = new Font(RowFont.FontFamily, RowFont.Size, RowFont.Style),
+            DataSource = DataSource,
+            TagTableName = TagTableName,
+            HistorianTagName = HistorianTagName,
+            HistorianTimeRangeMinutes = HistorianTimeRangeMinutes
         };
     }
 
@@ -227,6 +240,10 @@ public class TableComponent : BaseComponent
         json["rowFont"] = RowFont.Name;
         json["rowFontSize"] = RowFont.Size;
         json["rowFontStyle"] = RowFont.Style.ToString();
+        json["dataSource"] = DataSource;
+        json["tagTableName"] = TagTableName;
+        json["historianTagName"] = HistorianTagName;
+        json["historianTimeRangeMinutes"] = HistorianTimeRangeMinutes;
         return json;
     }
 
@@ -284,6 +301,11 @@ public class TableComponent : BaseComponent
         ShowHeader = json["showHeader"]?.ToObject<bool>() ?? true;
         ShowGrid = json["showGrid"]?.ToObject<bool>() ?? true;
         AlternateRows = json["alternateRows"]?.ToObject<bool>() ?? true;
+
+        DataSource = json["dataSource"]?.ToString() ?? "TagData";
+        TagTableName = json["tagTableName"]?.ToString() ?? string.Empty;
+        HistorianTagName = json["historianTagName"]?.ToString() ?? string.Empty;
+        HistorianTimeRangeMinutes = json["historianTimeRangeMinutes"]?.ToObject<int>() ?? 60;
 
         var headerFontName = json["headerFont"]?.ToString() ?? "Arial";
         var headerFontSize = json["headerFontSize"]?.ToObject<float>() ?? 9f;

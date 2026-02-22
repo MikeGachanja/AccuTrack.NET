@@ -4,18 +4,27 @@ namespace Runtime.Modules.TagsEngine;
 public sealed class TagSubscription : IDisposable
 {
     public string TagName { get; }
-    public Action<string, object?, TagQuality>? Callback { get; }
+    private Action<string, object?, TagQuality>? _callback;
+    private readonly Action<TagSubscription>? _onDispose;
+    private bool _disposed;
 
-    public TagSubscription(string tagName, Action<string, object?, TagQuality> callback)
+    public TagSubscription(string tagName, Action<string, object?, TagQuality> callback, Action<TagSubscription>? onDispose = null)
     {
         TagName = tagName ?? "";
-        Callback = callback ?? throw new ArgumentNullException(nameof(callback));
+        _callback = callback ?? throw new ArgumentNullException(nameof(callback));
+        _onDispose = onDispose;
     }
 
     public void Deliver(object? value, TagQuality quality)
     {
-        Callback?.Invoke(TagName, value, quality);
+        _callback?.Invoke(TagName, value, quality);
     }
 
-    public void Dispose() { }
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _callback = null;
+        _onDispose?.Invoke(this);
+    }
 }

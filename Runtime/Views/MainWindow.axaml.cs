@@ -140,11 +140,13 @@ public partial class MainWindow : Window
             }
             
             var console = ExecutionEngine.Instance.ModuleManager.GetModule("ConsoleModule") as IConsole;
+            var historianQuery = _screensModule?.HistorianQueryHelper;
             var view = ScreenViewBuilder.Build(screenDesc, tagManager, eventManager, tagIOHandler, 
                 name => _screensModule?.ScreenManager.ResolveImagePath(name), 
                 svgPath => _screensModule?.ScreenManager.ResolveSvgPath(svgPath), 
                 _screensModule?.AnimationManager, 
-                console);
+                console, 
+                historianQuery);
             if (view != null)
             {
                 _screenContainer.Content = view;

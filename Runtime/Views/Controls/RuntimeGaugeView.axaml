@@ -2,7 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:shapes="using:Avalonia.Controls.Shapes"
              x:Class="Runtime.Views.Controls.RuntimeGaugeView">
-  <Canvas x:Name="GaugeCanvas" Background="Transparent">
+  <Canvas x:Name="GaugeCanvas" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
     <!-- Gauge background circle -->
     <Ellipse x:Name="GaugeBackground" Fill="White" Stroke="#808080" StrokeThickness="1" />
     <!-- Gauge arc -->

@@ -6,6 +6,16 @@ using Newtonsoft.Json.Linq;
 
 namespace Designer.Modules.Components;
 
+/// <summary>One trend line/series on the chart with tag and display properties.</summary>
+public class TrendSeriesItem
+{
+    public string TagName { get; set; } = string.Empty;
+    public Color Color { get; set; } = Color.Blue;
+    public int LineWidth { get; set; } = 2;
+    /// <summary>Chart type: "Line", "Area", "Step".</summary>
+    public string ChartType { get; set; } = "Line";
+}
+
 /// <summary>
 /// Trend view component for displaying historical data trends.
 /// </summary>
@@ -13,10 +23,17 @@ public class TrendViewComponent : BaseComponent
 {
     public override string ComponentType => "TrendView";
 
+    /// <summary>Trend lines/series: each has tag, color, line size, chart type.</summary>
+    public List<TrendSeriesItem> TrendSeries { get; set; } = new List<TrendSeriesItem>();
+
+    /// <summary>Legacy: tag names (used when TrendSeries is empty or for backward compatibility).</summary>
     public List<string> TagNames { get; set; } = new List<string>();
+    /// <summary>Data source: "Live" = live tag subscription, "Historian" = historical data from historian.</summary>
+    public string DataSource { get; set; } = "Live";
     public int TimeRangeMinutes { get; set; } = 60;
     public Color BackColor { get; set; } = Color.White;
     public Color GridColor { get; set; } = Color.LightGray;
+    /// <summary>Legacy: line colors when using TagNames.</summary>
     public List<Color> LineColors { get; set; } = new List<Color> { Color.Blue, Color.Red, Color.Green, Color.Orange };
     public bool ShowGrid { get; set; } = true;
     public bool ShowLegend { get; set; } = true;
@@ -69,11 +86,19 @@ public class TrendViewComponent : BaseComponent
         }
 
         // Draw placeholder trend lines (would be replaced with actual data)
-        if (TagNames.Count > 0)
+        var series = TrendSeries.Count > 0 ? TrendSeries : TagNames.Select((name, i) => new TrendSeriesItem
         {
-            for (int i = 0; i < TagNames.Count && i < LineColors.Count; i++)
+            TagName = name,
+            Color = i < LineColors.Count ? LineColors[i] : Color.Blue,
+            LineWidth = 2,
+            ChartType = "Line"
+        }).ToList();
+        if (series.Count > 0)
+        {
+            for (int i = 0; i < series.Count; i++)
             {
-                var linePen = new Pen(LineColors[i], 2);
+                var item = series[i];
+                var linePen = new Pen(item.Color, Math.Max(1, item.LineWidth));
                 // Draw a sample sine wave as placeholder
                 var points = new List<Point>();
                 int pointsCount = 50;
@@ -95,19 +120,20 @@ public class TrendViewComponent : BaseComponent
         }
 
         // Draw legend
-        if (ShowLegend && TagNames.Count > 0)
+        if (ShowLegend && series.Count > 0)
         {
             var legendFont = new Font(SystemFonts.DefaultFont.FontFamily, 8);
             int legendY = rect.Y + 5;
-            for (int i = 0; i < TagNames.Count && i < LineColors.Count; i++)
+            for (int i = 0; i < series.Count; i++)
             {
-                var colorBrush = new SolidBrush(LineColors[i]);
+                var item = series[i];
+                var colorBrush = new SolidBrush(item.Color);
                 var colorRect = new Rectangle(rect.X + 5, legendY, 15, 10);
                 g.FillRectangle(colorBrush, colorRect);
                 g.DrawRectangle(Pens.Black, colorRect);
                 
                 var textBrush = new SolidBrush(Color.Black);
-                g.DrawString(TagNames[i], legendFont, textBrush, rect.X + 25, legendY - 2);
+                g.DrawString(item.TagName, legendFont, textBrush, rect.X + 25, legendY - 2);
                 
                 legendY += 15;
                 colorBrush.Dispose();
@@ -140,7 +166,9 @@ public class TrendViewComponent : BaseComponent
             Enabled = Enabled,
             ZOrder = ZOrder,
             TagName = TagName,
+            TrendSeries = TrendSeries.Select(s => new TrendSeriesItem { TagName = s.TagName, Color = s.Color, LineWidth = s.LineWidth, ChartType = s.ChartType }).ToList(),
             TagNames = new List<string>(TagNames),
+            DataSource = DataSource,
             TimeRangeMinutes = TimeRangeMinutes,
             BackColor = BackColor,
             GridColor = GridColor,
@@ -156,18 +184,27 @@ public class TrendViewComponent : BaseComponent
     public override JObject ToJson()
     {
         var json = base.ToJson();
+        var seriesArray = new JArray();
+        foreach (var s in TrendSeries)
+        {
+            seriesArray.Add(new JObject
+            {
+                ["tagName"] = s.TagName,
+                ["color"] = ColorTranslator.ToHtml(s.Color),
+                ["lineWidth"] = s.LineWidth,
+                ["chartType"] = s.ChartType
+            });
+        }
+        json["trendSeries"] = seriesArray;
         var tagNamesArray = new JArray();
         foreach (var tagName in TagNames)
-        {
             tagNamesArray.Add(tagName);
-        }
         json["tagNames"] = tagNamesArray;
+        json["dataSource"] = DataSource;
         
         var lineColorsArray = new JArray();
         foreach (var color in LineColors)
-        {
             lineColorsArray.Add(ColorTranslator.ToHtml(color));
-        }
         json["lineColors"] = lineColorsArray;
         
         json["timeRangeMinutes"] = TimeRangeMinutes;
@@ -185,18 +222,50 @@ public class TrendViewComponent : BaseComponent
     {
         base.FromJson(json);
         
+        TrendSeries.Clear();
+        var seriesArray = json["trendSeries"] as JArray;
+        if (seriesArray != null)
+        {
+            foreach (var item in seriesArray)
+            {
+                if (item is JObject jo)
+                {
+                    TrendSeries.Add(new TrendSeriesItem
+                    {
+                        TagName = jo["tagName"]?.ToString() ?? string.Empty,
+                        Color = ColorTranslator.FromHtml(jo["color"]?.ToString() ?? "#0000FF") is Color c ? c : Color.Blue,
+                        LineWidth = jo["lineWidth"]?.ToObject<int>() ?? 2,
+                        ChartType = jo["chartType"]?.ToString() ?? "Line"
+                    });
+                }
+            }
+        }
+
         TagNames.Clear();
         var tagNamesArray = json["tagNames"] as JArray;
         if (tagNamesArray != null)
         {
             foreach (var item in tagNamesArray)
-            {
                 TagNames.Add(item?.ToString() ?? string.Empty);
+        }
+        var lineColorsArray = json["lineColors"] as JArray;
+        if (TrendSeries.Count == 0 && TagNames.Count > 0)
+        {
+            foreach (var name in TagNames)
+                TrendSeries.Add(new TrendSeriesItem { TagName = name, Color = Color.Blue, LineWidth = 2, ChartType = "Line" });
+            if (lineColorsArray != null)
+            {
+                int idx = 0;
+                foreach (var item in lineColorsArray)
+                {
+                    if (idx < TrendSeries.Count && ColorTranslator.FromHtml(item?.ToString() ?? "#0000FF") is Color cx)
+                        TrendSeries[idx].Color = cx;
+                    idx++;
+                }
             }
         }
 
         LineColors.Clear();
-        var lineColorsArray = json["lineColors"] as JArray;
         if (lineColorsArray != null)
         {
             foreach (var item in lineColorsArray)
@@ -212,6 +281,7 @@ public class TrendViewComponent : BaseComponent
             LineColors.AddRange(new[] { Color.Blue, Color.Red, Color.Green, Color.Orange });
         }
 
+        DataSource = json["dataSource"]?.ToString() ?? "Live";
         TimeRangeMinutes = json["timeRangeMinutes"]?.ToObject<int>() ?? 60;
         
         if (ColorTranslator.FromHtml(json["backColor"]?.ToString() ?? "#FFFFFF") is Color backColor)

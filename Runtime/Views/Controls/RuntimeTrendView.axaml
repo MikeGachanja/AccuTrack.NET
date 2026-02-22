@@ -2,10 +2,13 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Runtime.Views.Controls.RuntimeTrendView">
   <Border Background="White" BorderBrush="#cccccc" BorderThickness="1" CornerRadius="4" Padding="8">
-    <StackPanel>
-      <TextBlock x:Name="LabelText" Text="Trend" Foreground="#333333" FontSize="12" FontWeight="SemiBold" />
-      <TextBlock x:Name="TagText" Text="" Foreground="#666666" FontSize="10" Margin="0,2,0,0" />
-      <TextBlock x:Name="PlaceholderText" Text="Historical data (chart placeholder)" Foreground="#666666" FontSize="11" Margin="0,8,0,0" />
-    </StackPanel>
+    <Grid RowDefinitions="Auto,*,Auto">
+      <StackPanel Grid.Row="0" Orientation="Horizontal" Margin="0,0,0,4">
+        <TextBlock x:Name="LabelText" Text="Trend" Foreground="#333333" FontSize="12" FontWeight="SemiBold" />
+        <TextBlock x:Name="TagText" Text="" Foreground="#666666" FontSize="10" Margin="8,0,0,0" IsVisible="False" />
+      </StackPanel>
+      <Canvas x:Name="ChartCanvas" Grid.Row="1" MinHeight="120" Margin="0,4,0,0" Background="#FAFAFA" />
+      <StackPanel x:Name="LegendPanel" Grid.Row="2" Orientation="Horizontal" Margin="0,4,0,0" IsVisible="False" />
+    </Grid>
   </Border>
 </UserControl>

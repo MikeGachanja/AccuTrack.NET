@@ -22,7 +22,8 @@ public partial class PropertyEditor : UserControl
     private Panel _generalTab;
     private Panel _eventsTab;
     private Panel _animationTab;
-    private Panel _tagsTab;
+    private Panel _tableTab;
+    private Panel _trendTab;
     
     private List<TagTable> _availableTagTables = new List<TagTable>();
     private List<object> _availableScreens = new List<object>(); // ScreenTemplate objects
@@ -94,17 +95,20 @@ public partial class PropertyEditor : UserControl
         _generalTab = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
         _eventsTab = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
         _animationTab = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
-        _tagsTab = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        _tableTab = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        _trendTab = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
 
         _tabControl.TabPages.Add("General");
         _tabControl.TabPages.Add("Events");
         _tabControl.TabPages.Add("Animation");
-        _tabControl.TabPages.Add("Tags");
+        _tabControl.TabPages.Add("Table");
+        _tabControl.TabPages.Add("Trend");
 
         _tabControl.TabPages[0].Controls.Add(_generalTab);
         _tabControl.TabPages[1].Controls.Add(_eventsTab);
         _tabControl.TabPages[2].Controls.Add(_animationTab);
-        _tabControl.TabPages[3].Controls.Add(_tagsTab);
+        _tabControl.TabPages[3].Controls.Add(_tableTab);
+        _tabControl.TabPages[4].Controls.Add(_trendTab);
 
         SetupEventsTab();
         SetupAnimationTab();
@@ -141,7 +145,8 @@ public partial class PropertyEditor : UserControl
         UpdateGeneralTab();
         UpdateEventsTab();
         UpdateAnimationTab();
-        UpdateTagsTab();
+        UpdateTableTab();
+        UpdateTrendTab();
 
         // Force the tab control to repaint so the visible tab (and any previously invisible tabs) show updated content
         _tabControl?.Refresh();
@@ -214,7 +219,8 @@ public partial class PropertyEditor : UserControl
         _generalTab.Controls.Clear();
         _eventsTab.Controls.Clear();
         _animationTab.Controls.Clear();
-        _tagsTab.Controls.Clear();
+        _tableTab.Controls.Clear();
+        _trendTab.Controls.Clear();
     }
 
     private void UpdateGeneralTab()
@@ -366,6 +372,29 @@ public partial class PropertyEditor : UserControl
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
+        // Tag binding (moved from Tags tab)
+        layout.Controls.Add(new Label { Text = "Tag binding:", AutoSize = true }, 0, row);
+        var tagBindingPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true };
+        var tagNameLabel = new Label { Text = string.IsNullOrEmpty(_selectedComponent.TagName) ? "(none)" : _selectedComponent.TagName, AutoSize = true };
+        var selectTagButton = new Button { Text = "Select tag...", Width = 90 };
+        selectTagButton.Click += (s, e) =>
+        {
+            var form = FindForm();
+            if (form == null) return;
+            var (tagName, _) = TagSelectorHelper.ShowTagSelectorWithTable(form, _availableTagTables, _selectedComponent?.TagName);
+            if (!string.IsNullOrEmpty(tagName) && _selectedComponent != null)
+            {
+                _selectedComponent.TagName = tagName;
+                tagNameLabel.Text = tagName;
+                TriggerAutoSave();
+            }
+        };
+        tagBindingPanel.Controls.Add(tagNameLabel);
+        tagBindingPanel.Controls.Add(selectTagButton);
+        layout.Controls.Add(tagBindingPanel, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
         // Component-specific properties
         if (_selectedComponent is ButtonComponent button)
         {
@@ -426,6 +455,18 @@ public partial class PropertyEditor : UserControl
         else if (_selectedComponent is ConsoleComponent console)
         {
             UpdateConsoleProperties(layout, console, ref row);
+        }
+        else if (_selectedComponent is TableComponent table)
+        {
+            UpdateTableProperties(layout, table, ref row);
+        }
+        else if (_selectedComponent is TrendViewComponent trendView)
+        {
+            UpdateTrendViewProperties(layout, trendView, ref row);
+        }
+        else if (_selectedComponent is GaugeViewComponent gaugeView)
+        {
+            UpdateGaugeViewProperties(layout, gaugeView, ref row);
         }
         // Add other component types as needed
 
@@ -1190,6 +1231,96 @@ public partial class PropertyEditor : UserControl
         }, ref row);
     }
 
+    private void UpdateTableProperties(TableLayoutPanel layout, TableComponent table, ref int row)
+    {
+        // Table-specific appearance in General; data source is on Table tab
+        layout.Controls.Add(new Label { Text = "Show header:", AutoSize = true }, 0, row);
+        var showHeaderCheck = new CheckBox { Checked = table.ShowHeader };
+        showHeaderCheck.CheckedChanged += (s, e) => { table.ShowHeader = showHeaderCheck.Checked; TriggerAutoSave(); };
+        layout.Controls.Add(showHeaderCheck, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+        layout.Controls.Add(new Label { Text = "Show grid:", AutoSize = true }, 0, row);
+        var showGridCheck = new CheckBox { Checked = table.ShowGrid };
+        showGridCheck.CheckedChanged += (s, e) => { table.ShowGrid = showGridCheck.Checked; TriggerAutoSave(); };
+        layout.Controls.Add(showGridCheck, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+        layout.Controls.Add(new Label { Text = "Use Table tab for data source (Tag or Historian).", AutoSize = true, ForeColor = Color.Gray }, 0, row);
+        layout.SetColumnSpan(layout.Controls[layout.Controls.Count - 1], 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
+    private void UpdateTrendViewProperties(TableLayoutPanel layout, TrendViewComponent trend, ref int row)
+    {
+        // Trend-specific in General is minimal; data source and tags on Trend tab
+        layout.Controls.Add(new Label { Text = "Use Trend tab for data source (Live tags or Historian).", AutoSize = true, ForeColor = Color.Gray }, 0, row);
+        layout.SetColumnSpan(layout.Controls[layout.Controls.Count - 1], 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
+    private void UpdateGaugeViewProperties(TableLayoutPanel layout, GaugeViewComponent gauge, ref int row)
+    {
+        layout.Controls.Add(new Label { Text = "Minimum:", AutoSize = true }, 0, row);
+        var minNumeric = new NumericUpDown { Minimum = decimal.MinValue, Maximum = decimal.MaxValue, Value = (decimal)gauge.Minimum, Width = 100 };
+        minNumeric.ValueChanged += (s, e) => { gauge.Minimum = (double)minNumeric.Value; TriggerAutoSave(); };
+        layout.Controls.Add(minNumeric, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+        layout.Controls.Add(new Label { Text = "Maximum:", AutoSize = true }, 0, row);
+        var maxNumeric = new NumericUpDown { Minimum = decimal.MinValue, Maximum = decimal.MaxValue, Value = (decimal)gauge.Maximum, Width = 100 };
+        maxNumeric.ValueChanged += (s, e) => { gauge.Maximum = (double)maxNumeric.Value; TriggerAutoSave(); };
+        layout.Controls.Add(maxNumeric, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+        layout.Controls.Add(new Label { Text = "Unit:", AutoSize = true }, 0, row);
+        var unitTextBox = new TextBox { Text = gauge.Unit ?? string.Empty, Width = 80 };
+        unitTextBox.TextChanged += (s, e) => { gauge.Unit = unitTextBox.Text ?? string.Empty; TriggerAutoSave(); };
+        layout.Controls.Add(unitTextBox, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+        layout.Controls.Add(new Label { Text = "Show value:", AutoSize = true }, 0, row);
+        var showValueCheck = new CheckBox { Checked = gauge.ShowValue };
+        showValueCheck.CheckedChanged += (s, e) => { gauge.ShowValue = showValueCheck.Checked; TriggerAutoSave(); };
+        layout.Controls.Add(showValueCheck, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+        layout.Controls.Add(new Label { Text = "Show min/max:", AutoSize = true }, 0, row);
+        var showMinMaxCheck = new CheckBox { Checked = gauge.ShowMinMax };
+        showMinMaxCheck.CheckedChanged += (s, e) => { gauge.ShowMinMax = showMinMaxCheck.Checked; TriggerAutoSave(); };
+        layout.Controls.Add(showMinMaxCheck, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+        layout.Controls.Add(new Label { Text = "Back color:", AutoSize = true }, 0, row);
+        var backColorBtn = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(backColorBtn, gauge.BackColor);
+        backColorBtn.Click += (s, e) =>
+        {
+            using (var d = new ColorDialog { Color = gauge.BackColor })
+            {
+                if (d.ShowDialog() == DialogResult.OK) { gauge.BackColor = d.Color; UpdateColorButton(backColorBtn, gauge.BackColor); TriggerAutoSave(); }
+            }
+        };
+        layout.Controls.Add(backColorBtn, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+        layout.Controls.Add(new Label { Text = "Needle color:", AutoSize = true }, 0, row);
+        var needleColorBtn = new Button { Text = "", Width = 50, Height = 25 };
+        UpdateColorButton(needleColorBtn, gauge.NeedleColor);
+        needleColorBtn.Click += (s, e) =>
+        {
+            using (var d = new ColorDialog { Color = gauge.NeedleColor })
+            {
+                if (d.ShowDialog() == DialogResult.OK) { gauge.NeedleColor = d.Color; UpdateColorButton(needleColorBtn, gauge.NeedleColor); TriggerAutoSave(); }
+            }
+        };
+        layout.Controls.Add(needleColorBtn, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+    }
+
     private void UpdateSvgViewProperties(TableLayoutPanel layout, SvgViewComponent svgView, ref int row)
     {
         // SVG Path
@@ -1722,42 +1853,323 @@ public partial class PropertyEditor : UserControl
         }
     }
 
-    private void UpdateTagsTab()
+    private void UpdateTableTab()
     {
-        _tagsTab.Controls.Clear();
-        
-        if (_selectedComponent == null)
-            return;
-
-        var layout = new TableLayoutPanel
+        _tableTab.Controls.Clear();
+        if (_selectedComponent is not TableComponent table)
         {
-            Dock = DockStyle.Fill,
-            ColumnCount = 2,
-            Padding = new Padding(5)
-        };
+            _tableTab.Controls.Add(new Label
+            {
+                Text = "Select a Table component to edit data source and table options.",
+                AutoSize = true,
+                Padding = new Padding(10)
+            });
+            return;
+        }
+        var scrollPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        var layout = new TableLayoutPanel { ColumnCount = 2, Padding = new Padding(5), AutoSize = true };
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
-
         int row = 0;
 
-        layout.Controls.Add(new Label { Text = "Tag Binding:", AutoSize = true }, 0, row);
-        var tagSelector = new TagSelectorWidget { Dock = DockStyle.Fill, Height = 25 };
-        tagSelector.SetAvailableTags(_availableTagTables);
-        if (!string.IsNullOrEmpty(_selectedComponent.TagName))
+        // Data source
+        layout.Controls.Add(new Label { Text = "Data source:", AutoSize = true }, 0, row);
+        var dataSourceCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
+        dataSourceCombo.Items.AddRange(new[] { "TagData", "Historian" });
+        dataSourceCombo.SelectedItem = table.DataSource ?? "TagData";
+        if (dataSourceCombo.SelectedIndex < 0) dataSourceCombo.SelectedIndex = 0;
+        dataSourceCombo.SelectedIndexChanged += (s, e) =>
         {
-            tagSelector.SetSelectedTagName(_selectedComponent.TagName);
-        }
-        tagSelector.TagSelected += (s, tagName) =>
-        {
-            _selectedComponent.TagName = tagName ?? string.Empty;
+            table.DataSource = dataSourceCombo.SelectedItem?.ToString() ?? "TagData";
             TriggerAutoSave();
         };
-        layout.Controls.Add(tagSelector, 1, row);
+        layout.Controls.Add(dataSourceCombo, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Tag table (for TagData) – dropdown + tag selector to set table from selected tag
+        layout.Controls.Add(new Label { Text = "Tag table:", AutoSize = true }, 0, row);
+        var tagTablePanel = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true };
+        var tagTableCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
+        tagTableCombo.Items.Add(string.Empty);
+        foreach (var tt in _availableTagTables)
+            tagTableCombo.Items.Add(tt.Name);
+        var tagTableName = table.TagTableName ?? string.Empty;
+        if (tagTableCombo.Items.Contains(tagTableName))
+            tagTableCombo.SelectedItem = tagTableName;
+        else
+        {
+            tagTableCombo.Items.Add(tagTableName);
+            tagTableCombo.SelectedItem = tagTableName;
+        }
+        tagTableCombo.SelectedIndexChanged += (s, e) =>
+        {
+            table.TagTableName = tagTableCombo.SelectedItem?.ToString() ?? string.Empty;
+            TriggerAutoSave();
+        };
+        var selectTableViaTagBtn = new Button { Text = "Select tag...", Width = 90 };
+        selectTableViaTagBtn.Click += (s, e) =>
+        {
+            var form = FindForm();
+            if (form == null) return;
+            var (_, tableName) = TagSelectorHelper.ShowTagSelectorWithTable(form, _availableTagTables, null);
+            if (!string.IsNullOrEmpty(tableName))
+            {
+                table.TagTableName = tableName;
+                if (!tagTableCombo.Items.Cast<object>().Any(x => x?.ToString() == tableName))
+                    tagTableCombo.Items.Add(tableName);
+                tagTableCombo.SelectedItem = tableName;
+                TriggerAutoSave();
+            }
+        };
+        tagTablePanel.Controls.Add(tagTableCombo);
+        tagTablePanel.Controls.Add(selectTableViaTagBtn);
+        layout.Controls.Add(tagTablePanel, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Historian tag (for Historian) – use tag selector dialog
+        layout.Controls.Add(new Label { Text = "Historian tag:", AutoSize = true }, 0, row);
+        var historianTagPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true };
+        var historianTagLabel = new Label { Text = string.IsNullOrEmpty(table.HistorianTagName) ? "(none)" : table.HistorianTagName, AutoSize = true };
+        var selectHistorianTagBtn = new Button { Text = "Select tag...", Width = 90 };
+        selectHistorianTagBtn.Click += (s, e) =>
+        {
+            var form = FindForm();
+            if (form == null) return;
+            var (tagName, _) = TagSelectorHelper.ShowTagSelectorWithTable(form, _availableTagTables, table.HistorianTagName);
+            if (!string.IsNullOrEmpty(tagName))
+            {
+                table.HistorianTagName = tagName;
+                historianTagLabel.Text = tagName;
+                TriggerAutoSave();
+            }
+        };
+        historianTagPanel.Controls.Add(historianTagLabel);
+        historianTagPanel.Controls.Add(selectHistorianTagBtn);
+        layout.Controls.Add(historianTagPanel, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Historian time range
+        layout.Controls.Add(new Label { Text = "Time range (minutes):", AutoSize = true }, 0, row);
+        var timeRangeNumeric = new NumericUpDown { Minimum = 1, Maximum = 10080, Value = table.HistorianTimeRangeMinutes, Width = 100 };
+        timeRangeNumeric.ValueChanged += (s, e) =>
+        {
+            table.HistorianTimeRangeMinutes = (int)timeRangeNumeric.Value;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(timeRangeNumeric, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        scrollPanel.Controls.Add(layout);
+        _tableTab.Controls.Add(scrollPanel);
+    }
+
+    private void UpdateTrendTab()
+    {
+        _trendTab.Controls.Clear();
+        if (_selectedComponent is not TrendViewComponent trend)
+        {
+            _trendTab.Controls.Add(new Label
+            {
+                Text = "Select a Trend View component to edit data source and trend options.",
+                AutoSize = true,
+                Padding = new Padding(10)
+            });
+            return;
+        }
+        var scrollPanel = new Panel { Dock = DockStyle.Fill, AutoScroll = true };
+        var layout = new TableLayoutPanel { ColumnCount = 2, Padding = new Padding(5), AutoSize = true };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+        int row = 0;
+
+        // Data source
+        layout.Controls.Add(new Label { Text = "Data source:", AutoSize = true }, 0, row);
+        var dataSourceCombo = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList, Width = 180 };
+        dataSourceCombo.Items.AddRange(new[] { "Live", "Historian" });
+        dataSourceCombo.SelectedItem = trend.DataSource ?? "Live";
+        if (dataSourceCombo.SelectedIndex < 0) dataSourceCombo.SelectedIndex = 0;
+        dataSourceCombo.SelectedIndexChanged += (s, e) =>
+        {
+            trend.DataSource = dataSourceCombo.SelectedItem?.ToString() ?? "Live";
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(dataSourceCombo, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Time range (for Historian or display)
+        layout.Controls.Add(new Label { Text = "Time range (minutes):", AutoSize = true }, 0, row);
+        var timeRangeNumeric = new NumericUpDown { Minimum = 1, Maximum = 10080, Value = trend.TimeRangeMinutes, Width = 100 };
+        timeRangeNumeric.ValueChanged += (s, e) =>
+        {
+            trend.TimeRangeMinutes = (int)timeRangeNumeric.Value;
+            TriggerAutoSave();
+        };
+        layout.Controls.Add(timeRangeNumeric, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Trend lines table
+        layout.Controls.Add(new Label { Text = "Trend lines:", AutoSize = true }, 0, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        var gridPanel = new Panel { Dock = DockStyle.Fill, Height = 200 };
+        var dgv = new DataGridView
+        {
+            Dock = DockStyle.Fill,
+            AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill,
+            AllowUserToAddRows = false,
+            AllowUserToDeleteRows = false,
+            RowHeadersVisible = false,
+            ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.AutoSize,
+            SelectionMode = DataGridViewSelectionMode.FullRowSelect,
+            MultiSelect = false
+        };
+        dgv.Columns.Add(new DataGridViewTextBoxColumn { Name = "TagName", HeaderText = "Tag", ReadOnly = true, FillWeight = 120 });
+        dgv.Columns.Add(new DataGridViewButtonColumn { Name = "SelectTag", HeaderText = "Select", Text = "Select tag...", UseColumnTextForButtonValue = true, FillWeight = 70 });
+        dgv.Columns.Add(new DataGridViewTextBoxColumn { Name = "Color", HeaderText = "Color", ReadOnly = true, FillWeight = 80 });
+        dgv.Columns.Add(new DataGridViewButtonColumn { Name = "PickColor", HeaderText = "", Text = "...", UseColumnTextForButtonValue = true, Width = 40 });
+        dgv.Columns.Add(new DataGridViewTextBoxColumn { Name = "LineWidth", HeaderText = "Line size", FillWeight = 60 });
+        var chartTypeCol = new DataGridViewComboBoxColumn { Name = "ChartType", HeaderText = "Chart type", FillWeight = 80 };
+        chartTypeCol.Items.AddRange(new object[] { "Line", "Area", "Step" });
+        dgv.Columns.Add(chartTypeCol);
+
+        void RefreshGridFromTrend()
+        {
+            dgv.Rows.Clear();
+            var series = trend.TrendSeries ?? new List<TrendSeriesItem>();
+            foreach (var s in series)
+            {
+                dgv.Rows.Add(s.TagName, "Select tag...", ColorTranslator.ToHtml(s.Color), "...", s.LineWidth, s.ChartType ?? "Line");
+            }
+        }
+        void FlushGridToTrend()
+        {
+            trend.TrendSeries.Clear();
+            foreach (DataGridViewRow r in dgv.Rows)
+            {
+                if (r.IsNewRow) continue;
+                var tagName = r.Cells["TagName"].Value?.ToString() ?? string.Empty;
+                var colorStr = r.Cells["Color"].Value?.ToString() ?? "#0000FF";
+                var color = ColorTranslator.FromHtml(colorStr) is Color c ? c : Color.Blue;
+                var lineWidth = int.TryParse(r.Cells["LineWidth"].Value?.ToString(), out var lw) ? lw : 2;
+                var chartType = r.Cells["ChartType"].Value?.ToString() ?? "Line";
+                trend.TrendSeries.Add(new TrendSeriesItem { TagName = tagName, Color = color, LineWidth = lineWidth, ChartType = chartType });
+            }
+            TriggerAutoSave();
+        }
+
+        RefreshGridFromTrend();
+
+        dgv.CellClick += (s, e) =>
+        {
+            if (e.RowIndex < 0) return;
+            if (dgv.Columns[e.ColumnIndex].Name == "SelectTag")
+            {
+                var form = FindForm();
+                if (form == null) return;
+                var currentTag = dgv.Rows[e.RowIndex].Cells["TagName"].Value?.ToString();
+                var (tagName, _) = TagSelectorHelper.ShowTagSelectorWithTable(form, _availableTagTables, currentTag);
+                if (!string.IsNullOrEmpty(tagName))
+                {
+                    dgv.Rows[e.RowIndex].Cells["TagName"].Value = tagName;
+                    FlushGridToTrend();
+                }
+            }
+            else if (dgv.Columns[e.ColumnIndex].Name == "PickColor")
+            {
+                var colorStr = dgv.Rows[e.RowIndex].Cells["Color"].Value?.ToString() ?? "#0000FF";
+                var current = ColorTranslator.FromHtml(colorStr) is Color cx ? cx : Color.Blue;
+                using (var cd = new ColorDialog { Color = current })
+                {
+                    if (cd.ShowDialog() == DialogResult.OK)
+                    {
+                        dgv.Rows[e.RowIndex].Cells["Color"].Value = ColorTranslator.ToHtml(cd.Color);
+                        FlushGridToTrend();
+                    }
+                }
+            }
+        };
+        dgv.CellValueChanged += (s, e) =>
+        {
+            if (e.RowIndex >= 0 && (dgv.Columns[e.ColumnIndex].Name == "LineWidth" || dgv.Columns[e.ColumnIndex].Name == "ChartType"))
+                FlushGridToTrend();
+        };
+
+        gridPanel.Controls.Add(dgv);
+        layout.Controls.Add(gridPanel, 0, row);
+        layout.SetColumnSpan(gridPanel, 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 200F));
+        row++;
+
+        var btnPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, Height = 28 };
+        var addRowBtn = new Button { Text = "Add trend line", Width = 110 };
+        addRowBtn.Click += (s, e) =>
+        {
+            trend.TrendSeries.Add(new TrendSeriesItem { TagName = string.Empty, Color = Color.Blue, LineWidth = 2, ChartType = "Line" });
+            RefreshGridFromTrend();
+            TriggerAutoSave();
+        };
+        var removeRowBtn = new Button { Text = "Remove", Width = 70 };
+        removeRowBtn.Click += (s, e) =>
+        {
+            if (dgv.CurrentRow != null && !dgv.CurrentRow.IsNewRow)
+            {
+                dgv.Rows.Remove(dgv.CurrentRow);
+                FlushGridToTrend();
+            }
+        };
+        btnPanel.Controls.Add(addRowBtn);
+        btnPanel.Controls.Add(removeRowBtn);
+        layout.Controls.Add(btnPanel, 0, row);
+        layout.SetColumnSpan(btnPanel, 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        // Y axis
+        layout.Controls.Add(new Label { Text = "Y axis label:", AutoSize = true }, 0, row);
+        var yLabelTextBox = new TextBox { Text = trend.YAxisLabel ?? "Value", Width = 150 };
+        yLabelTextBox.TextChanged += (s, e) => { trend.YAxisLabel = yLabelTextBox.Text ?? "Value"; TriggerAutoSave(); };
+        layout.Controls.Add(yLabelTextBox, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        layout.Controls.Add(new Label { Text = "Y min:", AutoSize = true }, 0, row);
+        var yMinNumeric = new NumericUpDown { Minimum = decimal.MinValue, Maximum = decimal.MaxValue, Value = (decimal)trend.YAxisMin, Width = 100 };
+        yMinNumeric.ValueChanged += (s, e) => { trend.YAxisMin = (double)yMinNumeric.Value; TriggerAutoSave(); };
+        layout.Controls.Add(yMinNumeric, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        layout.Controls.Add(new Label { Text = "Y max:", AutoSize = true }, 0, row);
+        var yMaxNumeric = new NumericUpDown { Minimum = decimal.MinValue, Maximum = decimal.MaxValue, Value = (decimal)trend.YAxisMax, Width = 100 };
+        yMaxNumeric.ValueChanged += (s, e) => { trend.YAxisMax = (double)yMaxNumeric.Value; TriggerAutoSave(); };
+        layout.Controls.Add(yMaxNumeric, 1, row);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        var showGridCheck = new CheckBox { Text = "Show grid", Checked = trend.ShowGrid };
+        showGridCheck.CheckedChanged += (s, e) => { trend.ShowGrid = showGridCheck.Checked; TriggerAutoSave(); };
+        layout.Controls.Add(showGridCheck, 0, row);
+        layout.SetColumnSpan(showGridCheck, 2);
+        layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        row++;
+
+        var showLegendCheck = new CheckBox { Text = "Show legend", Checked = trend.ShowLegend };
+        showLegendCheck.CheckedChanged += (s, e) => { trend.ShowLegend = showLegendCheck.Checked; TriggerAutoSave(); };
+        layout.Controls.Add(showLegendCheck, 0, row);
+        layout.SetColumnSpan(showLegendCheck, 2);
         layout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-        _tagsTab.Controls.Add(layout);
+        scrollPanel.Controls.Add(layout);
+        _trendTab.Controls.Add(scrollPanel);
     }
-    
+
     private void SetupAnimationTab()
     {
         var layout = new TableLayoutPanel

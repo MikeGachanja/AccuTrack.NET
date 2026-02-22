@@ -96,55 +96,41 @@ public static class ScreenRenderer
                 }
             }
             
-            // Also check root level for backward compatibility (designer writes many props at root, e.g. fillColor, lineColor)
-            // Only add if not already in properties dict
+            // Also check root level for backward compatibility (designer writes many props at root)
             var rootLevelProperties = new[] {
                 "text", "backColor", "foreColor", "textColor", "borderColor", "borderWidth", "font", "fontSize", "fontStyle", "action",
                 "maxLines",
-                "value", "minimum", "maximum", "needleColor", "textColor", "showValue", "showMinMax", "unit",
+                "value", "minimum", "maximum", "needleColor", "showValue", "showMinMax", "unit",
                 "level", "tankColor", "fillColor", "lowLevelColor", "highLevelColor", "lowLevelThreshold", "highLevelThreshold", "label", "showLevel",
                 "onColor", "offColor", "faultColor", "warningColor", "errorColor", "color", "backgroundColor", "running", "faulted", "state", "direction", "shape",
                 "labelColor", "valueColor", "labelFont", "labelFontSize", "labelFontStyle", "valueFont", "valueFontSize", "valueFontStyle", "decimalPlaces", "suffix",
                 "lineColor", "lineWidth", "style", "startPoint", "endPoint", "filled",
                 "headerFont", "headerFontSize", "headerFontStyle", "rowFont", "rowFontSize", "rowFontStyle", "title", "format",
                 "svgPath",
-                "columns", "headerBackColor", "headerForeColor", "activeAlarmColor", "acknowledgedAlarmColor", "normalColor", "showHeader", "maxRows"
+                "columns", "headerBackColor", "headerForeColor", "activeAlarmColor", "acknowledgedAlarmColor", "normalColor", "showHeader", "maxRows",
+                "dataSource", "historianTagName", "historianTimeRangeMinutes", "tagTableName", "timeRangeMinutes",
+                "columnHeaders", "rows", "trendSeries", "tagNames", "lineColors",
+                "gridColor", "showGrid", "showLegend", "yAxisLabel", "yAxisMin", "yAxisMax"
             };
             foreach (var propName in rootLevelProperties)
             {
                 if (!dict.ContainsKey(propName) && item.TryGetProperty(propName, out var rootProp))
                 {
-                    object? val;
-                    if (propName == "columns" && rootProp.ValueKind == JsonValueKind.Array)
-                    {
-                        // Handle columns array specially
-                        var columnsList = new List<string>();
-                        foreach (var colItem in rootProp.EnumerateArray())
-                        {
-                            if (colItem.ValueKind == JsonValueKind.String)
-                                columnsList.Add(colItem.GetString() ?? "");
-                        }
-                        val = columnsList;
-                    }
-                    else
-                    {
-                        val = rootProp.ValueKind switch
-                        {
-                            JsonValueKind.String => rootProp.GetString(),
-                            JsonValueKind.Number => rootProp.TryGetInt32(out var i) ? i : rootProp.GetDouble(),
-                            JsonValueKind.True => true,
-                            JsonValueKind.False => false,
-                            _ => rootProp.ToString()
-                        };
-                    }
-                    dict[propName] = val;
-                    
-                    // Log svgPath parsing for debugging
+                    object? val = ParseJsonValue(rootProp);
+                    dict[propName] = val ?? (rootProp.ValueKind == JsonValueKind.String ? rootProp.GetString() : rootProp.ToString());
                     if (propName == "svgPath" && comp.ComponentType == "SVGView")
-                    {
-                        System.Diagnostics.Trace.WriteLine($"[ScreenRenderer] Parsed svgPath for {comp.ComponentType} (ID: {comp.Id}): '{val}'");
-                    }
+                        System.Diagnostics.Trace.WriteLine($"[ScreenRenderer] Parsed svgPath for {comp.ComponentType} (ID: {comp.Id}): '{dict[propName]}'");
                 }
+            }
+            
+            // Copy any remaining root-level keys (e.g. from designer) so Table/Trend get full config
+            var structural = new HashSet<string> { "id", "componentType", "name", "location", "size", "visible", "enabled", "zOrder", "tagName", "properties", "eventIds" };
+            foreach (var prop in item.EnumerateObject())
+            {
+                if (structural.Contains(prop.Name) || dict.ContainsKey(prop.Name)) continue;
+                object? val = ParseJsonValue(prop.Value);
+                if (val != null || prop.Value.ValueKind == JsonValueKind.String)
+                    dict[prop.Name] = val ?? prop.Value.GetString();
             }
             
             comp.Properties = dict;
@@ -169,6 +155,30 @@ public static class ScreenRenderer
         catch
         {
             return null;
+        }
+    }
+
+    private static object? ParseJsonValue(JsonElement e)
+    {
+        switch (e.ValueKind)
+        {
+            case JsonValueKind.String: return e.GetString();
+            case JsonValueKind.Number:
+                if (e.TryGetInt32(out var i)) return i;
+                return e.GetDouble();
+            case JsonValueKind.True: return true;
+            case JsonValueKind.False: return false;
+            case JsonValueKind.Array:
+                var list = new List<object?>();
+                foreach (var el in e.EnumerateArray())
+                    list.Add(ParseJsonValue(el));
+                return list;
+            case JsonValueKind.Object:
+                var obj = new Dictionary<string, object?>();
+                foreach (var prop in e.EnumerateObject())
+                    obj[prop.Name] = ParseJsonValue(prop.Value);
+                return obj;
+            default: return e.ToString();
         }
     }
 }

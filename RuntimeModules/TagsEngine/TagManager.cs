@@ -116,12 +116,36 @@ public sealed class TagManager
 
     public TagSubscription Subscribe(string tagName, Action<string, object?, TagQuality> callback)
     {
-        var sub = new TagSubscription(tagName, callback);
+        TagSubscription sub;
         lock (_subLock)
         {
             if (!_subscriptions.ContainsKey(tagName))
                 _subscriptions[tagName] = new List<TagSubscription>();
+            sub = new TagSubscription(tagName, callback, s =>
+            {
+                lock (_subLock)
+                {
+                    if (_subscriptions.TryGetValue(tagName, out var list))
+                    {
+                        list.Remove(s);
+                        if (list.Count == 0)
+                            _subscriptions.TryRemove(tagName, out _);
+                    }
+                }
+            });
             _subscriptions[tagName].Add(sub);
+        }
+        // Deliver current value immediately so UI shows latest value and stays in sync
+        if (_tagsByName.TryGetValue(tagName ?? "", out var tag))
+        {
+            try
+            {
+                sub.Deliver(tag.GetValue(), tag.Quality);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[TagManager] Subscribe: Error delivering initial value for tag '{tagName}': {ex.Message}");
+            }
         }
         return sub;
     }
@@ -134,9 +158,11 @@ public sealed class TagManager
             if (_subscriptions.TryGetValue(subscription.TagName, out var list))
             {
                 list.Remove(subscription);
-                subscription.Dispose();
+                if (list.Count == 0)
+                    _subscriptions.TryRemove(subscription.TagName, out _);
             }
         }
+        subscription.Dispose();
     }
 
     public void Clear()

@@ -20,13 +20,24 @@ public partial class RuntimeGaugeView : UserControl
     private bool _showValue = true;
     private bool _showMinMax = true;
     private string _unit = string.Empty;
-    private double _lastWidth = 0;
-    private double _lastHeight = 0;
+    private bool _deferredUpdateScheduled;
 
     public RuntimeGaugeView()
     {
         InitializeComponent();
-        SizeChanged += (_, _) => UpdateGauge();
+        SizeChanged += OnSizeChanged;
+        AttachedToVisualTree += OnAttachedToVisualTree;
+    }
+
+    private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        // Run UpdateGauge once after layout so we have valid Bounds
+        Avalonia.Threading.Dispatcher.UIThread.Post(UpdateGauge, Avalonia.Threading.DispatcherPriority.Loaded);
+    }
+
+    private void OnSizeChanged(object? sender, EventArgs e)
+    {
+        UpdateGauge();
     }
 
     public void ApplyDescriptor(ComponentDescriptor d)
@@ -53,9 +64,11 @@ public partial class RuntimeGaugeView : UserControl
 
     public void SetValue(object? value)
     {
-        _value = 0;
-        if (value is int i) _value = Math.Clamp(i, _minimum, _maximum);
-        else if (value is double d) _value = Math.Clamp(d, _minimum, _maximum);
+        // Only update _value when we have a valid tag value; keep previous value when null (e.g. tag not connected yet)
+        if (value is int i)
+            _value = Math.Clamp(i, _minimum, _maximum);
+        else if (value is double d)
+            _value = Math.Clamp(d, _minimum, _maximum);
         else if (value != null && double.TryParse(value.ToString(), out var parsed))
             _value = Math.Clamp(parsed, _minimum, _maximum);
         UpdateGauge();
@@ -63,17 +76,27 @@ public partial class RuntimeGaugeView : UserControl
 
     private void UpdateGauge()
     {
-        var width = Bounds.Width > 0 ? Bounds.Width : 100;
-        var height = Bounds.Height > 0 ? Bounds.Height : 100;
-        
-        if (width <= 0 || height <= 0) return;
-        
-        // Only update if size actually changed to avoid infinite loops
-        if (Math.Abs(width - _lastWidth) < 0.1 && Math.Abs(height - _lastHeight) < 0.1)
-            return;
-        
-        _lastWidth = width;
-        _lastHeight = height;
+        var width = Bounds.Width > 0 ? Bounds.Width : (Width > 0 ? Width : 0);
+        var height = Bounds.Height > 0 ? Bounds.Height : (Height > 0 ? Height : 0);
+        if (width <= 0 || height <= 0)
+        {
+            width = Math.Max(50, width);
+            height = Math.Max(50, height);
+            if (width <= 0) width = 100;
+            if (height <= 0) height = 100;
+            // Schedule one deferred update so we redraw when control gets its real size
+            if (!_deferredUpdateScheduled)
+            {
+                _deferredUpdateScheduled = true;
+                Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+                {
+                    _deferredUpdateScheduled = false;
+                    UpdateGauge();
+                }, Avalonia.Threading.DispatcherPriority.Loaded);
+            }
+        }
+        width = Math.Max(50, width);
+        height = Math.Max(50, height);
         
         var size = Math.Min(width, height);
         var centerX = width / 2;

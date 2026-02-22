@@ -37,14 +37,15 @@ public static class ScreenViewBuilder
     private static readonly Dictionary<Control, TranslationAnimationTracker> _translationTrackers = new();
     private static Avalonia.Threading.DispatcherTimer? _animationTimer;
     public static Control? Build(ScreenRenderer.ScreenDescriptor? screen)
-        => Build(screen, null, null, null, null, null, null, null);
+        => Build(screen, null, null, null, null, null, null, null, null);
 
     /// <summary>Builds view and wires tag bindings and button events when services are provided.</summary>
     /// <param name="resolveImagePath">Optional resolver for image names (e.g. ScreenManager.ResolveImagePath).</param>
     /// <param name="resolveSvgPath">Optional resolver for SVG paths (e.g. ScreenManager.ResolveSvgPath). If null, uses resolveImagePath.</param>
     /// <param name="animationManager">Optional; when set, subscribes each control with an Id to animation state (visibility, opacity, color).</param>
     /// <param name="console">Optional; when set, Console components on the screen will display log output from this service.</param>
-    public static Control? Build(ScreenRenderer.ScreenDescriptor? screen, Runtime.Modules.TagsEngine.TagManager? tagManager, EventManager? eventManager, TagIOHandler? tagIOHandler = null, Func<string, string?>? resolveImagePath = null, Func<string, string?>? resolveSvgPath = null, AnimationManager? animationManager = null, IConsole? console = null)
+    /// <param name="historianQuery">Optional; when set, Table and TrendView can display historian data.</param>
+    public static Control? Build(ScreenRenderer.ScreenDescriptor? screen, Runtime.Modules.TagsEngine.TagManager? tagManager, EventManager? eventManager, TagIOHandler? tagIOHandler = null, Func<string, string?>? resolveImagePath = null, Func<string, string?>? resolveSvgPath = null, AnimationManager? animationManager = null, IConsole? console = null, Runtime.Modules.Screens.HistorianQueryHelper? historianQuery = null)
     {
         if (screen == null) return null;
         var subs = new List<IDisposable>();
@@ -66,7 +67,7 @@ public static class ScreenViewBuilder
         sorted.Sort((a, b) => a.ZOrder.CompareTo(b.ZOrder));
         foreach (var comp in sorted)
         {
-            var control = CreateControl(comp, tagManager, eventManager, tagIOHandler, resolveImagePath, resolveSvgPath, subs, console);
+            var control = CreateControl(comp, tagManager, eventManager, tagIOHandler, resolveImagePath, resolveSvgPath, subs, console, historianQuery);
             if (control == null) continue;
             
             // Set size constraints BEFORE adding to canvas to ensure they're respected
@@ -284,7 +285,7 @@ public static class ScreenViewBuilder
         }
     }
 
-    private static Control? CreateControl(ComponentDescriptor d, Runtime.Modules.TagsEngine.TagManager? tagManager, EventManager? eventManager, TagIOHandler? tagIOHandler, Func<string, string?>? resolveImagePath, Func<string, string?>? resolveSvgPath, List<IDisposable> subs, IConsole? console = null)
+    private static Control? CreateControl(ComponentDescriptor d, Runtime.Modules.TagsEngine.TagManager? tagManager, EventManager? eventManager, TagIOHandler? tagIOHandler, Func<string, string?>? resolveImagePath, Func<string, string?>? resolveSvgPath, List<IDisposable> subs, IConsole? console = null, Runtime.Modules.Screens.HistorianQueryHelper? historianQuery = null)
     {
         if (!d.Visible) return null;
         var type = d.ComponentType ?? "";
@@ -306,7 +307,7 @@ public static class ScreenViewBuilder
             "Text" => CreateText(d, tagManager, subs),
             "RadioButton" => CreateRadioButton(d, tagManager, tagIOHandler, eventManager, subs),
             "DateTime" => CreateDateTime(d, tagManager, subs),
-            "TrendView" => CreateTrendView(d),
+            "TrendView" => CreateTrendView(d, historianQuery),
             "AlarmView" => CreateAlarmView(d),
             "Console" => CreateConsole(d, console),
             "CircularGauge" => CreateGaugeView(d, tagManager, subs),
@@ -318,8 +319,9 @@ public static class ScreenViewBuilder
             "ComboBox" => CreateComboBox(d, tagManager, tagIOHandler, subs),
             "Tab" => CreateTab(d),
             "Conveyor" => CreateConveyor(d, tagManager, subs),
-            "SVGView" => CreateSVGView(d, resolveSvgPath ?? resolveImagePath), // Use resolveSvgPath if available, fallback to resolveImagePath
-            "TableView" => CreateTableView(d),
+            "SVGView" => CreateSVGView(d, resolveSvgPath ?? resolveImagePath),
+            "Table" => CreateTableView(d, historianQuery),
+            "TableView" => CreateTableView(d, historianQuery),
             "Popup" => CreatePopup(d),
             _ => CreatePlaceholder(d)
         };
@@ -656,11 +658,13 @@ public static class ScreenViewBuilder
         return dt;
     }
 
-    private static RuntimeTrendView CreateTrendView(ComponentDescriptor d)
+    private static RuntimeTrendView CreateTrendView(ComponentDescriptor d, Runtime.Modules.Screens.HistorianQueryHelper? historianQuery)
     {
         var t = new RuntimeTrendView();
         t.ApplyDescriptor(d);
         t.TagName = d.TagName;
+        if (historianQuery != null)
+            t.SetHistorianQuery(historianQuery);
         return t;
     }
 
@@ -862,10 +866,12 @@ public static class ScreenViewBuilder
         return s;
     }
 
-    private static RuntimeTableView CreateTableView(ComponentDescriptor d)
+    private static RuntimeTableView CreateTableView(ComponentDescriptor d, Runtime.Modules.Screens.HistorianQueryHelper? historianQuery)
     {
         var t = new RuntimeTableView();
         t.ApplyDescriptor(d);
+        if (historianQuery != null)
+            t.SetHistorianQuery(historianQuery);
         return t;
     }
 
