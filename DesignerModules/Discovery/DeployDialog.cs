@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Drawing;
 using Designer.Modules.Project;
 using Designer.Modules.Compiler;
 
@@ -119,8 +120,8 @@ public partial class DeployDialog : Form
         
         if (_discoveryClient.StartScanning(5))
         {
-            // Wait a bit for responses, then update UI
-            Task.Delay(6000).ContinueWith(_ =>
+            // Wait for scan + grace period (5s + 0.5s + 2s) then update UI
+            Task.Delay(8500).ContinueWith(_ =>
             {
                 if (InvokeRequired)
                 {
@@ -246,9 +247,14 @@ public partial class DeployDialog : Form
         mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
-        // Row 5: Log label
-        mainLayout.Controls.Add(new Label { Text = "Deployment Log:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top }, 0, row);
-        mainLayout.SetColumnSpan(mainLayout.Controls[mainLayout.Controls.Count - 1], 2);
+        // Row 5: Log label and Copy button
+        var logHeaderPanel = new FlowLayoutPanel { FlowDirection = FlowDirection.LeftToRight, AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top };
+        logHeaderPanel.Controls.Add(new Label { Text = "Deployment Log:", AutoSize = true });
+        var copyLogButton = new Button { Text = "Copy", Size = new Size(60, 25), Anchor = AnchorStyles.Left | AnchorStyles.Top };
+        copyLogButton.Click += CopyDeploymentLogToClipboard;
+        logHeaderPanel.Controls.Add(copyLogButton);
+        mainLayout.Controls.Add(logHeaderPanel, 0, row);
+        mainLayout.SetColumnSpan(logHeaderPanel, 2);
         mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
@@ -371,6 +377,24 @@ public partial class DeployDialog : Form
         }
         _deploymentLogListBox.Items.Add(message);
         _deploymentLogListBox.SelectedIndex = _deploymentLogListBox.Items.Count - 1;
+    }
+
+    private void CopyDeploymentLogToClipboard(object? sender, EventArgs e)
+    {
+        var lines = _deploymentLogListBox.Items.Cast<object>().Select(o => o?.ToString() ?? "").ToList();
+        var text = string.Join(Environment.NewLine, lines);
+        if (!string.IsNullOrEmpty(text))
+        {
+            try
+            {
+                Clipboard.SetText(text);
+                Log("(Log copied to clipboard)");
+            }
+            catch (Exception ex)
+            {
+                Log($"Copy failed: {ex.Message}");
+            }
+        }
     }
 
     private void SetProgress(int percent)

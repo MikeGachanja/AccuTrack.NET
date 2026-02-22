@@ -15,7 +15,7 @@ namespace Designer.Modules.Discovery;
 public class DeviceDiscoveryClient
 {
     private const int DiscoveryPort = 8889;
-    private UdpClient? _udpClient;
+    private volatile UdpClient? _udpClient;
     private CancellationTokenSource? _cancellationTokenSource;
     private volatile bool _isScanning;
     private readonly Dictionary<string, DiscoveredDevice> _discoveredDevices = new();
@@ -197,6 +197,9 @@ public class DeviceDiscoveryClient
             }
             await _udpClient!.SendAsync(requestBytes, requestBytes.Length, localhostEndPoint).ConfigureAwait(false);
 
+            // Unicast sweep: send discovery to each IP on local subnets (reliable when broadcast is blocked)
+            _ = SendSubnetUnicastSweepAsync(requestBytes, timeoutSeconds, ct);
+
             // Send periodic broadcasts during scan period
             int intervalMs = 1000; // Send every second
             int elapsed = 0;
@@ -220,8 +223,9 @@ public class DeviceDiscoveryClient
                 }
             }
 
-            // Wait a bit more for final responses
+            // Wait for final responses, then grace period so late unicast responses (e.g. 192.168.137.186) are received
             await Task.Delay(500, ct).ConfigureAwait(false);
+            await Task.Delay(2000, ct).ConfigureAwait(false); // grace period before closing socket
             StopScanning();
         }
         catch (OperationCanceledException) { }
@@ -230,6 +234,11 @@ public class DeviceDiscoveryClient
             ErrorOccurred?.Invoke(this, $"Error sending discovery broadcast: {ex.Message}");
         }
     }
+
+    /// <summary>
+    /// Default /24 mask used when the OS does not report a subnet mask (e.g. some mobile hotspot adapters).
+    /// </summary>
+    private static readonly IPAddress DefaultMask24 = IPAddress.Parse("255.255.255.0");
 
     /// <summary>
     /// Gets broadcast addresses for all network interfaces.
@@ -243,7 +252,6 @@ public class DeviceDiscoveryClient
             // Add standard broadcast
             broadcastAddresses.Add(IPAddress.Broadcast);
             
-            // Get broadcast addresses for each network interface
             var networkInterfaces = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces();
             foreach (var ni in networkInterfaces)
             {
@@ -259,26 +267,16 @@ public class DeviceDiscoveryClient
                     try
                     {
                         var ip = unicast.Address;
-                        var mask = unicast.IPv4Mask;
-                        
-                        if (mask != null)
-                        {
-                            // Calculate broadcast address: IP | ~Mask
-                            byte[] ipBytes = ip.GetAddressBytes();
-                            byte[] maskBytes = mask.GetAddressBytes();
-                            byte[] broadcastBytes = new byte[4];
-                            
-                            for (int i = 0; i < 4; i++)
-                            {
-                                broadcastBytes[i] = (byte)(ipBytes[i] | ~maskBytes[i]);
-                            }
-                            
-                            var broadcastAddr = new IPAddress(broadcastBytes);
-                            if (!broadcastAddresses.Contains(broadcastAddr))
-                            {
-                                broadcastAddresses.Add(broadcastAddr);
-                            }
-                        }
+                        // Use reported mask, or assume /24 when null (common on hotspot/virtual adapters)
+                        var mask = unicast.IPv4Mask ?? DefaultMask24;
+                        byte[] ipBytes = ip.GetAddressBytes();
+                        byte[] maskBytes = mask.GetAddressBytes();
+                        byte[] broadcastBytes = new byte[4];
+                        for (int i = 0; i < 4; i++)
+                            broadcastBytes[i] = (byte)(ipBytes[i] | ~maskBytes[i]);
+                        var broadcastAddr = new IPAddress(broadcastBytes);
+                        if (!broadcastAddresses.Contains(broadcastAddr))
+                            broadcastAddresses.Add(broadcastAddr);
                     }
                     catch { /* Skip invalid addresses */ }
                 }
@@ -292,17 +290,138 @@ public class DeviceDiscoveryClient
         return broadcastAddresses;
     }
 
+    /// <summary>
+    /// Gets local IPv4 subnets (address + mask) for all up interfaces. Uses /24 when mask is null (e.g. hotspot adapters).
+    /// </summary>
+    private List<(IPAddress Address, IPAddress Mask)> GetLocalSubnets()
+    {
+        var subnets = new List<(IPAddress, IPAddress)>();
+        try
+        {
+            var nics = System.Net.NetworkInformation.NetworkInterface.GetAllNetworkInterfaces();
+            foreach (var ni in nics)
+            {
+                if (ni.OperationalStatus != System.Net.NetworkInformation.OperationalStatus.Up)
+                    continue;
+                foreach (var unicast in ni.GetIPProperties().UnicastAddresses)
+                {
+                    if (unicast.Address.AddressFamily != AddressFamily.InterNetwork)
+                        continue;
+                    // Use reported mask, or assume /24 when null so we still sweep (e.g. 192.168.137.x)
+                    var mask = unicast.IPv4Mask ?? DefaultMask24;
+                    subnets.Add((unicast.Address, mask));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            ErrorOccurred?.Invoke(this, $"Error getting local subnets: {ex.Message}");
+        }
+        return subnets;
+    }
+
+    /// <summary>
+    /// Enumerates host IPs in a subnet (excludes network and broadcast). For /24 sweeps .1–.254; for larger subnets caps count.
+    /// </summary>
+    private static IEnumerable<IPAddress> GetHostAddressesInSubnetCapped(IPAddress address, IPAddress mask, int maxHosts = 254)
+    {
+        byte[] ip = address.GetAddressBytes();
+        byte[] m = mask.GetAddressBytes();
+        int hostOctetIndex = -1;
+        for (int i = 3; i >= 0; i--)
+        {
+            if (m[i] != 255)
+            {
+                hostOctetIndex = i;
+                break;
+            }
+        }
+        if (hostOctetIndex < 0)
+            yield break; // /32
+        byte[] network = new byte[4];
+        for (int i = 0; i < 4; i++)
+            network[i] = (byte)(ip[i] & m[i]);
+        int count = 0;
+        if (hostOctetIndex == 3)
+        {
+            // Typical /24: 192.168.137.1 -> 192.168.137.254
+            for (int d = 1; d <= 254 && count < maxHosts; d++, count++)
+            {
+                yield return new IPAddress(new byte[] { network[0], network[1], network[2], (byte)d });
+            }
+            yield break;
+        }
+        if (hostOctetIndex == 2)
+        {
+            for (int c = 0; c < 256 && count < maxHosts; c++)
+            {
+                for (int d = 1; d <= 254 && count < maxHosts; d++, count++)
+                {
+                    yield return new IPAddress(new byte[] { network[0], network[1], (byte)c, (byte)d });
+                }
+            }
+            yield break;
+        }
+        // /8 or /16: only enumerate first 254 hosts to avoid long scan
+        for (int d = 1; d <= 254 && count < maxHosts; d++, count++)
+        {
+            yield return new IPAddress(new byte[] { network[0], network[1], network[2], (byte)d });
+        }
+    }
+
+    private async Task SendSubnetUnicastSweepAsync(byte[] requestBytes, int timeoutSeconds, CancellationToken ct)
+    {
+        const int concurrency = 32;
+        var subnets = GetLocalSubnets();
+        var semaphore = new SemaphoreSlim(concurrency);
+        var tasks = new List<Task>();
+        foreach (var (address, mask) in subnets)
+        {
+            foreach (var hostIp in GetHostAddressesInSubnetCapped(address, mask))
+            {
+                if (ct.IsCancellationRequested) break;
+                await semaphore.WaitAsync(ct).ConfigureAwait(false);
+                var target = hostIp;
+                tasks.Add(Task.Run(async () =>
+                {
+                    try
+                    {
+                        var ep = new IPEndPoint(target, DiscoveryPort);
+                        await _udpClient!.SendAsync(requestBytes, requestBytes.Length, ep).ConfigureAwait(false);
+                    }
+                    catch { /* ignore per-host errors */ }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                }, ct));
+            }
+        }
+        try
+        {
+            await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(timeoutSeconds + 1), ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) { }
+        catch (TimeoutException) { }
+    }
+
     private async Task ReceiveLoopAsync(CancellationToken ct)
     {
         while (_isScanning && _udpClient != null && !ct.IsCancellationRequested)
         {
             try
             {
-                var result = await _udpClient.ReceiveAsync(ct).ConfigureAwait(false);
+                var client = _udpClient;
+                if (client == null) break;
+                var result = await client.ReceiveAsync(ct).ConfigureAwait(false);
                 ProcessResponse(result.Buffer, result.RemoteEndPoint);
             }
             catch (OperationCanceledException) { break; }
             catch (ObjectDisposedException) { break; }
+            catch (System.Net.Sockets.SocketException ex) when (ex.SocketErrorCode == System.Net.Sockets.SocketError.ConnectionReset || ex.Message.Contains("forcibly closed", StringComparison.OrdinalIgnoreCase))
+            {
+                break; // Socket closed or connection reset - normal when scan stops, don't spam log
+            }
             catch (Exception ex)
             {
                 ErrorOccurred?.Invoke(this, $"Error receiving discovery response: {ex.Message}");
@@ -323,7 +442,8 @@ public class DeviceDiscoveryClient
                 return;
 
             string deviceName = root.TryGetProperty("deviceName", out var dn) ? dn.GetString() ?? "" : "";
-            string ip = root.TryGetProperty("ip", out var ipProp) ? ipProp.GetString() ?? "" : remoteEndPoint.Address.ToString();
+            // Use the address we received the response from (reachable IP). Runtime often reports 127.0.0.1/127.0.1.1 in JSON.
+            string ip = remoteEndPoint.Address.ToString();
             int port = root.TryGetProperty("port", out var p) ? p.GetInt32() : 8888;
             string version = root.TryGetProperty("version", out var v) ? v.GetString() ?? "" : "";
             string deviceType = root.TryGetProperty("deviceType", out var dt) ? dt.GetString() ?? "" : "";
