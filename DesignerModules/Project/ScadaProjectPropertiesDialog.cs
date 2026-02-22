@@ -21,6 +21,8 @@ public partial class ScadaProjectPropertiesDialog : Form
     private Label _pathLabel;
     private ComboBox _startupScreenComboBox;
     private bool _customResolution = false;
+    private TextBox _targetDeviceHostTextBox;
+    private NumericUpDown _targetDevicePortNumeric;
 
     public ScadaProjectPropertiesDialog(ScadaProject scadaProject, ProjectManager? projectManager = null)
     {
@@ -33,30 +35,31 @@ public partial class ScadaProjectPropertiesDialog : Form
     private void InitializeComponent()
     {
         Text = $"SCADA Project Properties - {_scadaProject.Name}";
-        Size = new Size(500, 400);
+        Size = new Size(520, 460);
         StartPosition = FormStartPosition.CenterParent;
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
 
+        var tabControl = new TabControl { Dock = DockStyle.Fill, Padding = new Point(8, 6) };
+
+        // --- Tab 1: General ---
+        var generalTab = new TabPage("General");
         var mainLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
             ColumnCount = 2,
-            RowCount = 9,
+            RowCount = 8,
             Padding = new Padding(10)
         };
-
         int row = 0;
 
-        // Name
         mainLayout.Controls.Add(new Label { Text = "Name:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
         _nameTextBox = new TextBox { Text = _scadaProject.Name, Dock = DockStyle.Fill };
         mainLayout.Controls.Add(_nameTextBox, 1, row);
         mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
-        // Type
         mainLayout.Controls.Add(new Label { Text = "Type:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
         _typeComboBox = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
         _typeComboBox.Items.AddRange(new[] { "HMI", "PC Station", "BMS" });
@@ -65,7 +68,6 @@ public partial class ScadaProjectPropertiesDialog : Form
         mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
-        // Resolution
         mainLayout.Controls.Add(new Label { Text = "Resolution:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
         var resolutionLayout = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight };
         _resolutionComboBox = new ComboBox { Width = 200, DropDownStyle = ComboBoxStyle.DropDownList };
@@ -74,9 +76,8 @@ public partial class ScadaProjectPropertiesDialog : Form
         resolutionLayout.Controls.Add(_resolutionComboBox);
         _widthNumeric = new NumericUpDown { Width = 80, Minimum = 100, Maximum = 10000, Value = _scadaProject.Resolution.Width };
         _heightNumeric = new NumericUpDown { Width = 80, Minimum = 100, Maximum = 10000, Value = _scadaProject.Resolution.Height };
-        var xLabel = new Label { Text = "x", AutoSize = true, Anchor = AnchorStyles.Left };
         resolutionLayout.Controls.Add(_widthNumeric);
-        resolutionLayout.Controls.Add(xLabel);
+        resolutionLayout.Controls.Add(new Label { Text = " x ", AutoSize = true });
         resolutionLayout.Controls.Add(_heightNumeric);
         UpdateResolutionComboBox();
         UpdateCustomResolutionVisibility();
@@ -84,21 +85,18 @@ public partial class ScadaProjectPropertiesDialog : Form
         mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
-        // Version
         mainLayout.Controls.Add(new Label { Text = "Version:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
         _versionTextBox = new TextBox { Text = _scadaProject.Version, Dock = DockStyle.Fill };
         mainLayout.Controls.Add(_versionTextBox, 1, row);
         mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
-        // Path (read-only)
         mainLayout.Controls.Add(new Label { Text = "Path:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
         _pathLabel = new Label { Text = _scadaProject.Path, AutoSize = false, Dock = DockStyle.Fill, BorderStyle = BorderStyle.FixedSingle, Padding = new Padding(3) };
         mainLayout.Controls.Add(_pathLabel, 1, row);
         mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
-        // Startup Screen
         mainLayout.Controls.Add(new Label { Text = "Startup Screen:", AutoSize = true, Anchor = AnchorStyles.Left }, 0, row);
         _startupScreenComboBox = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList };
         LoadStartupScreenOptions();
@@ -106,28 +104,50 @@ public partial class ScadaProjectPropertiesDialog : Form
         mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
 
-        // Spacer
         mainLayout.Controls.Add(new Panel { Dock = DockStyle.Fill }, 0, row);
         mainLayout.SetColumnSpan(mainLayout.Controls[mainLayout.Controls.Count - 1], 2);
         mainLayout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        row++;
+        generalTab.Controls.Add(mainLayout);
+        tabControl.TabPages.Add(generalTab);
 
-        // Buttons
-        var buttonPanel = new FlowLayoutPanel
+        // --- Tab 2: Target Device ---
+        var deviceTab = new TabPage("Target Device");
+        var deviceLayout = new TableLayoutPanel
         {
             Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.RightToLeft,
-            Height = 40
+            ColumnCount = 2,
+            RowCount = 4,
+            Padding = new Padding(10)
         };
+        deviceLayout.Controls.Add(new Label { Text = "Deploy/Upload will probe this address first when scanning for devices.", AutoSize = true }, 0, 0);
+        deviceLayout.SetColumnSpan(deviceLayout.Controls[deviceLayout.Controls.Count - 1], 2);
+        deviceLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        deviceLayout.Controls.Add(new Label { Text = "Host (IP or name):", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 1);
+        _targetDeviceHostTextBox = new TextBox { Text = _scadaProject.TargetDeviceHost ?? "", Dock = DockStyle.Fill, Width = 220 };
+        deviceLayout.Controls.Add(_targetDeviceHostTextBox, 1, 1);
+        deviceLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        deviceLayout.Controls.Add(new Label { Text = "Transfer port (TCP):", AutoSize = true, Anchor = AnchorStyles.Left }, 0, 2);
+        _targetDevicePortNumeric = new NumericUpDown { Minimum = 1, Maximum = 65535, Value = _scadaProject.TargetDevicePort, Width = 80 };
+        deviceLayout.Controls.Add(_targetDevicePortNumeric, 1, 2);
+        deviceLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        deviceLayout.Controls.Add(new Label { Text = "Leave host blank to use scan/discovery only.", AutoSize = true, ForeColor = System.Drawing.Color.Gray }, 0, 3);
+        deviceLayout.SetColumnSpan(deviceLayout.Controls[deviceLayout.Controls.Count - 1], 2);
+        deviceLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+        deviceTab.Controls.Add(deviceLayout);
+        tabControl.TabPages.Add(deviceTab);
+
+        // Main form: tab control + buttons
+        var mainPanel = new TableLayoutPanel { Dock = DockStyle.Fill, RowCount = 2, Padding = new Padding(6) };
+        mainPanel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        mainPanel.RowStyles.Add(new RowStyle(SizeType.Absolute, 44));
+        mainPanel.Controls.Add(tabControl, 0, 0);
+        var buttonPanel = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, Height = 40 };
         var okButton = new Button { Text = "OK", DialogResult = DialogResult.OK, Size = new Size(75, 23) };
         var cancelButton = new Button { Text = "Cancel", DialogResult = DialogResult.Cancel, Size = new Size(75, 23) };
         buttonPanel.Controls.Add(okButton);
         buttonPanel.Controls.Add(cancelButton);
-        mainLayout.Controls.Add(buttonPanel, 0, row);
-        mainLayout.SetColumnSpan(buttonPanel, 2);
-        mainLayout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
-
-        Controls.Add(mainLayout);
+        mainPanel.Controls.Add(buttonPanel, 0, 1);
+        Controls.Add(mainPanel);
 
         AcceptButton = okButton;
         CancelButton = cancelButton;
@@ -139,6 +159,8 @@ public partial class ScadaProjectPropertiesDialog : Form
         _typeComboBox.SelectedIndex = (int)_scadaProject.Type;
         _versionTextBox.Text = _scadaProject.Version;
         _pathLabel.Text = _scadaProject.Path;
+        _targetDeviceHostTextBox.Text = _scadaProject.TargetDeviceHost ?? "";
+        _targetDevicePortNumeric.Value = Math.Clamp(_scadaProject.TargetDevicePort, 1, 65535);
         UpdateResolutionComboBox();
         UpdateStartupScreenSelection();
     }
@@ -278,23 +300,23 @@ public partial class ScadaProjectPropertiesDialog : Form
             
             // Update startup screen
             if (_startupScreenComboBox.SelectedIndex == 0)
-            {
-                _scadaProject.StartupScreen = null; // No startup screen set
-            }
+                _scadaProject.StartupScreen = null;
             else
             {
                 string selectedItem = _startupScreenComboBox.Items[_startupScreenComboBox.SelectedIndex].ToString() ?? "";
-                // Extract screen ID from item text (format: "Name (Id)")
                 if (selectedItem.Contains("(") && selectedItem.Contains(")"))
                 {
                     int startIdx = selectedItem.LastIndexOf("(") + 1;
                     int endIdx = selectedItem.LastIndexOf(")");
                     if (startIdx > 0 && endIdx > startIdx)
-                    {
                         _scadaProject.StartupScreen = selectedItem.Substring(startIdx, endIdx - startIdx);
-                    }
                 }
             }
+
+            // Target device (deploy/upload)
+            var host = _targetDeviceHostTextBox.Text.Trim();
+            _scadaProject.TargetDeviceHost = string.IsNullOrEmpty(host) ? null : host;
+            _scadaProject.TargetDevicePort = (int)_targetDevicePortNumeric.Value;
         }
         base.OnFormClosing(e);
     }

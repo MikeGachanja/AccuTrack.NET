@@ -729,8 +729,30 @@ public class ProjectManager
             return false;
         }
     }
-    public object? GetAlarms(string scadaName) => null;
-    
+    /// <summary>
+    /// Gets alarms for a SCADA project.
+    /// Returns the contents of json/alarms.json as a string, or null if the file does not exist or cannot be read.
+    /// Caller should parse with Alarms.FromJson(JObject.Parse(json)) when non-null.
+    /// </summary>
+    public object? GetAlarms(string scadaName)
+    {
+        var scada = FindScadaProject(scadaName);
+        if (scada == null) return null;
+
+        try
+        {
+            var jsonPath = Path.Combine(scada.Path, "json");
+            var alarmsFile = Path.Combine(jsonPath, "alarms.json");
+            if (File.Exists(alarmsFile))
+            {
+                return File.ReadAllText(alarmsFile);
+            }
+        }
+        catch { /* Return null on error */ }
+
+        return null;
+    }
+
     /// <summary>
     /// Saves alarms for a SCADA project.
     /// </summary>

@@ -30,6 +30,9 @@ public sealed class OpcUaClientConnection : IConnectionStub
     private readonly List<(string NodeId, string DisplayName)> _allNodes = new();
     private readonly object _nodesLock = new();
     private Func<List<(string tagName, string address)>>? _getTagsFunc;
+    private TaskCompletionSource? _disconnectedTcs;
+    private readonly int _reconnectDelayMs;
+    private const int DefaultReconnectDelayMs = 5000;
 
     public string Name => _status.Name;
     public string EndpointUrl { get; }
@@ -53,24 +56,29 @@ public sealed class OpcUaClientConnection : IConnectionStub
             ?? config?["endpoint"]?.GetValue<string>()
             ?? cfg?["url"]?.GetValue<string>()
             ?? "opc.tcp://localhost:4840";
+        var delaySec = cfg?["reconnectDelaySeconds"]?.GetValue<int>(); // optional: seconds
+        var delayMs = cfg?["reconnectDelayMs"]?.GetValue<int>();        // optional: milliseconds
+        _reconnectDelayMs = delayMs ?? (delaySec.HasValue ? delaySec.Value * 1000 : 0);
+        if (_reconnectDelayMs <= 0) _reconnectDelayMs = DefaultReconnectDelayMs;
     }
 
     public void SetTagValueCallback(Action<string, object?>? callback) => _onTagValue = callback;
 
     public void Start()
     {
-        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Start: Starting OPC UA client connection '{Name}' to endpoint '{EndpointUrl}'");
+        System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Start: Starting OPC UA client connection '{Name}' to endpoint '{EndpointUrl}' (reconnect delay: {_reconnectDelayMs}ms)");
         _running = true;
         _status.Running = true;
         _status.Connected = false;
         _status.Status = "Connecting...";
-        Task.Run(() => ConnectAndSubscribeAsync());
+        Task.Run(() => ConnectionLoopAsync());
     }
 
     public void Stop()
     {
         System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] Stop: Stopping OPC UA client connection '{Name}'");
         _running = false;
+        _disconnectedTcs?.TrySetResult(); // unblock connection loop if it is waiting for disconnect
         try
         {
             if (_subscription != null)
@@ -99,6 +107,62 @@ public sealed class OpcUaClientConnection : IConnectionStub
         _status.Status = "Stopped";
     }
 
+    /// <summary>Closes session and subscription; used when disconnecting or before reconnect.</summary>
+    private void CloseSessionAndSubscription()
+    {
+        try
+        {
+            if (_subscription != null)
+            {
+                _subscription.Delete(true);
+                _subscription = null;
+            }
+            if (_session != null)
+            {
+                _session.Close();
+                _session.Dispose();
+                _session = null;
+            }
+            _monitoredItems.Clear();
+            _subscribedNodes.Clear();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] CloseSessionAndSubscription: {ex.Message}");
+        }
+        _status.Connected = false;
+    }
+
+    /// <summary>Connection loop: connect, stay connected until disconnect, then retry after delay while _running.</summary>
+    private async Task ConnectionLoopAsync()
+    {
+        while (_running)
+        {
+            _disconnectedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            try
+            {
+                await ConnectAndSubscribeAsync().ConfigureAwait(false);
+                if (!_running) break;
+                // Wait until disconnect (KeepAlive will signal _disconnectedTcs)
+                await _disconnectedTcs.Task.ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectionLoopAsync: Connect failed: {ex.GetType().Name} - {ex.Message}");
+            }
+
+            CloseSessionAndSubscription();
+            if (!_running) break;
+
+            var delaySec = _reconnectDelayMs / 1000.0;
+            _status.Status = $"Connection lost or failed. Reconnecting in {delaySec:F0}s...";
+            System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectionLoopAsync: Reconnecting in {_reconnectDelayMs}ms...");
+            await Task.Delay(_reconnectDelayMs).ConfigureAwait(false);
+        }
+        _status.Status = "Stopped";
+        _status.Running = false;
+    }
+
     private async Task ConnectAndSubscribeAsync()
     {
         try
@@ -123,7 +187,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
                 _status.Status = "Error: Could not discover endpoints from server";
                 _status.Connected = false;
                 System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: ERROR - No endpoints discovered from server");
-                return;
+                throw new InvalidOperationException("Could not discover endpoints from server (device may be unavailable). Reconnect will retry.");
             }
             
             System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Discovered {endpoints.Count} endpoint(s)");
@@ -182,14 +246,15 @@ public sealed class OpcUaClientConnection : IConnectionStub
             
             System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: Session created successfully");
 
-            // Set up KeepAlive handler to maintain connection and process subscriptions
+            // Set up KeepAlive handler to maintain connection and signal disconnect for reconnection
             _session.KeepAlive += (session, e) =>
             {
                 if (e.CurrentState == ServerState.Unknown || e.CurrentState == ServerState.Shutdown)
                 {
-                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] KeepAlive: Server state changed to {e.CurrentState}, connection may be lost");
+                    System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] KeepAlive: Server state changed to {e.CurrentState}, signaling disconnect for reconnect");
                     _status.Connected = false;
                     _status.Status = $"Disconnected (Server state: {e.CurrentState})";
+                    _disconnectedTcs?.TrySetResult();
                 }
                 else if (e.CurrentState == ServerState.Running)
                 {
@@ -532,6 +597,7 @@ public sealed class OpcUaClientConnection : IConnectionStub
             {
                 System.Diagnostics.Trace.WriteLine($"[OpcUaClientConnection] ConnectAndSubscribeAsync: InnerException: {ex.InnerException.GetType().Name} - {ex.InnerException.Message}");
             }
+            throw; // rethrow so ConnectionLoopAsync can retry after delay
         }
     }
 

@@ -565,7 +565,8 @@ public partial class ProjectView : UserControl
             case NodeType.Alarms:
                 if (!string.IsNullOrEmpty(nodeData.ScadaName))
                 {
-                    AlarmsOpenRequested?.Invoke(this, new AlarmsOpenEventArgs(nodeData.ScadaName, null));
+                    var alarmsPayload = _projectManager?.GetAlarms(nodeData.ScadaName);
+                    AlarmsOpenRequested?.Invoke(this, new AlarmsOpenEventArgs(nodeData.ScadaName, alarmsPayload));
                 }
                 break;
             case NodeType.Schedules:

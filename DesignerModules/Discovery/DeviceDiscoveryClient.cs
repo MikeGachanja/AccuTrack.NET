@@ -15,7 +15,8 @@ namespace Designer.Modules.Discovery;
 public class DeviceDiscoveryClient
 {
     private const int DiscoveryPort = 8889;
-    private volatile UdpClient? _udpClient;
+    private volatile UdpClient? _udpClient; // kept for Probe when already scanning; may be null when using per-interface
+    private List<(UdpClient Client, IPAddress LocalAddress, IPAddress Mask)>? _interfaceClients;
     private CancellationTokenSource? _cancellationTokenSource;
     private volatile bool _isScanning;
     private readonly Dictionary<string, DiscoveredDevice> _discoveredDevices = new();
@@ -39,7 +40,7 @@ public class DeviceDiscoveryClient
     }
 
     /// <summary>
-    /// Starts scanning for devices on the network.
+    /// Starts scanning for devices on the network. Uses one socket per local interface so responses are received reliably (e.g. 192.168.137.x).
     /// </summary>
     public bool StartScanning(int timeoutSeconds = 5)
     {
@@ -48,26 +49,53 @@ public class DeviceDiscoveryClient
 
         try
         {
-            _udpClient = new UdpClient();
-            _udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-            _udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, 0));
-            _udpClient.EnableBroadcast = true;
+            var subnets = GetLocalSubnets();
+            _interfaceClients = new List<(UdpClient, IPAddress, IPAddress)>();
+
+            foreach (var (localAddress, mask) in subnets)
+            {
+                try
+                {
+                    var client = new UdpClient();
+                    client.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                    client.Client.Bind(new IPEndPoint(localAddress, 0));
+                    client.EnableBroadcast = true;
+                    _interfaceClients.Add((client, localAddress, mask));
+                }
+                catch { /* skip interface if bind fails */ }
+            }
+
+            // Ensure we have at least one client (e.g. when no subnets or all binds failed)
+            if (_interfaceClients.Count == 0)
+            {
+                var fallback = new UdpClient();
+                fallback.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                fallback.Client.Bind(new IPEndPoint(IPAddress.Any, 0));
+                fallback.EnableBroadcast = true;
+                _udpClient = fallback;
+                _interfaceClients.Add((fallback, IPAddress.Any, DefaultMask24));
+            }
+            else
+            {
+                _udpClient = _interfaceClients[0].Client; // for Probe when scanning
+            }
 
             _cancellationTokenSource = new CancellationTokenSource();
             _isScanning = true;
 
-            // Start listening for responses
-            _ = ReceiveLoopAsync(_cancellationTokenSource.Token);
+            // One receive loop per interface so we receive on the same socket we sent from
+            foreach (var (client, _, _) in _interfaceClients)
+                _ = ReceiveLoopAsync(client, _cancellationTokenSource.Token);
 
-            // Send discovery broadcast on all network interfaces
             _ = SendDiscoveryBroadcastAsync(timeoutSeconds, _cancellationTokenSource.Token);
-
             return true;
         }
         catch (Exception ex)
         {
             ErrorOccurred?.Invoke(this, $"Failed to start scanning: {ex.Message}");
             _isScanning = false;
+            _udpClient = null;
+            DisposeInterfaceClients();
             return false;
         }
     }
@@ -144,16 +172,21 @@ public class DeviceDiscoveryClient
 
         _isScanning = false;
         _cancellationTokenSource?.Cancel();
-        
-        try
-        {
-            _udpClient?.Close();
-        }
-        catch { }
-        
+        DisposeInterfaceClients();
         _udpClient = null;
         _cancellationTokenSource?.Dispose();
         _cancellationTokenSource = null;
+    }
+
+    private void DisposeInterfaceClients()
+    {
+        var list = _interfaceClients;
+        _interfaceClients = null;
+        if (list == null) return;
+        foreach (var (client, _, _) in list)
+        {
+            try { client?.Close(); client?.Dispose(); } catch { }
+        }
     }
 
     /// <summary>
@@ -176,63 +209,95 @@ public class DeviceDiscoveryClient
         };
         string json = JsonSerializer.Serialize(discoveryRequest);
         byte[] requestBytes = Encoding.UTF8.GetBytes(json);
+        var localhostEp = new IPEndPoint(IPAddress.Loopback, DiscoveryPort);
 
         try
         {
-            // Get all network interfaces and send broadcasts on each subnet
-            var broadcastAddresses = GetBroadcastAddresses();
-            
-            // Also send to localhost
-            var localhostEndPoint = new IPEndPoint(IPAddress.Loopback, DiscoveryPort);
-            
-            // Send initial broadcasts
-            foreach (var broadcastAddr in broadcastAddresses)
+            var list = _interfaceClients;
+            if (list == null || list.Count == 0) { StopScanning(); return; }
+
+            // Per-interface: send subnet broadcast + unicast sweep from the socket bound to that interface (so responses come back to it)
+            foreach (var (client, localAddress, mask) in list)
             {
+                if (localAddress.Equals(IPAddress.Any))
+                {
+                    try { await client.SendAsync(requestBytes, requestBytes.Length, new IPEndPoint(IPAddress.Broadcast, DiscoveryPort)).ConfigureAwait(false); } catch { }
+                    try { await client.SendAsync(requestBytes, requestBytes.Length, localhostEp).ConfigureAwait(false); } catch { }
+                    continue;
+                }
                 try
                 {
-                    var broadcastEndPoint = new IPEndPoint(broadcastAddr, DiscoveryPort);
-                    await _udpClient!.SendAsync(requestBytes, requestBytes.Length, broadcastEndPoint).ConfigureAwait(false);
+                    var broadcastAddr = GetBroadcastForSubnet(localAddress, mask);
+                    var broadcastEp = new IPEndPoint(broadcastAddr, DiscoveryPort);
+                    await client.SendAsync(requestBytes, requestBytes.Length, broadcastEp).ConfigureAwait(false);
                 }
-                catch { /* Ignore errors on specific interfaces */ }
+                catch { /* ignore */ }
+
+                if (IPAddress.IsLoopback(localAddress))
+                    try { await client.SendAsync(requestBytes, requestBytes.Length, localhostEp).ConfigureAwait(false); } catch { }
+
+                foreach (var hostIp in GetHostAddressesInSubnetCapped(localAddress, mask))
+                {
+                    if (ct.IsCancellationRequested) return;
+                    try
+                    {
+                        var ep = new IPEndPoint(hostIp, DiscoveryPort);
+                        await client.SendAsync(requestBytes, requestBytes.Length, ep).ConfigureAwait(false);
+                    }
+                    catch { /* ignore */ }
+                }
             }
-            await _udpClient!.SendAsync(requestBytes, requestBytes.Length, localhostEndPoint).ConfigureAwait(false);
 
-            // Unicast sweep: send discovery to each IP on local subnets (reliable when broadcast is blocked)
-            _ = SendSubnetUnicastSweepAsync(requestBytes, timeoutSeconds, ct);
+            // Send to localhost from first client if we didn't already (no loopback in list)
+            if (list.Count > 0 && !IPAddress.IsLoopback(list[0].LocalAddress))
+            {
+                try { await list[0].Client.SendAsync(requestBytes, requestBytes.Length, localhostEp).ConfigureAwait(false); } catch { }
+            }
 
-            // Send periodic broadcasts during scan period
-            int intervalMs = 1000; // Send every second
+            // Periodic broadcasts on each interface for the rest of the scan
+            int intervalMs = 1000;
             int elapsed = 0;
             while (elapsed < timeoutSeconds * 1000 && !ct.IsCancellationRequested)
             {
                 await Task.Delay(intervalMs, ct).ConfigureAwait(false);
                 elapsed += intervalMs;
-                
-                if (!ct.IsCancellationRequested)
+                if (ct.IsCancellationRequested) break;
+                foreach (var (client, localAddress, mask) in list)
                 {
-                    foreach (var broadcastAddr in broadcastAddresses)
+                    if (localAddress.Equals(IPAddress.Any))
+                    { try { await client.SendAsync(requestBytes, requestBytes.Length, new IPEndPoint(IPAddress.Broadcast, DiscoveryPort)).ConfigureAwait(false); } catch { } }
+                    else
                     {
                         try
                         {
-                            var broadcastEndPoint = new IPEndPoint(broadcastAddr, DiscoveryPort);
-                            await _udpClient.SendAsync(requestBytes, requestBytes.Length, broadcastEndPoint).ConfigureAwait(false);
+                            var broadcastAddr = GetBroadcastForSubnet(localAddress, mask);
+                            await client.SendAsync(requestBytes, requestBytes.Length, new IPEndPoint(broadcastAddr, DiscoveryPort)).ConfigureAwait(false);
                         }
-                        catch { /* Ignore errors on specific interfaces */ }
+                        catch { }
                     }
-                    await _udpClient.SendAsync(requestBytes, requestBytes.Length, localhostEndPoint).ConfigureAwait(false);
                 }
+                try { await list[0].Client.SendAsync(requestBytes, requestBytes.Length, localhostEp).ConfigureAwait(false); } catch { }
             }
 
-            // Wait for final responses, then grace period so late unicast responses (e.g. 192.168.137.186) are received
             await Task.Delay(500, ct).ConfigureAwait(false);
-            await Task.Delay(2000, ct).ConfigureAwait(false); // grace period before closing socket
+            await Task.Delay(2000, ct).ConfigureAwait(false);
             StopScanning();
         }
         catch (OperationCanceledException) { }
         catch (Exception ex)
         {
-            ErrorOccurred?.Invoke(this, $"Error sending discovery broadcast: {ex.Message}");
+            ErrorOccurred?.Invoke(this, $"Error sending discovery: {ex.Message}");
         }
+    }
+
+    private static IPAddress GetBroadcastForSubnet(IPAddress address, IPAddress mask)
+    {
+        byte[] ip = address.GetAddressBytes();
+        byte[] m = mask.GetAddressBytes();
+        byte[] broadcast = new byte[4];
+        for (int i = 0; i < 4; i++)
+            broadcast[i] = (byte)(ip[i] | ~m[i]);
+        return new IPAddress(broadcast);
     }
 
     /// <summary>
@@ -369,59 +434,19 @@ public class DeviceDiscoveryClient
         }
     }
 
-    private async Task SendSubnetUnicastSweepAsync(byte[] requestBytes, int timeoutSeconds, CancellationToken ct)
+    private async Task ReceiveLoopAsync(UdpClient client, CancellationToken ct)
     {
-        const int concurrency = 32;
-        var subnets = GetLocalSubnets();
-        var semaphore = new SemaphoreSlim(concurrency);
-        var tasks = new List<Task>();
-        foreach (var (address, mask) in subnets)
-        {
-            foreach (var hostIp in GetHostAddressesInSubnetCapped(address, mask))
-            {
-                if (ct.IsCancellationRequested) break;
-                await semaphore.WaitAsync(ct).ConfigureAwait(false);
-                var target = hostIp;
-                tasks.Add(Task.Run(async () =>
-                {
-                    try
-                    {
-                        var ep = new IPEndPoint(target, DiscoveryPort);
-                        await _udpClient!.SendAsync(requestBytes, requestBytes.Length, ep).ConfigureAwait(false);
-                    }
-                    catch { /* ignore per-host errors */ }
-                    finally
-                    {
-                        semaphore.Release();
-                    }
-                }, ct));
-            }
-        }
-        try
-        {
-            await Task.WhenAll(tasks).WaitAsync(TimeSpan.FromSeconds(timeoutSeconds + 1), ct).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) { }
-        catch (TimeoutException) { }
-    }
-
-    private async Task ReceiveLoopAsync(CancellationToken ct)
-    {
-        while (_isScanning && _udpClient != null && !ct.IsCancellationRequested)
+        while (_isScanning && !ct.IsCancellationRequested)
         {
             try
             {
-                var client = _udpClient;
-                if (client == null) break;
                 var result = await client.ReceiveAsync(ct).ConfigureAwait(false);
                 ProcessResponse(result.Buffer, result.RemoteEndPoint);
             }
             catch (OperationCanceledException) { break; }
             catch (ObjectDisposedException) { break; }
             catch (System.Net.Sockets.SocketException ex) when (ex.SocketErrorCode == System.Net.Sockets.SocketError.ConnectionReset || ex.Message.Contains("forcibly closed", StringComparison.OrdinalIgnoreCase))
-            {
-                break; // Socket closed or connection reset - normal when scan stops, don't spam log
-            }
+            { break; }
             catch (Exception ex)
             {
                 ErrorOccurred?.Invoke(this, $"Error receiving discovery response: {ex.Message}");

@@ -17,6 +17,11 @@ public class ScadaProject
     public Size Resolution { get; set; } = new Size(1920, 1080);
     public string Version { get; set; } = "1.0.0";
     public string? StartupScreen { get; set; } // Screen ID or name to load on startup
+
+    /// <summary>Target Runtime device for deploy/upload. When set, this IP is probed first when scanning.</summary>
+    public string? TargetDeviceHost { get; set; }
+    /// <summary>TCP port for project transfer (default 8888). Discovery uses UDP 8889.</summary>
+    public int TargetDevicePort { get; set; } = 8888;
     
     // These will be loaded from their respective modules
     public List<object> Screens { get; set; } = new();
@@ -48,9 +53,11 @@ public class ScadaProject
         };
         
         if (!string.IsNullOrEmpty(StartupScreen))
-        {
             json["startupScreen"] = StartupScreen;
-        }
+        if (!string.IsNullOrEmpty(TargetDeviceHost))
+            json["targetDeviceHost"] = TargetDeviceHost;
+        if (TargetDevicePort != 8888)
+            json["targetDevicePort"] = TargetDevicePort;
         
         return json;
     }
@@ -66,7 +73,9 @@ public class ScadaProject
             Path = json["path"]?.ToString() ?? string.Empty,
             Type = (ScadaType)(json["type"]?.ToObject<int>() ?? 0),
             Version = json["version"]?.ToString() ?? "1.0.0",
-            StartupScreen = json["startupScreen"]?.ToString()
+            StartupScreen = json["startupScreen"]?.ToString(),
+            TargetDeviceHost = json["targetDeviceHost"]?.ToString(),
+            TargetDevicePort = json["targetDevicePort"]?.ToObject<int>() ?? 8888
         };
 
         var resolutionObj = json["resolution"] as JObject;

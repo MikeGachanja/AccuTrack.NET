@@ -1731,6 +1731,47 @@ namespace Designer
                 }
             }
 
+            var scadaProject = _projectManager?.FindScadaProject(scadaName);
+
+            // Resolve alarms: from event payload, JSON string, or load from file
+            Alarms? alarmsObj = null;
+            if (alarms is Alarms a)
+            {
+                alarmsObj = a;
+            }
+            else if (alarms is string alarmsJson)
+            {
+                try
+                {
+                    var json = JObject.Parse(alarmsJson);
+                    alarmsObj = Alarms.FromJson(json);
+                }
+                catch
+                {
+                    alarmsObj = null;
+                }
+            }
+
+            if (alarmsObj == null)
+            {
+                var alarmsFile = scadaProject != null ? Path.Combine(scadaProject.Path, "json", "alarms.json") : null;
+                if (!string.IsNullOrEmpty(alarmsFile) && File.Exists(alarmsFile))
+                {
+                    try
+                    {
+                        var json = JObject.Parse(File.ReadAllText(alarmsFile));
+                        alarmsObj = Alarms.FromJson(json);
+                    }
+                    catch
+                    {
+                        alarmsObj = null;
+                    }
+                }
+            }
+
+            if (alarmsObj == null)
+                alarmsObj = new Alarms();
+
             // Get all tags for this SCADA project
             var tagTables = _projectManager?.GetTagTables(scadaName).OfType<TagTable>().ToList() ?? new List<TagTable>();
             var allTags = new List<Tag>();
@@ -1741,17 +1782,8 @@ namespace Designer
 
             // Create alarms editor
             var editor = new AlarmsEditor(allTags);
-            
-            if (alarms is Alarms alarmsObj)
-            {
-                editor.SetAlarms(alarmsObj);
-            }
-            else
-            {
-                editor.SetAlarms(new Alarms());
-            }
+            editor.SetAlarms(alarmsObj);
 
-            var scadaProject = _projectManager?.FindScadaProject(scadaName);
             if (scadaProject != null)
             {
                 editor.SetScadaProject(scadaProject);

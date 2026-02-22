@@ -108,19 +108,43 @@ public partial class DeployDialog : Form
         }
     }
 
-    private void ScanForDevices()
+    private async void ScanForDevices()
     {
         if (_discoveryClient == null)
             return;
 
-        Log("Scanning for devices on all network interfaces...");
+        DiscoveredDevice? configuredDevice = null;
+        var scada = GetSelectedScadaProject();
+        var configuredHost = scada?.TargetDeviceHost?.Trim();
+        if (!string.IsNullOrEmpty(configuredHost))
+        {
+            Log($"Probing configured device at {configuredHost}...");
+            var found = await _discoveryClient.ProbeDeviceAsync(configuredHost, 8889, 2500).ConfigureAwait(true);
+            if (found)
+            {
+                await Task.Yield(); // let OnDeviceFound run on UI thread
+                configuredDevice = _devices.Values.FirstOrDefault(d => string.Equals(d.IpAddress, configuredHost, StringComparison.OrdinalIgnoreCase));
+                if (configuredDevice != null)
+                    Log($"Configured device found: {configuredDevice.DeviceName} at {configuredDevice.IpAddress}:{configuredDevice.Port}");
+            }
+            else
+                Log($"Configured device at {configuredHost} did not respond. Scanning other devices...");
+        }
+
         _discoveryClient.ClearDevices();
         _devices.Clear();
+        if (configuredDevice != null)
+        {
+            var key = $"{configuredDevice.IpAddress}:{configuredDevice.Port}";
+            _devices[key] = configuredDevice;
+        }
         UpdateDeviceComboBox();
-        
+        if (configuredDevice != null)
+            SelectDeviceInCombo(configuredDevice.IpAddress, configuredDevice.Port);
+
+        Log("Scanning for devices on all network interfaces...");
         if (_discoveryClient.StartScanning(5))
         {
-            // Wait for scan + grace period (5s + 0.5s + 2s) then update UI
             Task.Delay(8500).ContinueWith(_ =>
             {
                 if (InvokeRequired)
@@ -130,7 +154,7 @@ public partial class DeployDialog : Form
                         Log($"Scan complete. Found {_devices.Count} device(s).");
                         if (_devices.Count == 0)
                         {
-                            Log("No devices found via broadcast. Try entering IP manually and clicking 'Probe'.");
+                            Log("No devices found. Set a target IP in Project Properties → Target Device, or enter IP manually and click 'Probe'.");
                             Log("Make sure Runtime is running and listening on port 8889.");
                         }
                     });
@@ -138,8 +162,28 @@ public partial class DeployDialog : Form
             });
         }
         else
-        {
             Log("Failed to start device scan.");
+    }
+
+    private ScadaProject? GetSelectedScadaProject()
+    {
+        if (_projectManager == null || _scadaProjectCombo.SelectedItem == null)
+            return null;
+        var name = _scadaProjectCombo.SelectedItem.ToString() ?? "";
+        return string.IsNullOrEmpty(name) ? null : _projectManager.FindScadaProject(name);
+    }
+
+    private void SelectDeviceInCombo(string ip, int port)
+    {
+        var target = $"{ip}:{port}";
+        for (int i = 0; i < _targetDeviceCombo.Items.Count; i++)
+        {
+            var item = _targetDeviceCombo.Items[i]?.ToString() ?? "";
+            if (item.Contains("(") && item.Contains(")") && item.Contains(target))
+            {
+                _targetDeviceCombo.SelectedIndex = i;
+                return;
+            }
         }
     }
 
@@ -201,6 +245,7 @@ public partial class DeployDialog : Form
         // Row 0: SCADA Project
         mainLayout.Controls.Add(new Label { Text = "SCADA Project:", AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Top }, 0, row);
         _scadaProjectCombo = new ComboBox { Dock = DockStyle.Fill, DropDownStyle = ComboBoxStyle.DropDownList, Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top };
+        _scadaProjectCombo.SelectedIndexChanged += (s, e) => ApplyConfiguredTargetFromProject();
         mainLayout.Controls.Add(_scadaProjectCombo, 1, row);
         mainLayout.RowStyles.Add(new RowStyle(SizeType.AutoSize));
         row++;
@@ -351,7 +396,6 @@ public partial class DeployDialog : Form
             
             if (_scadaProjectCombo.Items.Count > 0)
             {
-                // Pre-select active project if provided
                 if (!string.IsNullOrEmpty(_activeProjectName))
                 {
                     var activeIndex = _scadaProjectCombo.Items.IndexOf(_activeProjectName);
@@ -361,10 +405,21 @@ public partial class DeployDialog : Form
                         _scadaProjectCombo.SelectedIndex = 0;
                 }
                 else
-                {
                     _scadaProjectCombo.SelectedIndex = 0;
-                }
+                ApplyConfiguredTargetFromProject();
             }
+        }
+    }
+
+    private void ApplyConfiguredTargetFromProject()
+    {
+        var scada = GetSelectedScadaProject();
+        if (scada == null) return;
+        if (!string.IsNullOrEmpty(scada.TargetDeviceHost))
+        {
+            _targetIpTextBox.Text = scada.TargetDeviceHost;
+            _targetIpTextBox.Enabled = true;
+            _targetPortNumeric.Value = Math.Clamp(scada.TargetDevicePort, 1, 65535);
         }
     }
 
