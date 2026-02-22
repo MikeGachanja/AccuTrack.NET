@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
 using Newtonsoft.Json.Linq;
 
 namespace Designer.Modules.Project;
@@ -143,17 +144,127 @@ public class ScadaPaths
 }
 
 /// <summary>
-/// Placeholder for DeviceNetwork - will be implemented later.
+/// A node in the device network representing a configured SCADA project / runtime device.
+/// </summary>
+public class DeviceNode
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Name { get; set; } = "";
+    public ScadaType Type { get; set; } = ScadaType.HMI;
+    public string? IpAddress { get; set; }
+    public int Port { get; set; } = 8888;
+    public string? Description { get; set; }
+    public double X { get; set; }
+    public double Y { get; set; }
+    public List<string> ConnectedDeviceIds { get; set; } = new();
+
+    public string TypeString => Type switch
+    {
+        ScadaType.HMI => "HMI",
+        ScadaType.PC_STATION => "PC Station",
+        ScadaType.BMS => "BMS",
+        _ => "Other"
+    };
+
+    public JObject ToJson()
+    {
+        var obj = new JObject
+        {
+            ["id"] = Id,
+            ["name"] = Name,
+            ["type"] = (int)Type,
+            ["port"] = Port,
+            ["x"] = X,
+            ["y"] = Y
+        };
+        if (!string.IsNullOrEmpty(IpAddress)) obj["ipAddress"] = IpAddress;
+        if (!string.IsNullOrEmpty(Description)) obj["description"] = Description;
+        if (ConnectedDeviceIds.Count > 0) obj["connections"] = new JArray(ConnectedDeviceIds.Cast<object>().ToArray());
+        return obj;
+    }
+
+    public static DeviceNode FromJson(JObject json)
+    {
+        var node = new DeviceNode
+        {
+            Id = json["id"]?.ToString() ?? Guid.NewGuid().ToString("N"),
+            Name = json["name"]?.ToString() ?? "",
+            Type = (ScadaType)(json["type"]?.ToObject<int>() ?? 0),
+            IpAddress = json["ipAddress"]?.ToString(),
+            Port = json["port"]?.ToObject<int>() ?? 8888,
+            Description = json["description"]?.ToString(),
+            X = json["x"]?.ToObject<double>() ?? 0,
+            Y = json["y"]?.ToObject<double>() ?? 0
+        };
+        var conn = json["connections"] as JArray;
+        if (conn != null)
+            foreach (var c in conn)
+                if (c?.ToString() is string id && !string.IsNullOrEmpty(id))
+                    node.ConnectedDeviceIds.Add(id);
+        return node;
+    }
+}
+
+/// <summary>
+/// Device network: links configured SCADA projects (runtime devices). Synced from project's SCADA list; each node shows name, type, IP, port.
 /// </summary>
 public class DeviceNetwork
 {
+    public List<DeviceNode> Devices { get; set; } = new();
+
+    /// <summary>
+    /// Syncs devices from the current SCADA projects. Adds a node for each SCADA; updates IP/port from each project's TargetDeviceHost/Port; removes nodes for deleted SCADA.
+    /// </summary>
+    public void SyncFromScadaProjects(IEnumerable<ScadaProject> scadaProjects)
+    {
+        var scadaList = scadaProjects?.ToList() ?? new List<ScadaProject>();
+        var byName = Devices.ToDictionary(d => d.Name, StringComparer.OrdinalIgnoreCase);
+
+        // Remove nodes whose SCADA no longer exists
+        var toRemove = Devices.Where(d => !scadaList.Any(s => string.Equals(s.Name, d.Name, StringComparison.OrdinalIgnoreCase))).ToList();
+        foreach (var d in toRemove)
+            Devices.Remove(d);
+
+        // Add or update node for each SCADA project
+        foreach (var scada in scadaList)
+        {
+            if (!byName.TryGetValue(scada.Name, out var node))
+            {
+                node = new DeviceNode
+                {
+                    Name = scada.Name,
+                    Type = scada.Type,
+                    Description = $"SCADA Project: {scada.Name}"
+                };
+                Devices.Add(node);
+            }
+            else
+            {
+                node.Type = scada.Type;
+            }
+            node.IpAddress = string.IsNullOrWhiteSpace(scada.TargetDeviceHost) ? null : scada.TargetDeviceHost.Trim();
+            node.Port = scada.TargetDevicePort;
+        }
+    }
+
+    public IReadOnlyList<DeviceNode> GetAllDevices() => Devices;
+
     public JObject ToJson()
     {
-        return new JObject();
+        var arr = new JArray();
+        foreach (var d in Devices)
+            arr.Add(d.ToJson());
+        return new JObject { ["devices"] = arr };
     }
 
     public static DeviceNetwork FromJson(JObject json)
     {
-        return new DeviceNetwork();
+        var network = new DeviceNetwork();
+        var arr = json["devices"] as JArray;
+        if (arr != null)
+            foreach (var item in arr)
+                if (item is JObject obj)
+                    network.Devices.Add(DeviceNode.FromJson(obj));
+        return network;
     }
 }

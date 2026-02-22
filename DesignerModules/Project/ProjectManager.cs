@@ -998,5 +998,16 @@ public class ProjectManager
     
     public bool AddMachineLearning(string scadaName) => false;
     public bool AddHistorian(string scadaName) => false;
-    public DeviceNetwork? GetDeviceNetwork() => _currentProject?.DeviceNetwork;
+    /// <summary>
+    /// Gets the device network, ensuring it exists and is synced with current SCADA projects.
+    /// </summary>
+    public DeviceNetwork? GetDeviceNetwork()
+    {
+        if (_currentProject == null)
+            return null;
+        if (_currentProject.DeviceNetwork == null)
+            _currentProject.DeviceNetwork = new DeviceNetwork();
+        _currentProject.DeviceNetwork.SyncFromScadaProjects(GetScadaProjects());
+        return _currentProject.DeviceNetwork;
+    }
 }
