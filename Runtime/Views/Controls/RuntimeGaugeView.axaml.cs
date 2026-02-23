@@ -157,47 +157,49 @@ public partial class RuntimeGaugeView : UserControl
         double normalizedValue = range > 0 ? (_value - _minimum) / range : 0;
         normalizedValue = Math.Max(0, Math.Min(1, normalizedValue));
         
-        // Gauge spans 270 degrees (from -135 to +135 degrees)
-        double startAngle = -135;
+        // Gauge spans 270 degrees (from -135 to +135), GaugeControl1-style: fill path with RotateTransform
+        const double startAngle = -135;
         double sweepAngle = normalizedValue * 270;
         double angle = startAngle + sweepAngle;
         double angleRad = angle * Math.PI / 180.0;
         
-        // Draw gauge arc using Path
-        var arcRect = new Rect(centerX - radius, centerY - radius, radius * 2, radius * 2);
-        var arcPath = new PathGeometry();
-        var arcFigure = new PathFigure
+        // GaugeControl1-style: fixed wedge (2° slice) at origin, rotate then translate so rotation is around gauge center
+        const double wedgeSpanDeg = 2.0;
+        double r0 = wedgeSpanDeg * -0.5 * Math.PI / 180.0;
+        double r1 = wedgeSpanDeg * 0.5 * Math.PI / 180.0;
+        var centerPt = new Point(0, 0);
+        var p0 = new Point(radius * Math.Cos(r0), radius * Math.Sin(r0));
+        var p1 = new Point(radius * Math.Cos(r1), radius * Math.Sin(r1));
+        var wedgeFigure = new PathFigure { StartPoint = centerPt, IsClosed = true };
+        wedgeFigure.Segments.Add(new LineSegment { Point = p0 });
+        wedgeFigure.Segments.Add(new ArcSegment
         {
-            StartPoint = new Point(
-                centerX + radius * Math.Cos(startAngle * Math.PI / 180.0),
-                centerY + radius * Math.Sin(startAngle * Math.PI / 180.0)
-            )
-        };
-        
-        var arcSegment = new ArcSegment
-        {
-            Point = new Point(
-                centerX + radius * Math.Cos(angle * Math.PI / 180.0),
-                centerY + radius * Math.Sin(angle * Math.PI / 180.0)
-            ),
+            Point = p1,
             Size = new Size(radius, radius),
             SweepDirection = SweepDirection.Clockwise,
-            IsLargeArc = sweepAngle > 180
-        };
-        
-        arcFigure.Segments.Add(arcSegment);
-        arcPath.Figures.Add(arcFigure);
-        
-        GaugeArc.Data = arcPath;
-        GaugeArc.Stroke = new SolidColorBrush(_foreColor);
-        GaugeArc.StrokeThickness = 8;
+            IsLargeArc = false
+        });
+        var wedgeGeometry = new PathGeometry();
+        wedgeGeometry.Figures.Add(wedgeFigure);
+        GaugeArc.Data = wedgeGeometry;
+        GaugeArc.Fill = new SolidColorBrush(_foreColor);
+        GaugeArc.Stroke = null;
         GaugeArc.Width = width;
         GaugeArc.Height = height;
+        // Rotate wedge then translate to center (like fillPathRT in GaugeControl1)
+        GaugeArc.RenderTransform = new TransformGroup
+        {
+            Children =
+            {
+                new RotateTransform(startAngle + sweepAngle),
+                new TranslateTransform(centerX, centerY)
+            }
+        };
         
-        // Draw needle (set size so it isn't clipped; Line draws in its layout bounds)
-        int needleLength = (int)(radius * 0.7);
-        int needleEndX = (int)(centerX + needleLength * Math.Cos(angleRad));
-        int needleEndY = (int)(centerY + needleLength * Math.Sin(angleRad));
+        // Draw needle (GaugeControls-style: center to point on circle by angle)
+        double needleLength = radius * 0.7;
+        double needleEndX = centerX + needleLength * Math.Cos(angleRad);
+        double needleEndY = centerY + needleLength * Math.Sin(angleRad);
         
         NeedleLine.StartPoint = new Point(centerX, centerY);
         NeedleLine.EndPoint = new Point(needleEndX, needleEndY);
@@ -206,10 +208,18 @@ public partial class RuntimeGaugeView : UserControl
         NeedleLine.Width = width;
         NeedleLine.Height = height;
         
-        // Center dot
+        // Center dot (pivot point)
         Canvas.SetLeft(CenterDot, centerX - 5);
         Canvas.SetTop(CenterDot, centerY - 5);
         CenterDot.Fill = new SolidColorBrush(_needleColor);
+        
+        // Needle tip ellipse (GaugeControl2-style: circle at end of needle)
+        const double needleTipRadius = 6;
+        NeedleTip.Width = needleTipRadius * 2;
+        NeedleTip.Height = needleTipRadius * 2;
+        Canvas.SetLeft(NeedleTip, needleEndX - needleTipRadius);
+        Canvas.SetTop(NeedleTip, needleEndY - needleTipRadius);
+        NeedleTip.Fill = new SolidColorBrush(_needleColor);
         
         // Min/Max labels
         if (_showMinMax)

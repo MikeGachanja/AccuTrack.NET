@@ -2,19 +2,22 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:shapes="using:Avalonia.Controls.Shapes"
              x:Class="Runtime.Views.Controls.RuntimeGaugeView">
+  <!-- Gauge layout per GaugeControl1: backgroundPath, fillPath (RotateTransform), needle, center ellipse, labels -->
   <Canvas x:Name="GaugeCanvas" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-    <!-- Gauge background circle (default size; UpdateGauge overwrites) -->
+    <!-- 1. Background path: full gauge track (backColor) -->
     <Ellipse x:Name="GaugeBackground" Width="80" Height="80" Fill="White" Stroke="#808080" StrokeThickness="1" />
-    <!-- Gauge arc (Stroke set in code from foreColor) -->
-    <Path x:Name="GaugeArc" Width="80" Height="80" Stroke="Green" StrokeThickness="8" StrokeLineCap="Round" />
-    <!-- Needle line (Stroke set in code from needleColor) -->
+    <!-- 2. Fill path: value wedge, RotateTransform+TranslateTransform set in code (like fillPath/fillPathRT in GaugeControl1) -->
+    <Path x:Name="GaugeArc" Width="80" Height="80" Fill="Green" />
+    <!-- 3. Needle line (needleColor), X1,Y1,X2,Y2 set in code -->
     <shapes:Line x:Name="NeedleLine" Width="1" Height="1" Stroke="Red" StrokeThickness="3" />
-    <!-- Center dot -->
+    <!-- 4. Center ellipse (GaugeControl1: 20x20 at center) -->
     <Ellipse x:Name="CenterDot" Width="10" Height="10" />
-    <!-- Min/Max labels -->
-    <TextBlock x:Name="MinLabel" FontSize="8" Foreground="Black" Width="20" Height="12" />
-    <TextBlock x:Name="MaxLabel" FontSize="8" Foreground="Black" Width="20" Height="12" />
-    <!-- Value text -->
-    <TextBlock x:Name="ValueText" FontSize="12" FontWeight="Bold" Foreground="Black" TextAlignment="Center" Width="60" Height="16" />
+    <!-- 5. Needle tip ellipse -->
+    <Ellipse x:Name="NeedleTip" Width="12" Height="12" Fill="Red" />
+    <!-- 6. Min/Max labels -->
+    <TextBlock x:Name="MinLabel" FontSize="10" Foreground="Black" Width="24" Height="14" />
+    <TextBlock x:Name="MaxLabel" FontSize="10" Foreground="Black" Width="24" Height="14" />
+    <!-- 7. Value text -->
+    <TextBlock x:Name="ValueText" FontSize="14" FontWeight="Bold" Foreground="Black" TextAlignment="Center" Width="64" Height="20" />
   </Canvas>
 </UserControl>
