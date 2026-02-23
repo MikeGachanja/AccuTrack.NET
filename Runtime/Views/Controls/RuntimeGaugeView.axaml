@@ -3,18 +3,18 @@
              xmlns:shapes="using:Avalonia.Controls.Shapes"
              x:Class="Runtime.Views.Controls.RuntimeGaugeView">
   <Canvas x:Name="GaugeCanvas" Background="Transparent" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
-    <!-- Gauge background circle -->
-    <Ellipse x:Name="GaugeBackground" Fill="White" Stroke="#808080" StrokeThickness="1" />
-    <!-- Gauge arc -->
-    <Path x:Name="GaugeArc" StrokeThickness="8" StrokeLineCap="Round" />
-    <!-- Needle line -->
-    <shapes:Line x:Name="NeedleLine" StrokeThickness="3" />
+    <!-- Gauge background circle (default size; UpdateGauge overwrites) -->
+    <Ellipse x:Name="GaugeBackground" Width="80" Height="80" Fill="White" Stroke="#808080" StrokeThickness="1" />
+    <!-- Gauge arc (Stroke set in code from foreColor) -->
+    <Path x:Name="GaugeArc" Width="80" Height="80" Stroke="Green" StrokeThickness="8" StrokeLineCap="Round" />
+    <!-- Needle line (Stroke set in code from needleColor) -->
+    <shapes:Line x:Name="NeedleLine" Width="1" Height="1" Stroke="Red" StrokeThickness="3" />
     <!-- Center dot -->
     <Ellipse x:Name="CenterDot" Width="10" Height="10" />
     <!-- Min/Max labels -->
-    <TextBlock x:Name="MinLabel" FontSize="8" Foreground="Black" />
-    <TextBlock x:Name="MaxLabel" FontSize="8" Foreground="Black" />
+    <TextBlock x:Name="MinLabel" FontSize="8" Foreground="Black" Width="20" Height="12" />
+    <TextBlock x:Name="MaxLabel" FontSize="8" Foreground="Black" Width="20" Height="12" />
     <!-- Value text -->
-    <TextBlock x:Name="ValueText" FontSize="12" FontWeight="Bold" Foreground="Black" TextAlignment="Center" />
+    <TextBlock x:Name="ValueText" FontSize="12" FontWeight="Bold" Foreground="Black" TextAlignment="Center" Width="60" Height="16" />
   </Canvas>
 </UserControl>

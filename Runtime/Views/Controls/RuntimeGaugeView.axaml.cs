@@ -2,8 +2,10 @@ using System;
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Shapes;
+using Avalonia.Layout;
 using Avalonia.Markup.Xaml;
 using Avalonia.Media;
+using Runtime;
 using Runtime.Modules.Screens;
 
 namespace Runtime.Views.Controls;
@@ -27,6 +29,13 @@ public partial class RuntimeGaugeView : UserControl
         InitializeComponent();
         SizeChanged += OnSizeChanged;
         AttachedToVisualTree += OnAttachedToVisualTree;
+        Loaded += OnLoaded;
+    }
+
+    private void OnLoaded(object? sender, Avalonia.Interactivity.RoutedEventArgs e)
+    {
+        // Ensure gauge is drawn after layout has run and we have a real size
+        Avalonia.Threading.Dispatcher.UIThread.Post(UpdateGauge, Avalonia.Threading.DispatcherPriority.Loaded);
     }
 
     private void OnAttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
@@ -40,6 +49,30 @@ public partial class RuntimeGaugeView : UserControl
         UpdateGauge();
     }
 
+    /// <summary>Ensure we never return NaN or invalid size from measure (avoids InvalidOperationException in layout).</summary>
+    protected override Size MeasureOverride(Size availableSize)
+    {
+        double w = availableSize.Width;
+        double h = availableSize.Height;
+        if (double.IsNaN(w) || w <= 0 || double.IsPositiveInfinity(w)) w = 100;
+        if (double.IsNaN(h) || h <= 0 || double.IsPositiveInfinity(h)) h = 100;
+        var validSize = new Size(w, h);
+        try
+        {
+            var result = base.MeasureOverride(validSize);
+            // Coerce result in case content returned invalid size
+            var rw = result.Width;
+            var rh = result.Height;
+            if (double.IsNaN(rw) || rw < 0) rw = w;
+            if (double.IsNaN(rh) || rh < 0) rh = h;
+            return new Size(rw, rh);
+        }
+        catch (InvalidOperationException)
+        {
+            return validSize;
+        }
+    }
+
     public void ApplyDescriptor(ComponentDescriptor d)
     {
         if (d == null) return;
@@ -48,10 +81,10 @@ public partial class RuntimeGaugeView : UserControl
         _value = GetPropertyDouble(d, "value", 50.0);
         _minimum = GetPropertyDouble(d, "minimum", 0.0);
         _maximum = GetPropertyDouble(d, "maximum", 100.0);
-        _backColor = ParseColor(GetProperty(d, "backColor", "#FFFFFF"));
-        _foreColor = ParseColor(GetProperty(d, "foreColor", "#008000"));
-        _needleColor = ParseColor(GetProperty(d, "needleColor", "#FF0000"));
-        _textColor = ParseColor(GetProperty(d, "textColor", "#000000"));
+        _backColor = ColorParser.ParseColor(GetProperty(d, "backColor", "White"));
+        _foreColor = ColorParser.ParseColor(GetProperty(d, "foreColor", "Green"));
+        _needleColor = ColorParser.ParseColor(GetProperty(d, "needleColor", "Red"));
+        _textColor = ColorParser.ParseColor(GetProperty(d, "textColor", "Black"));
         _showValue = GetPropertyBool(d, "showValue", true);
         _showMinMax = GetPropertyBool(d, "showMinMax", true);
         _unit = GetProperty(d, "unit", "");
@@ -67,8 +100,14 @@ public partial class RuntimeGaugeView : UserControl
         // Only update _value when we have a valid tag value; keep previous value when null (e.g. tag not connected yet)
         if (value is int i)
             _value = Math.Clamp(i, _minimum, _maximum);
+        else if (value is long l)
+            _value = Math.Clamp((double)l, _minimum, _maximum);
         else if (value is double d)
             _value = Math.Clamp(d, _minimum, _maximum);
+        else if (value is float f)
+            _value = Math.Clamp((double)f, _minimum, _maximum);
+        else if (value is decimal dec)
+            _value = Math.Clamp((double)dec, _minimum, _maximum);
         else if (value != null && double.TryParse(value.ToString(), out var parsed))
             _value = Math.Clamp(parsed, _minimum, _maximum);
         UpdateGauge();
@@ -76,15 +115,17 @@ public partial class RuntimeGaugeView : UserControl
 
     private void UpdateGauge()
     {
-        var width = Bounds.Width > 0 ? Bounds.Width : (Width > 0 ? Width : 0);
-        var height = Bounds.Height > 0 ? Bounds.Height : (Height > 0 ? Height : 0);
-        if (width <= 0 || height <= 0)
+        // Prefer Bounds; fall back to Width/Height (may be set before layout). Reject NaN/zero.
+        var w = Bounds.Width;
+        var h = Bounds.Height;
+        if (w <= 0 || double.IsNaN(w)) w = Width;
+        if (h <= 0 || double.IsNaN(h)) h = Height;
+        if (w <= 0 || double.IsNaN(w) || h <= 0 || double.IsNaN(h))
         {
-            width = Math.Max(50, width);
-            height = Math.Max(50, height);
-            if (width <= 0) width = 100;
-            if (height <= 0) height = 100;
-            // Schedule one deferred update so we redraw when control gets its real size
+            w = Math.Max(50, w);
+            h = Math.Max(50, h);
+            if (w <= 0) w = 100;
+            if (h <= 0) h = 100;
             if (!_deferredUpdateScheduled)
             {
                 _deferredUpdateScheduled = true;
@@ -95,8 +136,8 @@ public partial class RuntimeGaugeView : UserControl
                 }, Avalonia.Threading.DispatcherPriority.Loaded);
             }
         }
-        width = Math.Max(50, width);
-        height = Math.Max(50, height);
+        var width = Math.Max(50, w);
+        var height = Math.Max(50, h);
         
         var size = Math.Min(width, height);
         var centerX = width / 2;
@@ -150,8 +191,10 @@ public partial class RuntimeGaugeView : UserControl
         GaugeArc.Data = arcPath;
         GaugeArc.Stroke = new SolidColorBrush(_foreColor);
         GaugeArc.StrokeThickness = 8;
+        GaugeArc.Width = width;
+        GaugeArc.Height = height;
         
-        // Draw needle
+        // Draw needle (set size so it isn't clipped; Line draws in its layout bounds)
         int needleLength = (int)(radius * 0.7);
         int needleEndX = (int)(centerX + needleLength * Math.Cos(angleRad));
         int needleEndY = (int)(centerY + needleLength * Math.Sin(angleRad));
@@ -160,6 +203,8 @@ public partial class RuntimeGaugeView : UserControl
         NeedleLine.EndPoint = new Point(needleEndX, needleEndY);
         NeedleLine.Stroke = new SolidColorBrush(_needleColor);
         NeedleLine.StrokeThickness = 3;
+        NeedleLine.Width = width;
+        NeedleLine.Height = height;
         
         // Center dot
         Canvas.SetLeft(CenterDot, centerX - 5);
@@ -169,12 +214,16 @@ public partial class RuntimeGaugeView : UserControl
         // Min/Max labels
         if (_showMinMax)
         {
+            MinLabel.IsVisible = true;
+            MaxLabel.IsVisible = true;
             MinLabel.Text = _minimum.ToString("F0");
+            MinLabel.FontSize = 10;
             Canvas.SetLeft(MinLabel, centerX - radius + 5);
             Canvas.SetTop(MinLabel, centerY + radius - 20);
             MinLabel.Foreground = new SolidColorBrush(_textColor);
-            
+
             MaxLabel.Text = _maximum.ToString("F0");
+            MaxLabel.FontSize = 10;
             Canvas.SetLeft(MaxLabel, centerX + radius - 30);
             Canvas.SetTop(MaxLabel, centerY + radius - 20);
             MaxLabel.Foreground = new SolidColorBrush(_textColor);
@@ -184,14 +233,16 @@ public partial class RuntimeGaugeView : UserControl
             MinLabel.IsVisible = false;
             MaxLabel.IsVisible = false;
         }
-        
-        // Value text
+
+        // Value text (ensure on top so not hidden behind arc/needle)
         if (_showValue)
         {
+            ValueText.IsVisible = true;
             string valueText = $"{_value:F1}";
             if (!string.IsNullOrEmpty(_unit))
                 valueText += $" {_unit}";
             ValueText.Text = valueText;
+            ValueText.FontSize = 14;
             Canvas.SetLeft(ValueText, centerX - 30);
             Canvas.SetTop(ValueText, centerY + radius / 2 + 10);
             ValueText.Foreground = new SolidColorBrush(_textColor);
@@ -202,6 +253,8 @@ public partial class RuntimeGaugeView : UserControl
         {
             ValueText.IsVisible = false;
         }
+
+        GaugeCanvas.InvalidateVisual();
     }
 
     public string? TagName { get; set; }
@@ -226,26 +279,5 @@ public partial class RuntimeGaugeView : UserControl
         if (!d.Properties.TryGetValue(key, out var v)) return fallback;
         if (v is bool b) return b;
         return bool.TryParse(v?.ToString(), out var parsed) ? parsed : fallback;
-    }
-
-    private static Color ParseColor(string hex)
-    {
-        if (string.IsNullOrEmpty(hex)) return Colors.Gray;
-        if (!hex.StartsWith("#")) hex = "#" + hex;
-        if (hex.Length >= 7)
-        {
-            try
-            {
-                var r = Convert.ToInt32(hex.Substring(1, 2), 16);
-                var g = Convert.ToInt32(hex.Substring(3, 2), 16);
-                var b = Convert.ToInt32(hex.Substring(5, 2), 16);
-                return Color.FromRgb((byte)r, (byte)g, (byte)b);
-            }
-            catch
-            {
-                return Colors.Gray;
-            }
-        }
-        return Colors.Gray;
     }
 }
