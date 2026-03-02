@@ -1,8 +1,8 @@
 # AccuTrack Designer User Guide
 
 **Version:** 1.0  
-**Last Updated:** 2024  
-**Platform:** Windows, Linux
+**Last Updated:** February 2025  
+**Platform:** Designer: Windows; Runtime: Windows (Avalonia)
 
 ---
 
@@ -21,10 +21,11 @@
 11. [Security Configuration](#security-configuration)
 12. [Schedules and Automation](#schedules-and-automation)
 13. [Historical Data (Historian)](#historical-data-historian)
-14. [Building and Deploying](#building-and-deploying)
-15. [Device Management](#device-management)
-16. [Tips and Best Practices](#tips-and-best-practices)
-17. [Troubleshooting](#troubleshooting)
+14. [Machine Learning Configuration](#machine-learning-configuration)
+15. [Building and Deploying](#building-and-deploying)
+16. [Device Management](#device-management)
+17. [Tips and Best Practices](#tips-and-best-practices)
+18. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -43,9 +44,8 @@ AccuTrack Designer is a comprehensive SCADA (Supervisory Control and Data Acquis
 - **Alarm Management**: Configure and manage alarm conditions and notifications
 - **Security**: Role-based access control and user management
 - **Historical Data**: Configure data collection and trending
-- **Cross-Platform**: Runs on Windows and Linux
-
-For an end-to-end workflow that covers configuring all modules and transferring your project to Runtime, see [AccuTrack SCADA – How to Use](AccuTrack%20SCADA%20%E2%80%93%20How%20to%20Use.md).
+- **Machine Learning**: Configure ML models (e.g. Fast Forest, LightGBM) with input/output tags and optional historian-based inference
+- **Simulation**: Run and test projects with the built-in simulator before deploying to hardware
 
 ---
 
@@ -53,11 +53,8 @@ For an end-to-end workflow that covers configuring all modules and transferring 
 
 ### System Requirements
 
-- **Operating System**: Windows 10/11 or Linux (Ubuntu 20.04+)
-- **Qt Framework**: Qt 6.10.1 or later
-- **Memory**: Minimum 4GB RAM (8GB recommended)
+- **.NET**: .NET 8.0 runtime/SDK
 - **Disk Space**: 500MB for installation, additional space for projects
-- **Display**: 1280x720 minimum resolution
 
 ### First Launch
 
@@ -68,6 +65,8 @@ When you first launch AccuTrack Designer, you'll see the **Startup Page** with t
 3. **Open Project**: Browse and open an existing project
 4. **Remove**: Remove a project from the recent projects list
 
+![Startup page](images/Startup%20page.png)
+
 ### Creating Your First Project
 
 1. Click **New Project** on the startup page, or use **File → New Project** from the menu
@@ -77,6 +76,7 @@ When you first launch AccuTrack Designer, you'll see the **Startup Page** with t
 5. The project will be created and automatically opened
 
 The project structure will be created with the following default folders:
+
 - `Tags/` - Tag database files
 - `Screens/` - HMI screen templates
 - `Scripts/` - Lua script files
@@ -94,23 +94,12 @@ The AccuTrack Designer interface is organized into several key areas:
 
 ### Main Window Layout
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│  Menu Bar: File | Build | Download | Upload | Help         │
-├──────────┬──────────────────────────────┬───────────────────┤
-│          │                              │                   │
-│ Project  │     Editor Area              │   Components     │
-│ View     │     (Tabbed)                  │   Palette        │
-│          │                              │                   │
-│          │                              │                   │
-├──────────┴──────────────────────────────┴───────────────────┤
-│  Bottom Panel: Output | Debug | Properties                  │
-└─────────────────────────────────────────────────────────────┘
-```
+![Main window layout](images/Main%20Window.png)
 
 ### Key Interface Components
 
 #### 1. Project View (Left Panel)
+
 - **Project Tab**: Tree view of your project structure
   - SCADA projects
   - Tag tables
@@ -126,12 +115,14 @@ The AccuTrack Designer interface is organized into several key areas:
 - **Devices Tab**: Device discovery and management
 
 #### 2. Editor Area (Center)
+
 - Tabbed interface for open editors
 - Each editor opens in its own tab
 - Tabs can be closed individually
 - Supports multiple screens, tag tables, and scripts open simultaneously
 
 #### 3. Components Palette (Right Panel)
+
 - Visual components available for HMI screens
 - Organized by categories:
   - Basic Controls (buttons, inputs, etc.)
@@ -140,6 +131,7 @@ The AccuTrack Designer interface is organized into several key areas:
   - Layout Components (tabs, containers)
 
 #### 4. Bottom Panel
+
 - **Output Tab**: Build output and system messages
 - **Debug Tab**: Debug console and diagnostic information
 - **Properties Tab**: Property editor for selected components
@@ -147,26 +139,60 @@ The AccuTrack Designer interface is organized into several key areas:
 ### Menu Bar
 
 #### File Menu
-- **New Project**: Create a new SCADA project
-- **Open Project**: Open an existing project
+
+- **New Project** (`Ctrl+N`): Create a new SCADA project
+- **Open Project** (`Ctrl+O`): Open an existing project
+- **Close Project** (`Ctrl+W`): Close the current project
+- **Save** (`Ctrl+S`): Save current project
+- **Save As** / **Save All** (`Ctrl+Shift+S`): Save with new name or save all
+- **Close** / **Close All**: Close current editor tab or all tabs
+- **Rename** (`F2`): Rename selected item
+- **Import** / **Export**: Import or export project data
+- **Archive Project** / **Restore Project**: Archive or restore a project
 - **Recent Projects**: Quick access to recently opened projects
-- **Save**: Save current project
-- **Save As**: Save project with a new name
-- **Close Project**: Close the current project
-- **Exit**: Exit the application
+- **Exit** (`Alt+F4`): Exit the application
+
+#### Edit Menu
+
+- **Undo** (`Ctrl+Z`), **Redo** (`Ctrl+Y`)
+- **Cut** (`Ctrl+X`), **Copy** (`Ctrl+C`), **Paste** (`Ctrl+V`), **Delete** (`Delete`)
+
+#### View Menu
+
+- **Project Explorer**, **Properties**, **Output**, **Component Palette**: Toggle panels
+- **Zoom In** (`Ctrl++`), **Zoom Out** (`Ctrl+-`), **Reset Zoom** (`Ctrl+0`)
 
 #### Build Menu
-- **Build Project**: Compile and prepare project for deployment
+
+- **Build Project** (`F7`): Compile and prepare project for deployment
+- **Rebuild Project** (`Ctrl+F7`): Clean and build
 - **Clean Project**: Remove build artifacts
+- **Select Active Project**: Choose which SCADA project is used for Build/Download
+- **Build Settings**: Configure build options
 
 #### Download Menu
-- **Download to Device**: Deploy project to a target device
+
+- **Download to Device** (`F5`): Deploy project to a target device
+- **Download Settings**: Configure deployment options
 
 #### Upload Menu
-- **Upload from Device**: Retrieve project from a device
+
+- **Upload from Device** (`F6`): Retrieve project from a device
+- **Upload Settings**: Configure upload options
+
+#### Simulate Menu
+
+- **Start Simulation** (`F9`): Run the project in the built-in simulator
+- **Pause Simulation** (`F10`), **Stop Simulation** (`Shift+F9`)
+- **Simulation Settings**: Configure auto-build before simulate, etc.
+
+#### Tools Menu
+
+- **Options**, **Customize**, **External Tools**, **Package Manager**
 
 #### Help Menu
-- **Documentation**: Open user documentation
+
+- **Documentation** (`F1`): Open user documentation
 - **About**: Application information
 
 ---
@@ -226,6 +252,7 @@ ProjectName.isc
 ### Recent Projects
 
 The application maintains a list of recently opened projects accessible via:
+
 - **File → Recent Projects** menu
 - Startup page recent projects list
 
@@ -238,6 +265,7 @@ Tags are the fundamental data points in your SCADA system. They represent proces
 ### Understanding Tags
 
 A tag is a named data point that can represent:
+
 - **Input Tags (I)**: Values read from external devices (PLCs, sensors)
 - **Output Tags (O)**: Values written to external devices
 - **Memory Tags (M)**: Internal variables for calculations and logic
@@ -245,6 +273,7 @@ A tag is a named data point that can represent:
 ### Tag Data Types
 
 Supported data types:
+
 - **Boolean**: True/False values
 - **Integer**: 16-bit, 32-bit, 64-bit (signed/unsigned)
 - **Float**: 32-bit and 64-bit floating point
@@ -260,43 +289,49 @@ Supported data types:
 3. The Tag Table Editor opens
 4. Click **Add Tag** or press `Insert`
 5. Configure tag properties:
-   - **Name**: Unique identifier (required)
-   - **Description**: Human-readable description
-   - **Type**: I/O type (Input/Output/Memory)
-   - **Data Type**: Boolean, Integer, Float, etc.
-   - **Address**: Device address (for I/O tags)
-   - **Value**: Initial/default value
-   - **Min/Max**: Valid range
-   - **Units**: Engineering units
-   - **Scaling**: Linear scaling factors
-   - **Access Level**: Security access level
+  - **Name**: Unique identifier (required)
+  - **Description**: Human-readable description
+  - **Type**: I/O type (Input/Output/Memory)
+  - **Data Type**: Boolean, Integer, Float, etc.
+  - **Address**: Device address (for I/O tags)
+  - **Value**: Initial/default value
+  - **Min/Max**: Valid range
+  - **Units**: Engineering units
+  - **Scaling**: Linear scaling factors
+  - **Access Level**: Security access level
 
 ### Tag Table Editor
 
 The Tag Table Editor provides:
+
 - **Table View**: Spreadsheet-like interface for bulk editing
 - **Search/Filter**: Find tags quickly
 - **Validation**: Real-time validation of tag names and addresses
 - **Duplicate Detection**: Prevents duplicate names/addresses
 - **Bulk Operations**: Edit multiple tags at once
 
+![Tag configuration](images/Tag%20Config.png)
+
 ### Tag Addressing
 
 For I/O tags, addresses specify where to read/write data:
 
 **Modbus Examples:**
+
 - `40001` - Holding Register 1
 - `30001` - Input Register 1
 - `10001` - Coil 1
 - `00001` - Discrete Input 1
 
 **Bit Addressing:**
+
 - `40001.0` - Bit 0 of Holding Register 1
 - `40001.15` - Bit 15 of Holding Register 1
 
 ### Tag Validation
 
 The system validates:
+
 - Unique tag names within a tag table
 - Valid data types for addresses
 - Range constraints (min/max)
@@ -305,6 +340,7 @@ The system validates:
 ### Using Tags in Screens
 
 Tags can be bound to screen components:
+
 1. Select a component on a screen
 2. In the **Properties** panel, find tag-related properties
 3. Click the tag selector (usually a `...` button)
@@ -336,6 +372,7 @@ The Screen Editor provides a visual canvas for designing operator interfaces.
 ### Screen Canvas
 
 The canvas provides:
+
 - **Grid**: Visual alignment guide (can be toggled)
 - **Snap to Grid**: Automatic alignment
 - **Zoom Controls**: Zoom in/out/fit
@@ -345,22 +382,21 @@ The canvas provides:
 ### Adding Components
 
 1. **From Components Palette**:
-   - Click a component in the palette
-   - Click on the canvas to place it
-   - Component appears at click location
-
+  - Click a component in the palette
+  - Click on the canvas to place it
+  - Component appears at click location
 2. **Drag and Drop**:
-   - Drag component from palette
-   - Drop onto canvas
-
+  - Drag component from palette
+  - Drop onto canvas
 3. **Copy/Paste**:
-   - Select component(s)
-   - `Ctrl+C` to copy
-   - `Ctrl+V` to paste
+  - Select component(s)
+  - `Ctrl+C` to copy
+  - `Ctrl+V` to paste
 
 ### Component Properties
 
 When a component is selected:
+
 - **Properties Panel** (bottom right) shows all properties
 - Properties are organized by category:
   - **General**: Name, position, size, visibility
@@ -372,27 +408,32 @@ When a component is selected:
 ### Common Component Operations
 
 #### Moving Components
+
 - Click and drag to move
 - Use arrow keys for fine positioning
 - Hold `Shift` for faster movement
 
 #### Resizing Components
+
 - Click and drag corner/edge handles
 - Hold `Shift` to maintain aspect ratio
 - Use Properties panel for precise dimensions
 
 #### Aligning Components
+
 - Select multiple components (`Ctrl+Click`)
 - Use alignment tools (if available)
 - Use grid snap for manual alignment
 
 #### Deleting Components
+
 - Select component(s)
 - Press `Delete` key or right-click → Delete
 
 ### Screen Properties
 
 Each screen has properties:
+
 - **Name**: Screen identifier
 - **Size**: Width and height in pixels
 - **Background**: Background color or image
@@ -402,6 +443,7 @@ Each screen has properties:
 ### Screen Templates
 
 Screens can be used as templates:
+
 - Create base screens with common elements
 - Inherit from templates
 - Override template properties as needed
@@ -423,6 +465,7 @@ Components are the building blocks of HMI screens. They provide visual represent
 #### 1. Basic Controls
 
 **Buttons**
+
 - Standard push buttons
 - Toggle buttons
 - Radio buttons
@@ -430,6 +473,7 @@ Components are the building blocks of HMI screens. They provide visual represent
 - Properties: Text, icon, colors, events
 
 **Text Input**
+
 - Single-line text input
 - Multi-line text area
 - Numeric input (with validation)
@@ -437,6 +481,7 @@ Components are the building blocks of HMI screens. They provide visual represent
 - Properties: Placeholder, validation, format
 
 **Selection Controls**
+
 - ComboBox (dropdown)
 - ListBox
 - RadioButton groups
@@ -444,6 +489,7 @@ Components are the building blocks of HMI screens. They provide visual represent
 - Properties: Options, default selection
 
 **Sliders and Spinners**
+
 - Horizontal/vertical sliders
 - Numeric spinners
 - Properties: Min/max, step, orientation
@@ -451,27 +497,32 @@ Components are the building blocks of HMI screens. They provide visual represent
 #### 2. Industrial Components
 
 **Pumps**
+
 - Visual pump representation
 - States: Running, Stopped, Fault
 - Properties: Colors, animations, tag bindings
 
 **Motors**
+
 - Motor visualization
 - Speed indication
 - Status indicators
 
 **Tanks**
+
 - Tank level visualization
 - Fill percentage
 - High/low level indicators
 - Properties: Capacity, units, colors
 
 **Valves**
+
 - Valve position visualization
 - Open/closed states
 - Flow direction indicators
 
 **Conveyors**
+
 - Conveyor belt visualization
 - Direction and speed
 - Status indicators
@@ -479,6 +530,7 @@ Components are the building blocks of HMI screens. They provide visual represent
 #### 3. Data Visualization
 
 **TrendView**
+
 - Real-time trending
 - Historical trending
 - Multiple tag support
@@ -486,18 +538,21 @@ Components are the building blocks of HMI screens. They provide visual represent
 - Properties: Tags, time range, colors, axes
 
 **GaugeView**
+
 - Circular gauges
 - Linear gauges
 - Digital displays
 - Properties: Min/max, units, colors, ranges
 
 **AlarmView**
+
 - Alarm list display
 - Alarm status indicators
 - Alarm history
 - Properties: Filter, sort, acknowledge actions
 
 **TableView**
+
 - Data grid display
 - Tag value tables
 - Sortable columns
@@ -506,16 +561,19 @@ Components are the building blocks of HMI screens. They provide visual represent
 #### 4. Layout Components
 
 **TabComponent**
+
 - Multi-page layouts
 - Tab navigation
 - Properties: Tab labels, pages, styling
 
 **PopupComponent**
+
 - Modal dialogs
 - Overlay windows
 - Properties: Size, position, modal behavior
 
 **Container Components**
+
 - Group boxes
 - Panels
 - Scroll areas
@@ -540,6 +598,7 @@ Most components can be bound to tags:
 5. Component will display/control tag value
 
 **Binding Types:**
+
 - **Read**: Display tag value (read-only)
 - **Write**: Control tag value (write-only)
 - **Read/Write**: Both display and control
@@ -547,12 +606,14 @@ Most components can be bound to tags:
 ### Component Events
 
 Components can trigger events:
+
 - **Click**: Button press, component click
 - **Value Changed**: Input value change
 - **Mouse Enter/Leave**: Hover events
 - **Focus**: Focus gained/lost
 
 Events can be connected to:
+
 - Scripts
 - Screen navigation
 - Tag writes
@@ -561,6 +622,7 @@ Events can be connected to:
 ### Component Styling
 
 Components support extensive styling:
+
 - **Colors**: Background, foreground, border
 - **Fonts**: Font family, size, style
 - **Borders**: Width, style, radius
@@ -570,6 +632,7 @@ Components support extensive styling:
 ### Component Libraries
 
 Components are organized in libraries:
+
 - Access via Components Palette
 - Search functionality
 - Category filtering
@@ -584,11 +647,14 @@ AccuTrack Designer includes an embedded Lua scripting engine (v5.4.7) for custom
 ### Script Editor
 
 The Script Editor provides:
+
 - **Syntax Highlighting**: Lua syntax coloring
 - **Code Completion**: Auto-completion support
 - **Error Marking**: Visual error indicators
 - **Line Numbers**: Easy navigation
 - **Search/Replace**: Find and replace functionality
+
+![Lua scripting](images/Lua%20Scripting.png)
 
 ### Creating Scripts
 
@@ -646,19 +712,17 @@ local quality = getTagQuality("TagName")
 Scripts can execute in different contexts:
 
 1. **Event-Triggered**: Execute when specific events occur
-   - Tag value changes
-   - ButtOnClicks
-   - Timer events
-   - Alarm conditions
-
+  - Tag value changes
+  - ButtOnClicks
+  - Timer events
+  - Alarm conditions
 2. **Periodic**: Execute at regular intervals
-   - Configure scan rate
-   - Continuous monitoring
-   - Background processing
-
+  - Configure scan rate
+  - Continuous monitoring
+  - Background processing
 3. **Startup/Shutdown**: Execute once
-   - System initialization
-   - Cleanup operations
+  - System initialization
+  - Cleanup operations
 
 ### Script Functions
 
@@ -688,6 +752,7 @@ string.format(...)        -- String formatting
 ### Script Scheduling
 
 Scripts can be scheduled via the Schedules module:
+
 1. Create a schedule
 2. Select script to execute
 3. Configure timing (daily, weekly, etc.)
@@ -696,6 +761,7 @@ Scripts can be scheduled via the Schedules module:
 ### Script Debugging
 
 Debugging features:
+
 - **Console Output**: Use `print()` to output messages
 - **Error Messages**: Syntax and runtime errors displayed
 - **Breakpoints**: (If supported) Set breakpoints
@@ -704,24 +770,21 @@ Debugging features:
 ### Script Best Practices
 
 1. **Error Handling**: Always handle errors
-   ```lua
+  ```lua
    local success, result = pcall(function()
        -- Risky code
    end)
-   ```
-
+  ```
 2. **Performance**: Keep scripts efficient
-   - Avoid tight loops
-   - Use appropriate scan rates
-   - Minimize tag reads/writes
-
+  - Avoid tight loops
+  - Use appropriate scan rates
+  - Minimize tag reads/writes
 3. **Documentation**: Comment your code
-   ```lua
+  ```lua
    -- Purpose: Calculate average temperature
    -- Author: Your Name
    -- Date: 2024-01-01
-   ```
-
+  ```
 4. **Modularity**: Break complex logic into functions
 5. **Testing**: Test scripts thoroughly before deployment
 
@@ -734,11 +797,13 @@ Alarms notify operators of abnormal conditions and events in the process.
 ### Alarm Types
 
 #### Digital Alarms
+
 - Trigger on Boolean tag state changes
 - ON alarm: Triggers when tag becomes true
 - OFF alarm: Triggers when tag becomes false
 
 #### Analog Alarms
+
 - Trigger on numeric tag threshold violations
 - **High**: Tag exceeds high limit
 - **Low**: Tag falls below low limit
@@ -746,10 +811,12 @@ Alarms notify operators of abnormal conditions and events in the process.
 - **Low-Low**: Critical low condition
 
 #### Deviation Alarms
+
 - Trigger when tag deviates from setpoint
 - Deadband to prevent oscillation
 
 #### Rate-of-Change Alarms
+
 - Trigger on rapid value changes
 - Prevents sudden spikes/drops
 
@@ -761,23 +828,27 @@ Alarms notify operators of abnormal conditions and events in the process.
 4. Configure alarm properties:
 
 **Basic Properties:**
+
 - **Name**: Unique alarm identifier
 - **Description**: Human-readable description
 - **Tag**: Tag to monitor
 - **Type**: Digital, Analog, etc.
 
 **Condition Properties:**
+
 - **Condition**: Trigger condition
 - **Threshold**: Threshold value (for analog)
 - **Deadband**: Hysteresis to prevent oscillation
 - **Delay**: Time delay before triggering
 
 **Priority and Severity:**
+
 - **Priority**: 1-100 (higher = more important)
 - **Severity**: Critical, High, Medium, Low
 - **Category**: Alarm category for grouping
 
 **Behavior:**
+
 - **Latching**: Alarm remains active until acknowledged
 - **Auto-Acknowledge**: Automatically acknowledge when condition clears
 - **Shelving**: Allow temporary suppression
@@ -785,15 +856,19 @@ Alarms notify operators of abnormal conditions and events in the process.
 ### Alarm Editor
 
 The Alarm Editor provides:
+
 - **Alarm List**: Table of all alarms
 - **Filtering**: Filter by type, priority, status
 - **Search**: Find alarms quickly
 - **Bulk Edit**: Edit multiple alarms
 - **Validation**: Verify alarm configuration
 
+![Alarm configuration](images/Alarms%20Config.png)
+
 ### Alarm States
 
 Alarms can be in various states:
+
 - **Normal**: Condition not met, no alarm
 - **Active**: Condition met, alarm active
 - **Acknowledged**: Alarm acknowledged by operator
@@ -803,6 +878,7 @@ Alarms can be in various states:
 ### Alarm Actions
 
 Alarms can trigger actions:
+
 - **Notifications**: Display messages, sounds
 - **Scripts**: Execute Lua scripts
 - **Tag Writes**: Set tag values
@@ -812,6 +888,7 @@ Alarms can trigger actions:
 ### Alarm History
 
 Alarm events are logged:
+
 - **Event Log**: All alarm state changes
 - **Timestamp**: When events occurred
 - **Operator**: Who acknowledged (if applicable)
@@ -820,6 +897,7 @@ Alarm events are logged:
 ### Alarm Display
 
 Alarms are displayed in:
+
 - **Alarm View Component**: On HMI screens
 - **Alarm List**: Tabular display
 - **Alarm Banner**: Top-of-screen summary
@@ -843,6 +921,8 @@ The Communication module configures connections to external devices (PLCs, senso
 2. Double-click **Communication Modules** to open editor
 3. Configure communication settings
 
+![Communication configuration](images/Communication%20Config.png)
+
 ### Modbus Configuration
 
 #### Creating a Modbus Connection
@@ -852,6 +932,7 @@ The Communication module configures connections to external devices (PLCs, senso
 3. Configure connection properties:
 
 **Modbus TCP:**
+
 - **Name**: Connection identifier
 - **IP Address**: Device IP address
 - **Port**: TCP port (default 502)
@@ -860,6 +941,7 @@ The Communication module configures connections to external devices (PLCs, senso
 - **Retry Count**: Number of retry attempts
 
 **Modbus RTU:**
+
 - **Name**: Connection identifier
 - **Port**: Serial port (COM1, /dev/ttyUSB0, etc.)
 - **Baud Rate**: 9600, 19200, 38400, etc.
@@ -871,6 +953,7 @@ The Communication module configures connections to external devices (PLCs, senso
 #### Modbus Scanner
 
 The Modbus Scanner helps discover devices:
+
 1. Open **Device Manager** tab
 2. Click **Scan for Devices**
 3. Configure scan parameters
@@ -887,6 +970,7 @@ The Modbus Scanner helps discover devices:
 3. Configure connection:
 
 **Connection Properties:**
+
 - **Name**: Connection identifier
 - **Endpoint URL**: OPC UA server endpoint
 - **Security Policy**: Security policy (None, Basic128Rsa15, etc.)
@@ -895,6 +979,7 @@ The Modbus Scanner helps discover devices:
 - **Certificate**: Client certificate (if required)
 
 **Node Browsing:**
+
 1. Click **Browse Nodes**
 2. Connect to OPC UA server
 3. Browse server address space
@@ -904,6 +989,7 @@ The Modbus Scanner helps discover devices:
 ### Tag Mapping
 
 After configuring communication:
+
 1. Map device addresses to tags
 2. In Tag Editor, set tag addresses
 3. Addresses reference communication connections
@@ -912,6 +998,7 @@ After configuring communication:
 ### Connection Status
 
 Monitor connection status:
+
 - **Connected**: Active connection
 - **Disconnected**: No connection
 - **Error**: Connection error
@@ -920,6 +1007,7 @@ Monitor connection status:
 ### Communication Diagnostics
 
 Diagnostic tools:
+
 - **Traffic Monitor**: View communication traffic
 - **Error Log**: Communication errors
 - **Performance Metrics**: Response times, throughput
@@ -946,6 +1034,7 @@ The Security module manages user accounts, roles, and permissions.
 3. Configure user properties:
 
 **User Properties:**
+
 - **Username**: Unique username (required)
 - **Full Name**: User's full name
 - **Email**: Email address
@@ -957,6 +1046,7 @@ The Security module manages user accounts, roles, and permissions.
 #### User Roles
 
 Roles define permission sets:
+
 - **Administrator**: Full system access
 - **Operator**: Operational access, limited configuration
 - **Viewer**: Read-only access
@@ -970,23 +1060,25 @@ Groups organize users and inherit permissions:
 1. Click **Groups** tab
 2. Click **Add Group**
 3. Configure group:
-   - **Name**: Group identifier
-   - **Description**: Group description
-   - **Parent Group**: Hierarchical grouping
-   - **Members**: Users in group
-   - **Roles**: Roles assigned to group
+  - **Name**: Group identifier
+  - **Description**: Group description
+  - **Parent Group**: Hierarchical grouping
+  - **Members**: Users in group
+  - **Roles**: Roles assigned to group
 
 ### Permission System
 
 Permissions control access to resources:
 
 **Permission Types:**
+
 - **View**: Read-only access
 - **Control**: Write/control access
 - **Configure**: Configuration access
 - **Admin**: Administrative access
 
 **Resource Types:**
+
 - Tags
 - Screens
 - Scripts
@@ -997,6 +1089,7 @@ Permissions control access to resources:
 ### Access Levels
 
 Tags and components can have access levels:
+
 - **Public**: No authentication required
 - **Operator**: Operator role or higher
 - **Engineer**: Engineer role or higher
@@ -1005,6 +1098,7 @@ Tags and components can have access levels:
 ### Authentication
 
 Users authenticate with:
+
 - **Username/Password**: Standard authentication
 - **Session Management**: Active session tracking
 - **Timeout**: Automatic logout after inactivity
@@ -1012,6 +1106,7 @@ Users authenticate with:
 ### Audit Trail
 
 Security events are logged:
+
 - **Login/Logout**: User authentication events
 - **Permission Denials**: Access denied events
 - **Configuration Changes**: Security configuration changes
@@ -1029,21 +1124,27 @@ Schedules automate script execution and tasks.
 2. Double-click **Schedules** to open editor
 3. Create and manage schedules
 
+![Schedules configuration](images/Schedules%20config.png)
+
 ### Schedule Types
 
 #### One-Time Schedule
+
 - Execute once at specified time
 - Use for: Initialization, one-time tasks
 
 #### Daily Schedule
+
 - Execute daily at specified time(s)
 - Use for: Daily reports, maintenance tasks
 
 #### Weekly Schedule
+
 - Execute on specific days of week
 - Use for: Weekly summaries, recurring tasks
 
 #### Monthly Schedule
+
 - Execute on specific days of month
 - Use for: Monthly reports, billing cycles
 
@@ -1053,18 +1154,21 @@ Schedules automate script execution and tasks.
 2. Configure schedule properties:
 
 **Basic Properties:**
+
 - **Name**: Schedule identifier
 - **Description**: Schedule description
 - **Type**: One-Time, Daily, Weekly, Monthly
 - **Enabled**: Enable/disable schedule
 
 **Timing Properties:**
+
 - **Start Time**: When to start execution
 - **End Time**: When to stop (if applicable)
 - **Scan Cycle**: Execution interval (ms)
 - **Days**: Days of week/month (for weekly/monthly)
 
 **Execution Properties:**
+
 - **Script**: Lua script to execute
 - **Parameters**: Script parameters
 - **Priority**: Execution priority (1-100)
@@ -1074,6 +1178,7 @@ Schedules automate script execution and tasks.
 ### Script Selection
 
 When creating a schedule:
+
 1. Click **Select Script**
 2. Browse available scripts
 3. Select script
@@ -1083,6 +1188,7 @@ When creating a schedule:
 ### Schedule Status
 
 Monitor schedule status:
+
 - **Active**: Schedule is running
 - **Inactive**: Schedule is disabled
 - **Executing**: Currently running
@@ -1092,6 +1198,7 @@ Monitor schedule status:
 ### Schedule History
 
 View execution history:
+
 - **Execution Log**: Past executions
 - **Success/Failure**: Execution results
 - **Execution Time**: When executed
@@ -1109,6 +1216,8 @@ The Historian module configures data collection and storage for trending and ana
 2. Double-click **Historian** to open editor
 3. Configure data collection
 
+![Historian configuration](images/Historian%20config.png)
+
 ### Data Collection Configuration
 
 #### Tag Selection
@@ -1120,12 +1229,14 @@ The Historian module configures data collection and storage for trending and ana
 #### Collection Settings
 
 **Sampling Rate:**
+
 - **Periodic**: Sample at fixed interval
 - **On Change**: Sample when value changes
 - **On Change with Deadband**: Sample on significant change
 - **Rate of Change**: Sample based on rate of change
 
 **Storage Settings:**
+
 - **In-Memory Buffer**: Circular buffer size
 - **Persistent Storage**: Archive to disk
 - **Compression**: Data compression settings
@@ -1134,6 +1245,7 @@ The Historian module configures data collection and storage for trending and ana
 ### Deadband Configuration
 
 Deadband prevents excessive data collection:
+
 - **Absolute Deadband**: Value must change by fixed amount
 - **Percent Deadband**: Value must change by percentage
 - **Rate Deadband**: Rate of change threshold
@@ -1141,12 +1253,14 @@ Deadband prevents excessive data collection:
 ### Data Storage
 
 **Storage Options:**
+
 - **Circular Buffer**: In-memory ring buffer
 - **File Archive**: Persistent file storage
 - **Database**: Database storage (if configured)
 - **Compression**: Compress archived data
 
 **Retention Policy:**
+
 - **Time-Based**: Keep data for X days
 - **Size-Based**: Keep until storage limit
 - **Automatic Cleanup**: Remove old data
@@ -1154,6 +1268,7 @@ Deadband prevents excessive data collection:
 ### Data Retrieval
 
 Retrieve historical data for:
+
 - **Trending**: Display in TrendView components
 - **Reports**: Generate reports
 - **Analysis**: Data analysis
@@ -1162,10 +1277,89 @@ Retrieve historical data for:
 ### Integration with Trends
 
 Historical data is used by TrendView components:
+
 1. Configure TrendView on screen
 2. Select tags to trend
 3. Set time range (real-time or historical)
 4. TrendView displays data from historian
+
+---
+
+## Machine Learning Configuration
+
+The Machine Learning (ML) module lets you configure inference models that run at Runtime. Models read values from input tags (or from Historian time-series data) and write predictions to an output tag. This supports use cases such as quality prediction, soft sensing, and anomaly detection.
+
+### Overview
+
+- **Designer:** You define ML settings and one or more models per SCADA project. Each model specifies a model kind (algorithm), path to trained data, input tags, output tag, and optional historian-based inference.
+- **Runtime:** The ML Engine loads configuration and trained model files, subscribes to input tags, and runs inference when tag values change (or on a timer using historian data). Predictions are written to the output tag and can optionally be stored in the ML results database.
+- **Build:** The build copies `machine_learning.json` and trained model files (and any ML plugins) into the deployment package so Runtime can load them.
+
+### Opening the ML Editor
+
+1. In **Project View**, expand your SCADA project.
+2. Double-click **Machine Learning** (or right-click → Open).
+3. The Machine Learning editor opens with **ML Settings** at the top and a **Models** grid below.
+
+![Machine learning configuration](images/ML%20Models%20config.png)
+
+### ML Settings (Project Level)
+
+- **Enable Machine Learning:** Master switch; when unchecked, Runtime does not load or run any ML models.
+- **Training Data Path:** Optional folder path for training data (used by training workflows; Runtime uses per-model trained data paths).
+- **Training Interval (hours):** Configurable interval for periodic training (e.g. 24 hours); used when automated training is implemented.
+
+### Model Kinds
+
+The system supports multiple model kinds (algorithms). Built-in kinds include:
+
+- **Fast Forest (Regression):** ML.NET Fast Forest; N numeric inputs, one numeric output; trained data format ML.NET.zip.
+- **LightGBM:** Gradient boosting (LightGBM); N numeric inputs, one numeric output.
+
+Future implementations: Additional kinds can be installed via the Package Manager or “Add from folder” and appear in the Model kind catalog. Each kind defines input/output schema, trained data format, and optional parameters (e.g. data cleaning method, moving average window).
+
+### Adding and Configuring Models
+
+1. Click **Add Model** in the toolbar. The **Configure Model** dialog opens.
+2. **Basic:** Set **Name**, **Model kind** (e.g. Fast Forest Regression, LightGBM), **Trained data path** (project-relative path to the trained model file, e.g. `machine_learning/data/MyModel.zip`).
+3. **Input/Output:** Select **Input tags** (one or more tags whose values are used as features) and **Output tag** (tag where the prediction is written). You can use historian-configured tags for input/output.
+4. **Optional:** Enable **Use historian time-series** to run inference from historian data on a timer (configurable time range and max rows per tag). Enable **Save results to DB** to persist predictions to the ML results database.
+5. **Parameters:** Some model kinds expose parameters (e.g. data cleaning method, moving average window); set them in the dialog.
+6. Click **OK** to add the model. It appears in the grid.
+
+To edit a model, select the row and click **Configure...** or double-click the row.
+
+### Toolbar Actions
+
+- **Add Model:** Open Configure Model dialog to add a new model.
+- **Configure...:** Edit the selected model.
+- **Remove Model:** Remove the selected model from the list.
+- **Set trained data...:** Set the trained data file path for the selected model (e.g. browse to a `.zip` file).
+- **Select input tag...** / **Select output tag...:** Add or set input/output tags for the selected model (with optional historian tag filter).
+
+### Model Grid Columns
+
+- **Name:** Model display name.
+- **Model kind:** Algorithm (Fast Forest, LightGBM, or installed kind).
+- **Trained data:** Project-relative path to the trained model file.
+- **Input Tags:** Comma-separated list of input tag names.
+- **Output Tag:** Tag name where prediction is written.
+- **Enabled:** When checked, the model is loaded and run at Runtime; when unchecked, it is skipped.
+
+### Trained Model Data
+
+- Trained model files (e.g. `.zip` for ML.NET, or format required by the model kind) must be placed in the project (e.g. under `Machine Learning/` or `machine_learning/data/`) or referenced by a path that the build can copy.
+- The build copies ML configuration to `json/machine_learning.json` and trained data (and plugins) to the Runtime build output (e.g. `mlmodels/`) so that Runtime finds them at runtime.
+
+### Historian Integration
+
+- For **live-tag inference:** the Runtime subscribes to input tags and runs the model when any input value changes; the result is written to the output tag.
+- For **historian time-series inference:** enable “Use historian time-series” for the model. Runtime runs the model on a configurable interval (e.g. every 60 seconds), queries the Historian for the configured time range and max rows per tag, and uses the retrieved values as inputs. Useful when the model expects a time window of data rather than a single snapshot.
+
+### Saving and Building
+
+- Save the project to persist ML configuration to `machine_learning.json` in the project’s Machine Learning folder.
+- **Build → Build Project** (`F7`) includes ML in the build: it generates/copies `json/machine_learning.json` and trained model files (and ML plugins) into the deployment package for Runtime.
 
 ---
 
@@ -1175,27 +1369,31 @@ Before deploying to Runtime, projects must be built (compiled).
 
 ### Building a Project
 
-1. **Build → Build Project** (or `Ctrl+B`)
+1. **Build → Build Project** (or `F7`)
 2. Build process:
-   - Validates project configuration
-   - Compiles resources
-   - Generates deployment package
-   - Creates QML files for Runtime
-   - Packages all assets
+  - Validates project configuration
+  - Compiles resources
+  - Generates deployment package
+  - Creates JSON configuration and screen definitions for Runtime
+  - Produces `metadata.iscr` and `json/*.json`, `screens/*.json`
+  - Packages all assets
 3. Monitor build progress in **Output** tab
 4. Build errors displayed in **Output** tab
 
 ### Build Output
 
 Build creates:
-- **Deployment Package**: Complete project package
-- **QML Files**: Runtime visualization files
-- **JSON Configuration**: Project configuration
-- **Resource Files**: Images, fonts, etc.
+
+- **Deployment package**: Complete project for Runtime (e.g. in project `build/` folder)
+- **metadata.iscr**: Project manifest (name, version, resolution, config paths)
+- **JSON configuration**: Tags, communications, alarms, scripts, historian, security, etc. in `json/`
+- **Screen definitions**: Per-screen JSON in `screens/` for Runtime (Avalonia) visualization
+- **Resource files**: Images, fonts, etc.
 
 ### Build Validation
 
 Build process validates:
+
 - **Tag References**: All tag references valid
 - **Screen References**: All screen references valid
 - **Script Syntax**: Lua scripts compile
@@ -1205,21 +1403,25 @@ Build process validates:
 ### Build Errors
 
 If build fails:
+
 1. Check **Output** tab for errors
 2. Fix reported issues
 3. Rebuild project
 4. Common issues:
-   - Invalid tag references
-   - Missing files
-   - Syntax errors in scripts
-   - Invalid addresses
+  - Invalid tag references
+  - Missing files
+  - Syntax errors in scripts
+  - Invalid addresses
 
 ### Cleaning a Project
 
 **Build → Clean Project**:
-- Removes build artifacts
+
+- Removes build artifacts (e.g. `build/` output)
 - Cleans temporary files
 - Prepares for fresh build
+
+**Build → Rebuild Project** (`Ctrl+F7`): Cleans then builds in one step.
 
 ### Deployment to Device
 
@@ -1231,9 +1433,12 @@ If build fails:
 4. Transfer project package
 5. Verify deployment
 
+![Download to device](images/Download%20to%20device.png)
+
 #### Device Requirements
 
 Target device must have:
+
 - AccuTrack Runtime installed
 - Network connectivity (for network deployment)
 - Sufficient storage space
@@ -1242,6 +1447,7 @@ Target device must have:
 ### Upload from Device
 
 **Upload → Upload from Device**:
+
 1. Connect to device
 2. Select project to upload
 3. Download project package
@@ -1263,22 +1469,23 @@ Access via **Project View → Devices** tab.
 
 1. Click **Scan for Devices**
 2. Configure scan parameters:
-   - **Protocol**: Modbus, OPC UA, etc.
-   - **IP Range**: Network range to scan
-   - **Port**: Communication port
-   - **Timeout**: Scan timeout
+  - **Protocol**: Modbus, OPC UA, etc.
+  - **IP Range**: Network range to scan
+  - **Port**: Communication port
+  - **Timeout**: Scan timeout
 3. Start scan
 4. Discovered devices appear in list
 
 #### Modbus Scanner
 
 For Modbus devices:
+
 1. Select **Modbus** protocol
 2. Configure network settings
 3. Scan discovers:
-   - Device addresses
-   - Available registers
-   - Device information
+  - Device addresses
+  - Available registers
+  - Device information
 
 ### Device Configuration
 
@@ -1286,17 +1493,18 @@ For Modbus devices:
 
 1. Click **Add Device**
 2. Configure device:
-   - **Name**: Device identifier
-   - **Type**: Device type
-   - **Protocol**: Communication protocol
-   - **Address**: Network address
-   - **Port**: Communication port
+  - **Name**: Device identifier
+  - **Type**: Device type
+  - **Protocol**: Communication protocol
+  - **Address**: Network address
+  - **Port**: Communication port
 3. Test connection
 4. Save device
 
 ### Device Status
 
 Monitor device status:
+
 - **Online**: Device is connected
 - **Offline**: Device is disconnected
 - **Error**: Communication error
@@ -1305,6 +1513,7 @@ Monitor device status:
 ### Device Information
 
 View device details:
+
 - **Device ID**: Unique identifier
 - **Firmware Version**: Device firmware
 - **Capabilities**: Supported features
@@ -1317,128 +1526,113 @@ View device details:
 ### Project Organization
 
 1. **Naming Conventions**: Use consistent naming
-   - Tags: `Tank1_Level`, `Pump1_Status`
-   - Screens: `MainScreen`, `AlarmScreen`
-   - Scripts: `StartupScript`, `AlarmHandler`
-
+  - Tags: `Tank1_Level`, `Pump1_Status`
+  - Screens: `MainScreen`, `AlarmScreen`
+  - Scripts: `StartupScript`, `AlarmHandler`
 2. **Folder Structure**: Organize by function
-   - Group related tags
-   - Organize screens by area
-   - Separate scripts by purpose
-
+  - Group related tags
+  - Organize screens by area
+  - Separate scripts by purpose
 3. **Documentation**: Document complex configurations
-   - Add descriptions to tags
-   - Comment scripts
-   - Document screen purposes
+  - Add descriptions to tags
+  - Comment scripts
+  - Document screen purposes
 
 ### Tag Management
 
 1. **Tag Naming**: Use descriptive names
-   - Include location/equipment
-   - Include measurement type
-   - Use consistent abbreviations
-
+  - Include location/equipment
+  - Include measurement type
+  - Use consistent abbreviations
 2. **Tag Organization**: Group related tags
-   - Use tag tables for logical groups
-   - Organize by process area
-   - Separate I/O from memory tags
-
+  - Use tag tables for logical groups
+  - Organize by process area
+  - Separate I/O from memory tags
 3. **Tag Validation**: Validate early
-   - Check addresses before deployment
-   - Verify data types
-   - Test tag connections
+  - Check addresses before deployment
+  - Verify data types
+  - Test tag connections
 
 ### Screen Design
 
 1. **Layout**: Design for clarity
-   - Group related information
-   - Use consistent positioning
-   - Follow operator workflow
-
+  - Group related information
+  - Use consistent positioning
+  - Follow operator workflow
 2. **Colors**: Use standard conventions
-   - Red: Alarm, Stop
-   - Green: Normal, Running
-   - Yellow: Warning, Caution
-   - Blue: Information
-
+  - Red: Alarm, Stop
+  - Green: Normal, Running
+  - Yellow: Warning, Caution
+  - Blue: Information
 3. **Components**: Use appropriate components
-   - Match component to data type
-   - Use industrial components for equipment
-   - Provide clear visual feedback
-
+  - Match component to data type
+  - Use industrial components for equipment
+  - Provide clear visual feedback
 4. **Navigation**: Make navigation intuitive
-   - Clear navigation paths
-   - Breadcrumbs or menu bars
-   - Quick access to critical screens
+  - Clear navigation paths
+  - Breadcrumbs or menu bars
+  - Quick access to critical screens
 
 ### Scripting
 
 1. **Performance**: Write efficient scripts
-   - Minimize tag reads/writes
-   - Use appropriate scan rates
-   - Avoid blocking operations
-
+  - Minimize tag reads/writes
+  - Use appropriate scan rates
+  - Avoid blocking operations
 2. **Error Handling**: Always handle errors
-   - Use pcall for risky operations
-   - Log errors appropriately
-   - Provide fallback behavior
-
+  - Use pcall for risky operations
+  - Log errors appropriately
+  - Provide fallback behavior
 3. **Modularity**: Break into functions
-   - Reusable functions
-   - Clear function names
-   - Single responsibility
+  - Reusable functions
+  - Clear function names
+  - Single responsibility
 
 ### Security
 
 1. **Access Levels**: Set appropriate levels
-   - Public for read-only displays
-   - Operator for control actions
-   - Engineer for configuration
-
+  - Public for read-only displays
+  - Operator for control actions
+  - Engineer for configuration
 2. **User Management**: Follow best practices
-   - Strong passwords
-   - Regular password changes
-   - Disable unused accounts
-
+  - Strong passwords
+  - Regular password changes
+  - Disable unused accounts
 3. **Audit Trail**: Enable logging
-   - Track important actions
-   - Monitor access attempts
-   - Review logs regularly
+  - Track important actions
+  - Monitor access attempts
+  - Review logs regularly
 
 ### Communication
 
 1. **Connection Management**: Configure properly
-   - Appropriate timeouts
-   - Retry settings
-   - Error handling
-
+  - Appropriate timeouts
+  - Retry settings
+  - Error handling
 2. **Address Mapping**: Map addresses correctly
-   - Verify device addresses
-   - Test connections
-   - Document mappings
-
+  - Verify device addresses
+  - Test connections
+  - Document mappings
 3. **Performance**: Optimize communication
-   - Group tag reads
-   - Use appropriate scan rates
-   - Monitor traffic
+  - Group tag reads
+  - Use appropriate scan rates
+  - Monitor traffic
 
 ### Testing
 
 1. **Test Before Deployment**: Always test
-   - Test tag connections
-   - Test screen navigation
-   - Test scripts
-   - Test alarms
-
+  - Test tag connections
+  - Test screen navigation
+  - Test scripts
+  - Test alarms
 2. **Incremental Development**: Build incrementally
-   - Add features one at a time
-   - Test each addition
-   - Verify before proceeding
-
+  - Add features one at a time
+  - Test each addition
+  - Verify before proceeding
 3. **Backup**: Keep backups
-   - Regular project backups
-   - Version control (if possible)
-   - Archive old versions
+  - Regular project backups
+  - Version control (if possible)
+  - Archive old versions
 
 ---
 
@@ -1451,6 +1645,7 @@ View device details:
 **Symptoms**: Error opening project file
 
 **Solutions**:
+
 1. Verify file is valid `.isc` file
 2. Check file permissions
 3. Verify project structure is intact
@@ -1461,6 +1656,7 @@ View device details:
 **Symptoms**: Tag values not changing
 
 **Solutions**:
+
 1. Check communication connection status
 2. Verify tag addresses are correct
 3. Check device is online
@@ -1472,6 +1668,7 @@ View device details:
 **Symptoms**: Components missing or not visible
 
 **Solutions**:
+
 1. Check component visibility property
 2. Verify component is not behind another
 3. Check Z-order/layering
@@ -1483,6 +1680,7 @@ View device details:
 **Symptoms**: Scripts not executing or errors
 
 **Solutions**:
+
 1. Check script syntax in editor
 2. Verify tag names are correct
 3. Check script execution context
@@ -1494,6 +1692,7 @@ View device details:
 **Symptoms**: Build process fails
 
 **Solutions**:
+
 1. Check Output tab for specific errors
 2. Verify all referenced files exist
 3. Check tag references are valid
@@ -1505,6 +1704,7 @@ View device details:
 **Symptoms**: Cannot connect to devices
 
 **Solutions**:
+
 1. Verify network connectivity
 2. Check IP addresses and ports
 3. Verify device is powered and online
@@ -1517,6 +1717,7 @@ View device details:
 **Symptoms**: Alarms not activating when expected
 
 **Solutions**:
+
 1. Verify alarm condition is correct
 2. Check tag value is updating
 3. Verify threshold values
@@ -1531,18 +1732,17 @@ View device details:
 3. **Error Messages**: Read error messages carefully
 4. **Logs**: Review application logs
 5. **Support**: Contact support with:
-   - Error messages
-   - Steps to reproduce
-   - Project configuration
-   - System information
+  - Error messages
+  - Steps to reproduce
+  - Project configuration
+  - System information
 
 ### Debugging Tips
 
 1. **Use Console**: Print debug information
-   ```lua
+  ```lua
    print("Debug: Tag value = " .. tagValue)
-   ```
-
+  ```
 2. **Check Properties**: Verify component properties
 3. **Test Incrementally**: Test one feature at a time
 4. **Use Breakpoints**: (If available) Set breakpoints in scripts
@@ -1555,31 +1755,39 @@ View device details:
 
 ### Keyboard Shortcuts
 
-| Action | Shortcut |
-|--------|----------|
-| New Project | `Ctrl+N` |
-| Open Project | `Ctrl+O` |
-| Save Project | `Ctrl+S` |
-| Build Project | `Ctrl+B` |
-| Close Tab | `Ctrl+W` |
-| Copy | `Ctrl+C` |
-| Paste | `Ctrl+V` |
-| Delete | `Delete` |
-| Undo | `Ctrl+Z` |
-| Redo | `Ctrl+Y` |
+
+| Action             | Shortcut                       |
+| ------------------ | ------------------------------ |
+| New Project        | `Ctrl+N`                       |
+| Open Project       | `Ctrl+O`                       |
+| Save               | `Ctrl+S`                       |
+| Save As / Save All | `Ctrl+Shift+S`                 |
+| Close Project      | `Ctrl+W`                       |
+| Close tab          | `Ctrl+F4`                      |
+| Build Project      | `F7`                           |
+| Rebuild Project    | `Ctrl+F7`                      |
+| Download to Device | `F5`                           |
+| Upload from Device | `F6`                           |
+| Start Simulation   | `F9`                           |
+| Pause Simulation   | `F10`                          |
+| Stop Simulation    | `Shift+F9`                     |
+| Documentation      | `F1`                           |
+| Rename             | `F2`                           |
+| Copy / Paste / Cut | `Ctrl+C` / `Ctrl+V` / `Ctrl+X` |
+| Delete             | `Delete`                       |
+| Undo / Redo        | `Ctrl+Z` / `Ctrl+Y`            |
+
 
 ### File Extensions
 
-- `.isc` - AccuTrack project file
+- `.isc` - AccuTrack Designer project file
+- `.iscr` - Runtime project manifest (metadata.iscr) produced by build
 - `.lua` - Lua script file
-- `.json` - Configuration files
-- `.qml` - QML screen files
+- `.json` - Configuration files (tags, communications, alarms, screens, etc.); build output uses `json/` and `screens/*.json` for Runtime
 
 ### Project File Locations
 
-Projects are typically stored in:
-- **Windows**: `%USERPROFILE%\Documents\AccuTrack\Projects\`
-- **Linux**: `~/Documents/AccuTrack/Projects/`
+Projects are typically stored in a location you choose when creating or opening a project (e.g. `File → New Project` or `Open Project`). The Designer stores the project file as `ProjectName.isc` in that folder; the build output (for deployment to Runtime) is generated in a `build/` directory (e.g. containing `metadata.iscr`, `json/`, `screens/`).
 
 ### Support Resources
 
@@ -1587,10 +1795,4 @@ Projects are typically stored in:
 - **Requirements Specification**: See SRS document
 - **Module Documentation**: See ReadMe files
 - **Code Documentation**: Inline code comments
-
----
-
-**End of User Guide**
-
-For technical specifications and architecture details, refer to the Requirements Specification (SRS) document.
 

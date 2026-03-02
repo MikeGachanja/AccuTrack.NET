@@ -1,8 +1,8 @@
 # AccuTrack SCADA – How to Use
 
 **Version:** 1.0  
-**Last Updated:** 2024  
-**Applies to:** SCADA Designer (Qt C++), SCADA Runtime (Qt/QML)
+**Last Updated:** February 2025  
+**Applies to:** SCADA Designer (.NET/C# Windows Forms), SCADA Runtime (.NET/C# Avalonia)
 
 ---
 
@@ -25,8 +25,6 @@ This document explains how to use the AccuTrack SCADA system from configuration 
 - **Designer** is the desktop application where you create and configure projects (tags, alarms, screens, scripts, communication, and other modules).
 - **Runtime** is the execution environment that loads the built project and runs data acquisition, control logic, visualization, and alarm handling.
 
-For detailed step-by-step procedures on each feature, see the [AccuTrack Designer User Guide](AccuTrack%20Designer%20User%20Guide.md). For system scope and requirements, see the [AccuTrack – SCADA Requirements Specification (SRS)](AccuTrack%20%E2%80%93%20SCADA%20Requirements%20Specification%20(SRS).md).
-
 ---
 
 ## End-to-End Workflow
@@ -34,7 +32,7 @@ For detailed step-by-step procedures on each feature, see the [AccuTrack Designe
 A typical workflow is:
 
 1. **Create or open a project** in AccuTrack Designer.
-2. **Configure all modules** (tags, communication, alarms, scripts, schedules, historian, security, and HMI screens) in an order that respects dependencies.
+2. **Configure all modules** (tags, communication, alarms, scripts, schedules, historian, security, machine learning, and HMI screens) in an order that respects dependencies.
 3. **Build the project** so that a deployment package is generated and validated.
 4. **Transfer to runtime** by downloading the built project to the target device.
 5. **Run** the project on the device using AccuTrack Runtime.
@@ -53,6 +51,8 @@ flowchart LR
   end
   A --> B --> C --> D --> E --> F
 ```
+
+
 
 ---
 
@@ -168,11 +168,18 @@ Configure modules in the **Project View** (left panel) under your SCADA project.
 
 ### 10. Machine Learning
 
-**What it is:** Optional module for ML-related configuration (if enabled in your project).
+**What it is:** Configuration of machine learning (ML) models for inference at Runtime. Models use tag values (and optionally Historian time-series data) as inputs and write predictions to an output tag (e.g. quality prediction, soft sensing).
 
-**Where:** Project View → *Your SCADA project* → **Machine Learning**.
+**Where:** Project View → *Your SCADA project* → **Machine Learning**. Double-click Machine Learning to open the ML editor.
 
-**Main actions:** Use as exposed in the Designer; detailed configuration is to be documented in the Designer User Guide when the feature is released.
+**Main actions:**
+
+- Enable/disable ML at project level; set training data path and training interval if needed.
+- Add models: choose model kind (e.g. Fast Forest Regression, LightGBM), set path to trained model file, select input tags and output tag.
+- Optionally enable historian time-series mode (time range, max rows) and “Save results to DB” per model.
+- Use **Configure...** to edit a model; use **Set trained data...** to point to the trained model file (e.g. `.zip`).
+
+**Detail:** [Machine Learning Configuration](AccuTrack%20Designer%20User%20Guide.md#machine-learning-configuration) in the Designer User Guide.
 
 ---
 
@@ -180,20 +187,21 @@ Configure modules in the **Project View** (left panel) under your SCADA project.
 
 Before transferring to Runtime, the project must be built. The build validates configuration and produces a deployment package.
 
-**When to build:** After configuring or changing tags, screens, scripts, communication, alarms, security, or other modules.
+**When to build:** After configuring or changing tags, screens, scripts, communication, alarms, security, machine learning, or other modules.
 
 **Steps:**
 
-1. **Build → Build Project** (or `Ctrl+B`).
+1. **Build → Build Project** (or `F7`).
 2. Watch the **Output** tab for progress and errors.
 3. If the build fails, fix the reported issues (e.g. invalid tag references, script syntax, missing files, invalid addresses) and rebuild.
-4. Use **Build → Clean Project** to remove build artifacts before a fresh build if needed.
+4. Use **Build → Clean Project** to remove build artifacts before a fresh build if needed. **Build → Rebuild Project** (`Ctrl+F7`) cleans and builds in one step.
 
 **What the build produces:**
 
-- Deployment package (complete project package for Runtime)
-- QML files for Runtime visualization
-- JSON configuration
+- Deployment package (complete project for Runtime, e.g. in project `build/` folder)
+- `metadata.iscr` – project manifest (name, version, resolution, config paths)
+- JSON configuration in `json/` (tags, communications, alarms, scripts, historian, security, etc.)
+- Screen definitions in `screens/*.json` for Runtime (Avalonia) visualization
 - Resource files (images, fonts, etc.)
 
 **What is validated:**
@@ -253,17 +261,21 @@ To retrieve a project from a device (e.g. for backup or editing in Designer):
 
 ## Quick Reference
 
-| I want to… | Do this |
-|------------|--------|
-| Create a new project | File → New Project; save as `.isc`. |
-| Configure tags | Project View → *SCADA project* → Tags; see [Working with Tags](AccuTrack%20Designer%20User%20Guide.md#working-with-tags). |
-| Configure Modbus/OPC UA | Project View → Communication → add connection; map addresses in Tags. See [Communication Setup](AccuTrack%20Designer%20User%20Guide.md#communication-setup). |
-| Configure alarms | Project View → Alarms → Open Alarms Editor; see [Configuring Alarms](AccuTrack%20Designer%20User%20Guide.md#configuring-alarms). |
-| Add Lua scripts | Project View → Scripts → New Script; see [Scripting with Lua](AccuTrack%20Designer%20User%20Guide.md#scripting-with-lua). |
-| Schedule scripts | Project View → Schedules; see [Schedules and Automation](AccuTrack%20Designer%20User%20Guide.md#schedules-and-automation). |
-| Configure historian/trending | Project View → Historian; see [Historical Data (Historian)](AccuTrack%20Designer%20User%20Guide.md#historical-data-historian). |
-| Configure users and security | Project View → Security; see [Security Configuration](AccuTrack%20Designer%20User%20Guide.md#security-configuration). |
-| Design HMI screens | Project View → Screens; see [Creating HMI Screens](AccuTrack%20Designer%20User%20Guide.md#creating-hmi-screens). |
-| Build the project | Build → Build Project (`Ctrl+B`); check Output tab. See [Building and Deploying](AccuTrack%20Designer%20User%20Guide.md#building-and-deploying). |
-| Deploy to device | Build first, then Download → Download to Device; select target and transfer. |
-| Get project from device | Upload → Upload from Device; select project and open in Designer. |
+
+| I want to…                   | Do this                                                                                                                                                      |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Create a new project         | File → New Project; save as `.isc`.                                                                                                                          |
+| Configure tags               | Project View → *SCADA project* → Tags; see [Working with Tags](AccuTrack%20Designer%20User%20Guide.md#working-with-tags).                                    |
+| Configure Modbus/OPC UA      | Project View → Communication → add connection; map addresses in Tags. See [Communication Setup](AccuTrack%20Designer%20User%20Guide.md#communication-setup). |
+| Configure alarms             | Project View → Alarms → Open Alarms Editor; see [Configuring Alarms](AccuTrack%20Designer%20User%20Guide.md#configuring-alarms).                             |
+| Add Lua scripts              | Project View → Scripts → New Script; see [Scripting with Lua](AccuTrack%20Designer%20User%20Guide.md#scripting-with-lua).                                    |
+| Schedule scripts             | Project View → Schedules; see [Schedules and Automation](AccuTrack%20Designer%20User%20Guide.md#schedules-and-automation).                                   |
+| Configure historian/trending | Project View → Historian; see [Historical Data (Historian)](AccuTrack%20Designer%20User%20Guide.md#historical-data-historian).                               |
+| Configure users and security | Project View → Security; see [Security Configuration](AccuTrack%20Designer%20User%20Guide.md#security-configuration).                                        |
+| Configure ML models          | Project View → Machine Learning; see [Machine Learning Configuration](AccuTrack%20Designer%20User%20Guide.md#machine-learning-configuration).                |
+| Design HMI screens           | Project View → Screens; see [Creating HMI Screens](AccuTrack%20Designer%20User%20Guide.md#creating-hmi-screens).                                             |
+| Build the project            | Build → Build Project (`F7`); check Output tab. See [Building and Deploying](AccuTrack%20Designer%20User%20Guide.md#building-and-deploying).                 |
+| Deploy to device             | Build first, then Download → Download to Device; select target and transfer.                                                                                 |
+| Get project from device      | Upload → Upload from Device; select project and open in Designer.                                                                                            |
+
+
